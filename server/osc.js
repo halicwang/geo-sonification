@@ -26,6 +26,10 @@ const { OSC_HOST, OSC_PORT, DEBUG_OSC, GRID_SIZE } = require('./config');
 const { VALID_LANDCOVER_CLASSES, getCellLcDistribution } = require('./landcover');
 const { normalizeOscValues } = require('./normalize');
 
+// ESA WorldCover class range bounds, derived from the canonical class list
+const LC_CLASS_MIN = Math.min(...VALID_LANDCOVER_CLASSES); // 10
+const LC_CLASS_MAX = Math.max(...VALID_LANDCOVER_CLASSES); // 100
+
 let oscReady = false;
 
 const oscPort = new osc.UDPPort({
@@ -59,9 +63,9 @@ function isOscReady() {
  * @param {Object} [landcoverDistribution={}] — { classCode: weightedArea } from spatial stats
  */
 function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, landcoverDistribution) {
-    // ESA WorldCover classes range 10-100; clamp to that range
-    let lc = (landcoverClass != null && Number.isFinite(landcoverClass)) ? Math.round(landcoverClass) : 10;
-    lc = Math.max(10, Math.min(100, lc));
+    // ESA WorldCover classes range LC_CLASS_MIN–LC_CLASS_MAX; clamp to that range
+    let lc = (landcoverClass != null && Number.isFinite(landcoverClass)) ? Math.round(landcoverClass) : LC_CLASS_MIN;
+    lc = Math.max(LC_CLASS_MIN, Math.min(LC_CLASS_MAX, lc));
 
     const clamp01 = (v) => {
         if (v == null || !Number.isFinite(v)) return 0;
@@ -96,18 +100,20 @@ function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, l
         safeSend({ address: '/population', args: [{ type: 'f', value: pop }] }, '/population');
         safeSend({ address: '/forest', args: [{ type: 'f', value: f }] }, '/forest');
 
-        // Landcover distribution (11 messages)
-        for (const cls of VALID_LANDCOVER_CLASSES) {
+        // Landcover distribution (11 messages) — compute fractions once, reuse for debug
+        const lcFracs = VALID_LANDCOVER_CLASSES.map(cls => {
             const frac = totalWeight > 0 ? clamp01((dist[cls] || 0) / totalWeight) : 0;
+            return { cls, frac };
+        });
+        for (const { cls, frac } of lcFracs) {
             safeSend({ address: `/lc/${cls}`, args: [{ type: 'f', value: frac }] }, `/lc/${cls}`);
         }
 
         if (DEBUG_OSC) {
-            const top3 = VALID_LANDCOVER_CLASSES
-                .map(cls => ({ cls, frac: totalWeight > 0 ? (dist[cls] || 0) / totalWeight : 0 }))
+            const top3 = lcFracs
+                .filter(x => x.frac > 0)
                 .sort((a, b) => b.frac - a.frac)
                 .slice(0, 3)
-                .filter(x => x.frac > 0)
                 .map(x => `${x.cls}:${(x.frac * 100).toFixed(1)}%`)
                 .join(' ');
             console.log(`OSC sent: landcover=${lc}, nl=${nl.toFixed(3)}, pop=${pop.toFixed(3)}, forest=${f.toFixed(3)}, lc_dist=[${top3}]`);
@@ -168,12 +174,12 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
             const lon = Number.isFinite(g.lon) ? g.lon : 0;
             const lat = Number.isFinite(g.lat) ? g.lat : 0;
 
-            // Landcover class — clamp to valid ESA range (10-100), consistent with aggregated mode
-            let lc = 10;
+            // Landcover class — clamp to valid ESA range, consistent with aggregated mode
+            let lc = LC_CLASS_MIN;
             if (g.landcover_class != null && g.landcover_class !== '' && !isNaN(g.landcover_class)) {
                 lc = Math.round(Number(g.landcover_class));
             }
-            lc = Math.max(10, Math.min(100, lc));
+            lc = Math.max(LC_CLASS_MIN, Math.min(LC_CLASS_MAX, lc));
 
             // Normalize per-cell values using same p1/p99 as aggregated mode
             // Explicitly handle nightlight sentinel (-1 = no VIIRS data) → treat as 0
@@ -211,7 +217,7 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
             // Fallback: if no lc_pct_* data, synthesize 100% distribution from discrete landcover_class
             let cellDist = getCellLcDistribution(g);
             let cellPctSum = Object.values(cellDist).reduce((s, v) => s + v, 0);
-            if (cellPctSum <= 0 && lc >= 10) {
+            if (cellPctSum <= 0 && lc >= LC_CLASS_MIN) {
                 cellDist = { [lc]: 100 };
                 cellPctSum = 100;
             }

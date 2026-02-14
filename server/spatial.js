@@ -18,6 +18,16 @@ const { VALID_LANDCOVER_CLASSES, normalizeLandcoverClass, getCellLcDistribution 
 const { USE_LEGACY_AGGREGATION, MIN_LAND_AREA_KM2, landFractionWeight, GRID_SIZE, LON_BUCKETS, LAT_BUCKETS } = require('./config');
 const { NIGHTLIGHT_NO_DATA } = require('./data-loader');
 
+// ============ Constants ============
+
+/** Maximum number of landcover classes shown in the frontend breakdown panel. */
+const LANDCOVER_DISPLAY_TOP_N = 5;
+
+/** Minimum percentage for a landcover class to be shown individually (rest → "Other"). */
+const LANDCOVER_MIN_DISPLAY_PCT = 1.0;
+
+// ============ Module State ============
+
 let spatialIndex = null;
 let gridData = [];
 let normalizeParams = null;
@@ -200,15 +210,12 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
         }))
         .sort((a, b) => b.percentage - a.percentage);
 
-    const DISPLAY_TOP_N = 5;
-    const MIN_PERCENTAGE_THRESHOLD = 1.0;
-
     let displayItems = [];
     let otherItems = [];
     let otherTotalPercentage = 0;
 
     landcoverPercentages.forEach((item, index) => {
-        if (index < DISPLAY_TOP_N && item.percentage >= MIN_PERCENTAGE_THRESHOLD) {
+        if (index < LANDCOVER_DISPLAY_TOP_N && item.percentage >= LANDCOVER_MIN_DISPLAY_PCT) {
             displayItems.push(item);
         } else {
             otherItems.push(item);
@@ -224,13 +231,17 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
         });
     }
 
-    // Adjust rounding so percentages sum closer to 100%
+    // Adjust rounding so percentages sum closer to 100%.
+    // Distribute the delta proportionally to the largest items (by percentage)
+    // to avoid skewing any single item.
     if (displayItems.length > 0) {
         const totalPercentage = displayItems.reduce((sum, item) => sum + item.percentage, 0);
         const roundingDiff = 100 - totalPercentage;
-        if (Math.abs(roundingDiff) > 0.1) {
-            const lastItem = displayItems[displayItems.length - 1];
-            lastItem.percentage = Math.max(0, Math.min(100, lastItem.percentage + roundingDiff));
+        if (Math.abs(roundingDiff) > 0.1 && totalPercentage > 0) {
+            for (const item of displayItems) {
+                const share = item.percentage / totalPercentage;
+                item.percentage = Math.max(0, Math.min(100, item.percentage + roundingDiff * share));
+            }
         }
     }
 

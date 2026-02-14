@@ -14,31 +14,33 @@ const { PER_GRID_THRESHOLD_ENTER, PER_GRID_THRESHOLD_EXIT } = require('./config'
 
 // ============ Constants ============
 
-const HTTP_MODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const HTTP_MODE_TTL_MS = 5 * 60 * 1000;        // 5 min: stale entry expiry
+const HTTP_MODE_CLEANUP_INTERVAL_MS = 60 * 1000; // 1 min: sweep frequency
 
 // ============ HTTP Per-Client State ============
 
 // Per-IP hysteresis state for HTTP /api/viewport fallback.
 // Entries expire after HTTP_MODE_TTL_MS of inactivity to prevent unbounded growth.
+// A fixed-interval timer sweeps stale entries even when no new requests arrive.
 const httpModeByClient = new Map(); // key -> { currentMode, lastSeen }
 let httpModeCleanupTimer = null;
 
-/** Lazily schedule a single cleanup pass for stale httpModeByClient entries. */
-function scheduleHttpModeCleanup() {
-    if (httpModeCleanupTimer) return; // already scheduled
-    httpModeCleanupTimer = setTimeout(() => {
-        httpModeCleanupTimer = null;
+/** Start a fixed-interval timer that evicts stale entries and stops itself when empty. */
+function ensureCleanupTimer() {
+    if (httpModeCleanupTimer) return;
+    httpModeCleanupTimer = setInterval(() => {
         const now = Date.now();
         for (const [key, entry] of httpModeByClient) {
             if (now - entry.lastSeen > HTTP_MODE_TTL_MS) {
                 httpModeByClient.delete(key);
             }
         }
-        // If there are still entries, schedule another pass
-        if (httpModeByClient.size > 0) {
-            scheduleHttpModeCleanup();
+        // Stop the timer when there are no entries left to avoid idle CPU
+        if (httpModeByClient.size === 0) {
+            clearInterval(httpModeCleanupTimer);
+            httpModeCleanupTimer = null;
         }
-    }, HTTP_MODE_TTL_MS);
+    }, HTTP_MODE_CLEANUP_INTERVAL_MS);
     httpModeCleanupTimer.unref(); // don't prevent process exit
 }
 
@@ -71,7 +73,7 @@ function getHttpModeState(clientKey) {
  */
 function saveHttpModeState(clientKey, modeState) {
     httpModeByClient.set(clientKey, { currentMode: modeState.currentMode, lastSeen: Date.now() });
-    scheduleHttpModeCleanup();
+    ensureCleanupTimer();
 }
 
 // ============ Hysteresis Logic ============

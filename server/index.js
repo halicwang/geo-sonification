@@ -32,6 +32,11 @@ const {
     PER_GRID_THRESHOLD_ENTER, PER_GRID_THRESHOLD_EXIT
 } = require('./mode-manager');
 
+// ============ Constants ============
+
+/** Interval between WebSocket ping probes; clients that don't respond are terminated. */
+const WS_PING_INTERVAL_MS = 30000; // 30 seconds
+
 // ============ State ============
 let dataLoaded = false;
 let httpServer = null;
@@ -185,10 +190,6 @@ async function startServer() {
         // Start WebSocket server
         const wss = wssServer = new WebSocketServer({ port: WS_PORT });
 
-        // Ping/pong keeps connections alive and detects stale clients.
-        // If a client doesn't respond within PING_INTERVAL, it's terminated.
-        const PING_INTERVAL = 30000;  // 30 seconds
-
         wss.on('connection', (ws) => {
             console.log('WebSocket client connected');
 
@@ -212,7 +213,7 @@ async function startServer() {
                 } catch (err) {
                     console.error('Failed to send ping:', err);
                 }
-            }, PING_INTERVAL);
+            }, WS_PING_INTERVAL_MS);
 
             ws.on('pong', () => {
                 ws.isAlive = true;

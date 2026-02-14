@@ -4,7 +4,9 @@
 // West boundary at 40°E aligns with Europe's east edge — avoids ~2800-cell overlap.
 // 25-40°E is covered by Europe (>=35°N) and Africa (<38°N). No land missed.
 // Extended north to 84°N for Novaya Zemlya, Franz Josef Land, Severnaya Zemlya.
-var region = ee.Geometry.Rectangle([40, -10, 180, 84]);
+// East boundary at 190°E (= -170°W) covers Chukotka across the date line,
+// seamlessly joining North America's west boundary at -170°.
+var region = ee.Geometry.Rectangle([40, -10, 190, 84]);
 var gridSize = 0.5;
 // Tuning knobs
 var MIN_LAND_FRACTION = 0.02; // set to 0 to disable; 0.02–0.05 recommended to drop mostly-ocean cells
@@ -16,8 +18,9 @@ var AREA_METHOD = 'fast';
 var AREA_SCALE = 1000;
 var FRACTIONAL_MAX_PIXELS = 16384;
 
-// IMPORTANT: ee.List.sequence end is inclusive. Use max - gridSize to avoid creating overflow cells (e.g., lon=180 -> 181).
-var lonList = ee.List.sequence(40, 180 - gridSize, gridSize);
+// IMPORTANT: ee.List.sequence end is inclusive. Use max - gridSize to avoid creating overflow cells.
+// East extends to 190° (= -170°W) to cover Chukotka; GEE wraps coordinates automatically.
+var lonList = ee.List.sequence(40, 190 - gridSize, gridSize);
 var latList = ee.List.sequence(-10, 84 - gridSize, gridSize);
 
 var grid = ee.FeatureCollection(

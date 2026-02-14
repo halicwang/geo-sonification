@@ -461,7 +461,7 @@ function updateUI(stats) {
     if (_els.oscMode) {
         if (stats.mode === 'per-grid') {
             _els.oscMode.textContent = `Per-Grid (${stats.gridCount || 0} cells)`;
-            _els.oscMode.style.color = '#4fc3f7';
+            _els.oscMode.style.color = 'var(--color-accent-info)';
         } else {
             _els.oscMode.textContent = 'Aggregated';
             _els.oscMode.style.color = '';

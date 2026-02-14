@@ -15,6 +15,8 @@
     --color-text-muted: #aaa;
     --color-text-dim: #888;
     --color-accent: #4ecdc4;
+    --color-accent-info: #4fc3f7;
+    --color-danger: #ff6b6b;
     --color-border: rgba(255, 255, 255, 0.1);
 }
 
@@ -133,7 +135,7 @@ body {
 }
 
 .status-dot.disconnected {
-    background: #ff6b6b;
+    background: var(--color-danger);
 }
 
 /* ============ Toast Notification (bottom-center, auto-hides) ============ */

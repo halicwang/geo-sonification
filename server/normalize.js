@@ -11,14 +11,9 @@ const crypto = require('crypto');
 const NORMALIZE_FILE = path.join(__dirname, '..', 'data', 'cache', 'normalize.json');
 const REQUIRED_FIELDS = ['nightlight_p90', 'population_density', 'forest_pct'];
 
+/** JSON.stringify with sorted keys for stable comparison of flat config objects. */
 function stableStringify(value) {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
-    if (typeof value !== 'object') return JSON.stringify(value);
-    if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-    const keys = Object.keys(value).sort();
-    const body = keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',');
-    return `{${body}}`;
+    return JSON.stringify(value, Object.keys(value ?? {}).sort());
 }
 
 function calcPercentiles(data, field) {

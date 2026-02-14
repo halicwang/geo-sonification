@@ -176,26 +176,6 @@ if (PER_GRID_THRESHOLD_ENTER > PER_GRID_THRESHOLD_EXIT) {
 }
 console.log(`[PerGrid] thresholds: enter<=${PER_GRID_THRESHOLD_ENTER}, exit>${PER_GRID_THRESHOLD_EXIT}`);
 
-// ---- Grid merge for map overlay ----
-// When the viewport contains many grids, merge adjacent cells into larger
-// blocks for faster rendering.  Stats/OSC always use the original 0.5° cells.
-//
-// Primary: zoom-based (deterministic — same zoom = same merge level everywhere)
-//   zoom < MERGE_5DEG_ZOOM  → 5.0° merge  (disabled by default; too blocky for globe view)
-//   zoom < MERGE_2DEG_ZOOM  → 2.0° merge  (global view: ~4,500 features)
-//   zoom < MERGE_1DEG_ZOOM  → 1.0° merge  (continent: ~17,000 features)
-//   else                    → 0.5° base    (zoom ≥ 4.5)
-const MERGE_5DEG_ZOOM = parseFloat(process.env.MERGE_5DEG_ZOOM || '0');
-const MERGE_2DEG_ZOOM = parseFloat(process.env.MERGE_2DEG_ZOOM || '0');
-const MERGE_1DEG_ZOOM = parseFloat(process.env.MERGE_1DEG_ZOOM || '4');
-
-// Fallback: rawCount-based (when zoom is not provided, e.g. curl/tests)
-const MERGE_1DEG_ENTER = parseNonNegativeInt('MERGE_1DEG_ENTER', 10000, 'MERGE_1DEG_ENTER');
-const MERGE_2DEG_ENTER = parseNonNegativeInt('MERGE_2DEG_ENTER', 40000, 'MERGE_2DEG_ENTER');
-const MERGE_5DEG_ENTER = parseNonNegativeInt('MERGE_5DEG_ENTER', 60000, 'MERGE_5DEG_ENTER');
-
-console.log(`[Merge] zoom thresholds: 5°<z${MERGE_5DEG_ZOOM}, 2°<z${MERGE_2DEG_ZOOM}, 1°<z${MERGE_1DEG_ZOOM} | rawCount fallback: 1°>${MERGE_1DEG_ENTER}, 2°>${MERGE_2DEG_ENTER}, 5°>${MERGE_5DEG_ENTER}`);
-
 // ---- Cache & broadcast ----
 const DISABLE_CACHE = process.env.DISABLE_CACHE === '1' || process.env.DISABLE_CACHE === 'true';
 const FORCE_REBUILD_CACHE = process.env.FORCE_REBUILD_CACHE === '1' || process.env.FORCE_REBUILD_CACHE === 'true';
@@ -219,12 +199,6 @@ module.exports = {
     LAT_BUCKETS,
     PER_GRID_THRESHOLD_ENTER,
     PER_GRID_THRESHOLD_EXIT,
-    MERGE_5DEG_ZOOM,
-    MERGE_2DEG_ZOOM,
-    MERGE_1DEG_ZOOM,
-    MERGE_1DEG_ENTER,
-    MERGE_2DEG_ENTER,
-    MERGE_5DEG_ENTER,
     DISABLE_CACHE,
     FORCE_REBUILD_CACHE,
     BROADCAST_STATS

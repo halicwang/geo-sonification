@@ -2,9 +2,7 @@
 /**
  * Build PMTiles from grid data for the map overlay.
  *
- * Generates a single .pmtiles file with two zoom ranges:
- *   - zoom 0-3: 1° merged cells (~17K features)
- *   - zoom 4-12: 0.5° base cells (~67K features)
+ * Generates a single .pmtiles file with 0.5° base cells across all zoom levels (0-12).
  *
  * Usage:
  *   node scripts/build-tiles.js
@@ -16,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-// Reuse server modules for data loading and merging
+// Reuse server modules for data loading
 const { loadGridData } = require('../server/data-loader');
 const spatial = require('../server/spatial');
 
@@ -67,30 +65,19 @@ async function main() {
     const allGrids = spatial.getGridData();
     console.log(`[build-tiles] Loaded ${allGrids.length} base cells (0.5°)`);
 
-    // 2. Generate 1° merged cells
-    const t0 = Date.now();
-    const merged = spatial.mergeGrids(allGrids, 1.0);
-    console.log(`[build-tiles] Merged to ${merged.length} cells (1°) in ${Date.now() - t0}ms`);
-
-    // 3. Build combined GeoJSON with tippecanoe zoom hints
-    const features = [];
-    for (const g of merged) {
-        features.push(gridToFeature(g, 1.0, 0, 3));
-    }
-    for (const g of allGrids) {
-        features.push(gridToFeature(g, 0.5, 4, 12));
-    }
+    // 2. Build GeoJSON — all cells at full 0.5° resolution across all zoom levels
+    const features = allGrids.map(g => gridToFeature(g, 0.5, 0, 12));
 
     const geojson = { type: 'FeatureCollection', features };
-    console.log(`[build-tiles] ${features.length} total features (${merged.length} merged + ${allGrids.length} base)`);
+    console.log(`[build-tiles] ${features.length} features (0.5° base cells, zoom 0-12)`);
 
-    // 4. Write temporary GeoJSON
+    // 3. Write temporary GeoJSON
     fs.mkdirSync(SRC_DIR, { recursive: true });
     const json = JSON.stringify(geojson);
     fs.writeFileSync(GEOJSON_PATH, json);
     console.log(`[build-tiles] Wrote ${(json.length / 1e6).toFixed(1)}MB GeoJSON → ${GEOJSON_PATH}`);
 
-    // 5. Run tippecanoe
+    // 4. Run tippecanoe
     const tippecanoeArgs = [
         '-o', OUTPUT,
         '--force',
@@ -107,11 +94,11 @@ async function main() {
     execFileSync('tippecanoe', tippecanoeArgs, { stdio: 'inherit' });
     console.log(`[build-tiles] tippecanoe finished in ${((Date.now() - t1) / 1000).toFixed(1)}s`);
 
-    // 6. Report output size
+    // 5. Report output size
     const stat = fs.statSync(OUTPUT);
     console.log(`[build-tiles] Output: ${OUTPUT} (${(stat.size / 1e6).toFixed(1)}MB)`);
 
-    // 7. Clean up temp files
+    // 6. Clean up temp files
     fs.rmSync(SRC_DIR, { recursive: true, force: true });
     console.log('[build-tiles] Cleaned up temp files');
     console.log('[build-tiles] Done!');

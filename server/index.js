@@ -11,7 +11,7 @@
  *     <-- response         (stats JSON back to frontend)
  *
  * This file only handles HTTP routes, WebSocket, and startup/shutdown.
- * All data loading, spatial queries, and OSC are in separate modules.
+ * All data loading, spatial queries, OSC, and mode switching are in separate modules.
  */
 
 const express = require('express');
@@ -20,24 +20,22 @@ const WebSocket = require('ws');
 const { WebSocketServer } = WebSocket;
 const path = require('path');
 
-const { HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS,
-        PER_GRID_THRESHOLD_ENTER, PER_GRID_THRESHOLD_EXIT, GRID_SIZE } = require('./config');
+const { HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
 const { isOscReady, sendToMax, sendGridsToMax, sendModeToMax, closeOsc } = require('./osc');
 const { loadGridData } = require('./data-loader');
 const spatial = require('./spatial');
 const { validateBounds } = spatial;
+const {
+    createModeState, getHttpModeState, saveHttpModeState,
+    applyHysteresis, getHttpClientKey,
+    PER_GRID_THRESHOLD_ENTER, PER_GRID_THRESHOLD_EXIT
+} = require('./mode-manager');
 
 // ============ State ============
 let dataLoaded = false;
 let httpServer = null;
 let wssServer = null;
-
-// Per-IP hysteresis state for HTTP /api/viewport fallback.
-// Entries expire after HTTP_MODE_TTL_MS of inactivity to prevent unbounded growth.
-const HTTP_MODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const httpModeByClient = new Map(); // key -> { currentMode, lastSeen }
-let httpModeCleanupTimer = null;
 
 // ============ Shared Helpers ============
 
@@ -54,19 +52,7 @@ function processViewport(bounds, modeState) {
     }
     const { gridsInView, ...stats } = spatial.calculateViewportStats(validation.bounds);
 
-    // Hysteresis-based mode switching:
-    //   aggregated -> per-grid:  when gridCount > 0 AND gridCount <= ENTER threshold
-    //   per-grid -> aggregated:  when gridCount > EXIT threshold OR gridCount === 0
-    const count = gridsInView.length;
-    if (modeState.currentMode === 'aggregated') {
-        if (count > 0 && count <= PER_GRID_THRESHOLD_ENTER) {
-            modeState.currentMode = 'per-grid';
-        }
-    } else {
-        if (count === 0 || count > PER_GRID_THRESHOLD_EXIT) {
-            modeState.currentMode = 'aggregated';
-        }
-    }
+    applyHysteresis(modeState, gridsInView.length);
 
     // Notify MaxMSP of current mode — sent before data messages so Max
     // can prepare for the incoming format (e.g., crossfade on mode change).
@@ -86,44 +72,6 @@ function processViewport(bounds, modeState) {
     return { stats, gridsInView };
 }
 
-function getHttpClientKey(req) {
-    const normalizeClientId = (value) => {
-        if (Array.isArray(value)) {
-            for (const item of value) {
-                const normalized = normalizeClientId(item);
-                if (normalized) {
-                    return normalized;
-                }
-            }
-            return '';
-        }
-        if (typeof value !== 'string') return '';
-        const trimmed = value.trim();
-        return trimmed.length > 0 && trimmed.length <= 128 ? trimmed : '';
-    };
-
-    const body = req.body;
-    if (body && typeof body === 'object') {
-        const clientId = typeof body.clientId === 'string' ? body.clientId.trim() : '';
-        if (clientId && clientId.length <= 128) {
-            return `client:${clientId}`;
-        }
-    }
-
-    const headerClientId = normalizeClientId(req.get ? req.get('x-client-id') : req.headers['x-client-id']);
-    if (headerClientId) {
-        return `header-client:${headerClientId}`;
-    }
-
-    const xff = normalizeClientId(req.headers['x-forwarded-for']);
-    const ip = (typeof xff === 'string' && xff.trim() !== '')
-        ? xff.split(',')[0].trim()
-        : (req.ip || req.socket?.remoteAddress || 'unknown');
-
-    const safeUa = normalizeClientId(req.get ? req.get('user-agent') : req.headers['user-agent']) || 'unknown';
-    return `${ip}|${safeUa}`;
-}
-
 function parseViewportBounds(bounds, clientLabel = 'request') {
     if (!Array.isArray(bounds) || bounds.length !== 4) {
         return {
@@ -131,25 +79,6 @@ function parseViewportBounds(bounds, clientLabel = 'request') {
         };
     }
     return { bounds };
-}
-
-/** Lazily schedule a single cleanup pass for stale httpModeByClient entries. */
-function scheduleHttpModeCleanup() {
-    if (httpModeCleanupTimer) return; // already scheduled
-    httpModeCleanupTimer = setTimeout(() => {
-        httpModeCleanupTimer = null;
-        const now = Date.now();
-        for (const [key, entry] of httpModeByClient) {
-            if (now - entry.lastSeen > HTTP_MODE_TTL_MS) {
-                httpModeByClient.delete(key);
-            }
-        }
-        // If there are still entries, schedule another pass
-        if (httpModeByClient.size > 0) {
-            scheduleHttpModeCleanup();
-        }
-    }, HTTP_MODE_TTL_MS);
-    httpModeCleanupTimer.unref(); // don't prevent process exit
 }
 
 // ============ Express Server ============
@@ -204,9 +133,7 @@ app.post('/api/viewport', (req, res) => {
         return res.status(503).json({ error: 'Data not loaded yet', dataLoaded: false });
     }
     const clientKey = getHttpClientKey(req);
-    const entry = httpModeByClient.get(clientKey);
-    const previousMode = entry ? entry.currentMode : 'aggregated';
-    const modeState = { currentMode: entry ? entry.currentMode : 'aggregated' };
+    const { modeState, previousMode } = getHttpModeState(clientKey);
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const parsedBounds = parseViewportBounds(body.bounds, 'HTTP');
     if (parsedBounds.error) {
@@ -217,11 +144,10 @@ app.post('/api/viewport', (req, res) => {
     if (result.error) {
         return res.status(400).json({ error: result.error });
     }
-    httpModeByClient.set(clientKey, { currentMode: modeState.currentMode, lastSeen: Date.now() });
+    saveHttpModeState(clientKey, modeState);
     if (modeState.currentMode !== previousMode) {
         console.log(`[HTTP mode] ${clientKey}: ${previousMode} -> ${modeState.currentMode}`);
     }
-    scheduleHttpModeCleanup();
     res.json(result.stats);
 });
 
@@ -268,7 +194,7 @@ async function startServer() {
 
             // Per-client hysteresis state — each client tracks its own mode
             // so multiple viewports don't interfere with each other.
-            const modeState = { currentMode: 'aggregated' };
+            const modeState = createModeState();
 
             // Mark alive; the ping timer will flip to false before each ping.
             // If pong comes back, it flips back to true.

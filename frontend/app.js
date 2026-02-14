@@ -363,6 +363,37 @@ async function sendViewportHTTP(bounds) {
     }
 }
 
+// ============ Server Config Refresh ============
+/**
+ * Re-fetch /api/config from the server and update local state.
+ * If LANDCOVER_META changes, also update the map grid layer's fill-color expression
+ * so the new colors are reflected without a full page reload.
+ */
+async function refreshServerConfig() {
+    try {
+        const response = await fetch(`${API_BASE}/api/config`);
+        if (!response.ok) return;
+        const config = await response.json();
+
+        OSC_READY = config.oscReady || false;
+        if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
+            GRID_SIZE = config.gridSize;
+        }
+        if (config.landcoverMeta) {
+            const oldKeys = Object.keys(LANDCOVER_META).sort().join(',');
+            const newKeys = Object.keys(config.landcoverMeta).sort().join(',');
+            LANDCOVER_META = config.landcoverMeta;
+
+            // Update map layer if metadata changed and map is ready
+            if (oldKeys !== newKeys && map && map.getLayer('grid-layer')) {
+                map.setPaintProperty('grid-layer', 'fill-color', buildLandcoverFillColor());
+            }
+        }
+    } catch (err) {
+        console.warn('Failed to refresh server config:', err.message || err);
+    }
+}
+
 // ============ WebSocket Connection ============
 /** Connect to server WS; auto-reconnects on close with exponential backoff. */
 let wsReconnectDelay = 1000;   // initial delay: 1s
@@ -375,26 +406,12 @@ function connectWebSocket() {
     ws.onopen = async () => {
         console.log('WebSocket connected');
         wsReconnectDelay = 1000; // reset backoff on successful connection
-        
-        // Refresh config from server (OSC status, landcover meta)
-        try {
-            const response = await fetch(`${API_BASE}/api/config`);
-            if (response.ok) {
-                const config = await response.json();
-                OSC_READY = config.oscReady || false;
-                if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
-                    GRID_SIZE = config.gridSize;
-                }
-                if (config.landcoverMeta) {
-                    LANDCOVER_META = config.landcoverMeta;
-                }
-            }
-        } catch (err) {
-            // Ignore errors, use cached value
-        }
-        
+
+        // Refresh config from server (OSC status, landcover meta, grid size)
+        await refreshServerConfig();
+
         updateConnectionStatus(true);
-        
+
         // Send initial viewport
         if (map) {
             onViewportChange();

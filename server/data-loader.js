@@ -198,10 +198,15 @@ function parseCSVFile(csvContent, sourceLabel) {
     if (parseErrors.length > 0) {
         const shown = parseErrors
             .slice(0, 5)
-            .map(e => `[CSV] ${sourceLabel}:${e.row}: invalid value for ${e.field}: ${JSON.stringify(e.value)}`)
+            .map(e => `  row ${e.row}, field "${e.field}": got ${JSON.stringify(e.value)}`)
             .join('\n');
-        const suffix = parseErrors.length > 5 ? `\n... and ${parseErrors.length - 5} more` : '';
-        throw new Error(`CSV parse errors in ${sourceLabel}:\n${shown}${suffix}`);
+        const suffix = parseErrors.length > 5 ? `\n  ... and ${parseErrors.length - 5} more` : '';
+        const err = new Error(
+            `[CSV] ${parseErrors.length} parse error(s) in ${sourceLabel}:\n${shown}${suffix}\n` +
+            'Hint: ensure all numeric columns contain valid numbers. Empty values are treated as 0.'
+        );
+        err.code = 'CSV_PARSE_ERROR';
+        throw err;
     }
 
     return parsedRows;
@@ -413,7 +418,8 @@ async function loadGridData() {
             if (err && err.code === 'CACHE_SCHEMA_MISMATCH') {
                 throw err;
             }
-            console.log('[CSV] Cache not available or corrupted, loading from CSV files...');
+            const reason = err && err.message ? err.message : String(err);
+            console.log(`[CSV] Cache not usable (${reason}), loading from CSV files...`);
         }
     } else if (FORCE_REBUILD_CACHE) {
         console.log('[CSV] Force rebuild mode, loading from CSV files (will write cache after load)');
@@ -439,11 +445,15 @@ async function loadGridData() {
             gridData = gridData.concat(parsed);
             loadedCsvPaths.push(filePath);
         } catch (err) {
-            if (err && (err.code === 'CSV_SCHEMA_MISMATCH' || err.code === 'GRID_SIZE_MISMATCH')) {
+            if (err && (err.code === 'CSV_SCHEMA_MISMATCH' || err.code === 'GRID_SIZE_MISMATCH' || err.code === 'CSV_PARSE_ERROR')) {
                 throw err;
             }
             const message = err && err.message ? err.message : String(err);
-            console.error(`[CSV] Error loading ${filename}:`, message);
+            const stack = err && err.stack ? err.stack : '';
+            console.error(`[CSV] Error loading ${filename}: ${message}`);
+            if (stack) {
+                console.error(`[CSV]   Stack: ${stack.split('\n').slice(1, 4).join('\n          ')}`);
+            }
             failedCsvLoads.push({
                 filename,
                 message
@@ -452,12 +462,14 @@ async function loadGridData() {
     }
 
     if (failedCsvLoads.length > 0) {
-        const details = failedCsvLoads.map((item) => `- ${item.filename}: ${item.message}`).join('\n');
-        throw new Error(
-            '[CSV] One or more continent grid files failed to load.\n' +
+        const details = failedCsvLoads.map((item) => `  - ${item.filename}: ${item.message}`).join('\n');
+        const err = new Error(
+            `[CSV] ${failedCsvLoads.length} continent grid file(s) failed to load:\n` +
             `${details}\n` +
-            'Please fix these files and restart the server.'
+            'Hint: check that the CSV files are valid UTF-8, have correct headers (see data/raw/SCHEMA.md), and are not truncated.'
         );
+        err.code = 'CSV_LOAD_FAILED';
+        throw err;
     }
 
     if (gridData.length === 0) {
@@ -501,7 +513,7 @@ async function loadGridData() {
             await fs.rename(tempPath, combinedJsonPath);
             console.log(`[Cache] Writing to all_grids.json (${gridData.length} grids)`);
         } catch (err) {
-            console.error('[Cache] Warning: Failed to write cache:', err.message);
+            console.error(`[Cache] Warning: Failed to write cache to ${combinedJsonPath}: ${err.message}`);
         }
     }
 

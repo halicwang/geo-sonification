@@ -1,0 +1,5 @@
+// Local Mapbox configuration (not in repository)
+// Copy this file to config.local.js and add your token
+// Get your token at: https://account.mapbox.com/access-tokens/
+
+window.MAPBOX_TOKEN = 'your-token-here';

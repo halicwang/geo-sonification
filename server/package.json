@@ -1,0 +1,19 @@
+{
+  "name": "geo-sonification-server",
+  "version": "1.0.0",
+  "description": "Node.js server for geo-sonification",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "check:csv": "node ../scripts/check_csv_schema.js",
+    "build:tiles": "node ../scripts/build-tiles.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "csv-parse": "^5.5.0",
+    "express": "^4.18.2",
+    "osc": "^2.4.4",
+    "ws": "^8.16.0"
+  }
+}

@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+
+# Logs
+*.log
+
+# Cache files (derived data, avoid cache drift across machines — rm -rf data/cache to clear all)
+data/cache/
+
+# Pre-built vector tiles (regenerate with: npm run build:tiles --prefix server)
+data/tiles/
+
+# Local configuration (not in repository)
+.env
+frontend/config.local.js

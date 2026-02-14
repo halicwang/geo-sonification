@@ -1,0 +1,12 @@
+{
+  "name": "geo-sonification",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Interactive map that streams geographic metrics to Max/MSP via OSC",
+  "scripts": {
+    "start": "npm --prefix server start",
+    "dev": "npm --prefix server run dev",
+    "check:csv": "node scripts/check_csv_schema.js",
+    "clean:cache": "rm -rf data/cache"
+  }
+}

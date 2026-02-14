@@ -1,0 +1,278 @@
+/*
+ * Geo-Sonification UI
+ *
+ * Layout: full-screen Mapbox map + floating info panel (top-right).
+ * Color scheme: dark (#1a1a2e base) to match mapbox dark-v11 style.
+ */
+
+/* ============ Theme Variables ============ */
+:root {
+    --color-bg: #1a1a2e;
+    --color-bg-95: rgba(26, 26, 46, 0.55);
+    --color-bg-70: rgba(26, 26, 46, 0.7);
+    --color-text: #eee;
+    --color-text-bright: #fff;
+    --color-text-muted: #aaa;
+    --color-text-dim: #888;
+    --color-accent: #4ecdc4;
+    --color-border: rgba(255, 255, 255, 0.1);
+}
+
+/* ============ Reset & Base ============ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    overflow: hidden;
+}
+
+/* ============ Map (fills entire viewport) ============ */
+#map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* ============ Info Panel (floating top-right) ============ */
+#info-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 280px;
+    background: var(--color-bg-95);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+}
+
+#info-panel h2 {
+    font-size: 1.4em;
+    margin-bottom: 4px;
+    color: var(--color-text-bright);
+}
+
+.subtitle {
+    font-size: 0.85em;
+    color: var(--color-text-dim);
+    margin-bottom: 20px;
+}
+
+/* Data vintage label + "By land area" note */
+.stats-section .vintage {
+    font-size: 0.8em;
+    color: var(--color-text-dim);
+    margin-bottom: 12px;
+}
+
+.stats-section .stat-note {
+    font-size: 0.75em;
+    color: var(--color-text-dim);
+    margin-top: -4px;
+    margin-bottom: 10px;
+}
+
+.stats-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    color: var(--color-text-muted);
+    font-size: 0.9em;
+}
+
+.stat-value {
+    font-weight: 600;
+    font-size: 1.1em;
+    color: var(--color-text-bright);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============ Connection Status (bottom of info panel) ============ */
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.8em;
+    color: var(--color-text-dim);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text-dim);
+}
+
+.status-dot.connected {
+    background: var(--color-accent);
+    box-shadow: 0 0 8px var(--color-accent);  /* glow when connected */
+}
+
+.status-dot.disconnected {
+    background: #ff6b6b;
+}
+
+/* ============ Toast Notification (bottom-center, auto-hides) ============ */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-bg-95);
+    color: var(--color-text-bright);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 1000;
+}
+
+.toast.hidden {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+    pointer-events: none;
+}
+
+/* ============ Mapbox Overrides (match dark theme) ============ */
+.mapboxgl-ctrl-attrib {
+    background: var(--color-bg-70) !important;
+    color: var(--color-text-dim) !important;
+}
+
+.mapboxgl-ctrl-attrib a {
+    color: var(--color-text-muted) !important;
+}
+
+/* Click popup on grid cells */
+.mapboxgl-popup-content {
+    background: var(--color-bg-95);
+    color: var(--color-text-bright);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.85em;
+}
+
+.mapboxgl-popup-close-button {
+    color: var(--color-text-bright);
+}
+
+.mapboxgl-popup-tip {
+    border-top-color: var(--color-bg-95);
+    border-bottom-color: var(--color-bg-95);
+    border-left-color: var(--color-bg-95);
+    border-right-color: var(--color-bg-95);
+}
+
+/* ============ Landcover Breakdown (dynamically built by updateUI) ============ */
+.landcover-list {
+    margin-top: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.landcover-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.9em;
+}
+
+.landcover-item:last-child {
+    border-bottom: none;
+}
+
+.landcover-name {
+    color: var(--color-accent);
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Small colored square matching the ESA WorldCover class color */
+.landcover-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    flex: 0 0 auto;
+}
+
+.landcover-percent {
+    color: var(--color-text-bright);
+    font-weight: 600;
+    margin-left: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Dimmed states: "Other" (classes below 1% threshold) and "empty" (no land data) */
+.landcover-item.landcover-other,
+.landcover-item.empty {
+    font-style: italic;
+}
+
+.landcover-item.landcover-other {
+    opacity: 0.7;
+}
+
+.landcover-item.landcover-other .landcover-name {
+    color: var(--color-text-muted);
+}
+
+.landcover-item.empty {
+    opacity: 0.6;
+}
+
+.landcover-item.empty .landcover-name {
+    color: var(--color-text-dim);
+}
+
+/* ============ Responsive: narrow screens ============ */
+@media (max-width: 600px) {
+    #info-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        border-radius: 12px 12px 0 0;
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+
+    #info-panel h2 {
+        font-size: 1.2em;
+    }
+
+    .landcover-list {
+        max-height: 120px;
+    }
+}

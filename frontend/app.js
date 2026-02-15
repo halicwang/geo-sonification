@@ -186,7 +186,11 @@ function initMap() {
         console.log('Map loaded');
 
         // Add vector tile grid overlay (PMTiles)
-        await addGridLayer();
+        try {
+            await addGridLayer();
+        } catch (err) {
+            console.warn('Grid layer failed to load (PMTiles missing?), continuing without overlay:', err);
+        }
 
         // Set up viewport tracking
         map.on('moveend', () => {
@@ -197,6 +201,15 @@ function initMap() {
         onViewportChange();
     });
     
+    // Escape dynamic values before inserting into HTML (prevents XSS)
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
     // Show coordinates on click (for debugging)
     map.on('click', 'grid-layer', (e) => {
         if (e.features.length > 0) {
@@ -217,15 +230,15 @@ function initMap() {
             if (lcEntries.length > 0) {
                 const top5 = lcEntries.slice(0, 5);
                 lcBreakdownHtml = '<br><small>' + top5.map(e =>
-                    `${getLandcoverName(e.cls) || e.cls}: ${e.pct.toFixed(1)}%`
+                    `${escapeHtml(getLandcoverName(e.cls) || e.cls)}: ${e.pct.toFixed(1)}%`
                 ).join('<br>') + '</small>';
             }
 
             new mapboxgl.Popup()
                 .setLngLat(e.lngLat)
                 .setHTML(`
-                    <strong>Grid: ${props.grid_id}</strong><br>
-                    Land Cover: ${landcoverDisplay}${lcBreakdownHtml}
+                    <strong>Grid: ${escapeHtml(props.grid_id)}</strong><br>
+                    Land Cover: ${escapeHtml(landcoverDisplay)}${lcBreakdownHtml}
                 `)
                 .addTo(map);
         }

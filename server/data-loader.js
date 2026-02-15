@@ -147,15 +147,16 @@ function parseCSVFile(csvContent, sourceLabel) {
         for (const [key, val] of Object.entries(record)) {
             if (numericKeys.has(key)) {
                 const trimmed = String(val).trim();
-                if (trimmed === '') {
-                    row[key] = 0;
+
+                // Nightlight: empty/NaN means "no VIIRS data" (sentinel -1), not zero
+                if (key === 'nightlight_mean' || key === 'nightlight_p90') {
+                    const num = Number(trimmed);
+                    row[key] = (trimmed !== '' && Number.isFinite(num)) ? num : NIGHTLIGHT_NO_DATA;
                     continue;
                 }
 
-                // Preserve existing sentinel behavior for VIIRS fields.
-                if (key === 'nightlight_mean' || key === 'nightlight_p90') {
-                    const num = Number(trimmed);
-                    row[key] = Number.isFinite(num) ? num : NIGHTLIGHT_NO_DATA;
+                if (trimmed === '') {
+                    row[key] = 0;
                     continue;
                 }
 
@@ -175,14 +176,6 @@ function parseCSVFile(csvContent, sourceLabel) {
                 row[key] = normalizeLandcoverClass(val);
             } else {
                 row[key] = val;
-            }
-        }
-        // Nightlight sentinel: empty/NaN nightlight values mean "no VIIRS data",
-        // not "zero light". Override the generic 0 default with -1 sentinel.
-        for (const nlKey of ['nightlight_mean', 'nightlight_p90']) {
-            const rawVal = String(record[nlKey] ?? '').trim();
-            if (rawVal === '' || !Number.isFinite(Number(rawVal))) {
-                row[nlKey] = NIGHTLIGHT_NO_DATA;
             }
         }
         row.population_density = (row.land_area_km2 != null && row.land_area_km2 > 0 && row.population_total != null)

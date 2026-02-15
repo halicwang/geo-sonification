@@ -141,7 +141,7 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
 
     // Viewport x-range on a circular longitude domain (0..360).
     // For dateline-crossing bounds (west > east), this formula returns a positive span.
-    const xSpan = ((east - west + 360) % 360);
+    const xSpan = ((east - west + 360) % 360) || (east !== west ? 360 : 0);
     const yRange = north - south;
 
     try {

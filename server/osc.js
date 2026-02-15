@@ -45,7 +45,8 @@ oscPort.on('ready', () => {
 });
 
 oscPort.on('error', (err) => {
-    console.error('OSC error:', err);
+    oscReady = false;
+    console.error('OSC error (oscReady set to false):', err);
 });
 
 oscPort.open();
@@ -63,6 +64,8 @@ function isOscReady() {
  * @param {Object} [landcoverDistribution={}] — { classCode: weightedArea } from spatial stats
  */
 function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, landcoverDistribution) {
+    if (!oscReady) return;
+
     // ESA WorldCover classes range LC_CLASS_MIN–LC_CLASS_MAX; clamp to that range
     let lc = (landcoverClass != null && Number.isFinite(landcoverClass)) ? Math.round(landcoverClass) : LC_CLASS_MIN;
     lc = Math.max(LC_CLASS_MIN, Math.min(LC_CLASS_MAX, lc));
@@ -79,35 +82,25 @@ function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, l
     const dist = landcoverDistribution || {};
     const totalWeight = Object.values(dist).reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
 
+    // Landcover distribution fractions — compute once, reuse for bundle and debug
+    const lcFracs = VALID_LANDCOVER_CLASSES.map(cls => {
+        const frac = totalWeight > 0 ? clamp01((dist[cls] || 0) / totalWeight) : 0;
+        return { cls, frac };
+    });
+
     try {
-        const safeSend = (packet, label) => {
-            try {
-                oscPort.send(packet);
-                return true;
-            } catch (err) {
-                if (DEBUG_OSC) {
-                    console.error(`OSC aggregated send failed: ${label}`, err);
-                } else {
-                    console.error(`OSC aggregated send failed: ${label}`);
-                }
-                return false;
-            }
-        };
+        // Bundle all 15 messages (4 stats + 11 lc fractions) into a single UDP packet
+        const packets = [
+            { address: '/landcover', args: [{ type: 'i', value: lc }] },
+            { address: '/nightlight', args: [{ type: 'f', value: nl }] },
+            { address: '/population', args: [{ type: 'f', value: pop }] },
+            { address: '/forest', args: [{ type: 'f', value: f }] },
+            ...lcFracs.map(({ cls, frac }) => ({
+                address: `/lc/${cls}`, args: [{ type: 'f', value: frac }]
+            }))
+        ];
 
-        // Aggregated stats (4 messages)
-        safeSend({ address: '/landcover', args: [{ type: 'i', value: lc }] }, '/landcover');
-        safeSend({ address: '/nightlight', args: [{ type: 'f', value: nl }] }, '/nightlight');
-        safeSend({ address: '/population', args: [{ type: 'f', value: pop }] }, '/population');
-        safeSend({ address: '/forest', args: [{ type: 'f', value: f }] }, '/forest');
-
-        // Landcover distribution (11 messages) — compute fractions once, reuse for debug
-        const lcFracs = VALID_LANDCOVER_CLASSES.map(cls => {
-            const frac = totalWeight > 0 ? clamp01((dist[cls] || 0) / totalWeight) : 0;
-            return { cls, frac };
-        });
-        for (const { cls, frac } of lcFracs) {
-            safeSend({ address: `/lc/${cls}`, args: [{ type: 'f', value: frac }] }, `/lc/${cls}`);
-        }
+        oscPort.send({ timeTag: osc.timeTag(0), packets });
 
         if (DEBUG_OSC) {
             const top3 = lcFracs
@@ -116,7 +109,7 @@ function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, l
                 .slice(0, 3)
                 .map(x => `${x.cls}:${(x.frac * 100).toFixed(1)}%`)
                 .join(' ');
-            console.log(`OSC sent: landcover=${lc}, nl=${nl.toFixed(3)}, pop=${pop.toFixed(3)}, forest=${f.toFixed(3)}, lc_dist=[${top3}]`);
+            console.log(`OSC sent (bundle): landcover=${lc}, nl=${nl.toFixed(3)}, pop=${pop.toFixed(3)}, forest=${f.toFixed(3)}, lc_dist=[${top3}]`);
         }
     } catch (err) {
         console.error('OSC aggregated send error:', err);
@@ -131,6 +124,7 @@ function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, l
  */
 function sendGridsToMax(gridsInView, bounds, normalizeParams) {
     if (!gridsInView || gridsInView.length === 0) return;
+    if (!oscReady) return;
 
     const clamp01 = (v) => {
         if (v == null || !Number.isFinite(v)) return 0;
@@ -145,31 +139,14 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
     const yRange = north - south;
 
     try {
-        const safeSend = (packet, label, debugMeta) => {
-            try {
-                oscPort.send(packet);
-                return true;
-            } catch (err) {
-                const suffix = debugMeta ? ` (${debugMeta})` : '';
-                if (DEBUG_OSC) {
-                    console.error(`OSC per-grid send failed: ${label}${suffix}`, err);
-                } else {
-                    console.error(`OSC per-grid send failed: ${label}${suffix}`);
-                }
-                return false;
-            }
-        };
-
-        // Tell Max how many grids to expect
-        safeSend({ address: '/grid/count', args: [{ type: 'i', value: gridsInView.length }] }, 'count');
-
-        // Send viewport bounds for panning calculation
-        safeSend({ address: '/viewport', args: [
+        // Header messages sent individually (not per-cell)
+        oscPort.send({ address: '/grid/count', args: [{ type: 'i', value: gridsInView.length }] });
+        oscPort.send({ address: '/viewport', args: [
             { type: 'f', value: west },  { type: 'f', value: south },
             { type: 'f', value: east },  { type: 'f', value: north }
-        ]}, 'viewport');
+        ]});
 
-        // Send each grid cell
+        // Bundle each cell's 3 messages (/grid, /grid/pos, /grid/lc) into one UDP packet
         for (const [index, g] of gridsInView.entries()) {
             const lon = Number.isFinite(g.lon) ? g.lon : 0;
             const lat = Number.isFinite(g.lat) ? g.lat : 0;
@@ -191,27 +168,11 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
                 normalizeParams
             );
 
-            safeSend({ address: '/grid', args: [
-                { type: 'f', value: lon },
-                { type: 'f', value: lat },
-                { type: 'i', value: lc },
-                { type: 'f', value: clamp01(nightlightNorm) },
-                { type: 'f', value: clamp01(populationNorm) },
-                { type: 'f', value: clamp01(forestNorm) }
-            ]}, '/grid', `index=${index}`);
-
             // Viewport-relative normalized position (0-1) using cell CENTER
-            // lon/lat from CSV are bottom-left corners; add half GRID_SIZE to get center
-            // xNorm: 0 = west edge, 1 = east edge
-            // yNorm: 0 = south edge, 1 = north edge
             const centerLon = lon + GRID_SIZE / 2;
             const centerLat = lat + GRID_SIZE / 2;
             const xNorm = xSpan > 0 ? clamp01(((centerLon - west + 360) % 360) / xSpan) : 0.5;
             const yNorm = yRange > 0 ? clamp01((centerLat - south) / yRange) : 0.5;
-            safeSend({ address: '/grid/pos', args: [
-                { type: 'f', value: xNorm },
-                { type: 'f', value: yNorm }
-            ]}, '/grid/pos', `index=${index}`);
 
             // Per-cell continuous landcover distribution (11 floats, same class order as /lc/*)
             // Fallback: if no lc_pct_* data, synthesize 100% distribution from discrete landcover_class
@@ -225,11 +186,29 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
                 type: 'f',
                 value: cellPctSum > 0 ? clamp01((cellDist[cls] || 0) / cellPctSum) : 0
             }));
-            safeSend({ address: '/grid/lc', args: lcArgs }, '/grid/lc', `index=${index}`);
+
+            oscPort.send({
+                timeTag: osc.timeTag(0),
+                packets: [
+                    { address: '/grid', args: [
+                        { type: 'f', value: lon },
+                        { type: 'f', value: lat },
+                        { type: 'i', value: lc },
+                        { type: 'f', value: clamp01(nightlightNorm) },
+                        { type: 'f', value: clamp01(populationNorm) },
+                        { type: 'f', value: clamp01(forestNorm) }
+                    ]},
+                    { address: '/grid/pos', args: [
+                        { type: 'f', value: xNorm },
+                        { type: 'f', value: yNorm }
+                    ]},
+                    { address: '/grid/lc', args: lcArgs }
+                ]
+            });
         }
 
         if (DEBUG_OSC) {
-            console.log(`OSC per-grid: ${gridsInView.length} cells (with /grid/pos, /grid/lc), viewport=[${west.toFixed(2)},${south.toFixed(2)},${east.toFixed(2)},${north.toFixed(2)}]`);
+            console.log(`OSC per-grid: ${gridsInView.length} bundles (3 msgs each), viewport=[${west.toFixed(2)},${south.toFixed(2)},${east.toFixed(2)},${north.toFixed(2)}]`);
         }
     } catch (err) {
         console.error('OSC per-grid send error:', err);

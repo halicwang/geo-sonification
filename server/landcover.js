@@ -22,6 +22,9 @@ const LANDCOVER_META = {
 
 const VALID_LANDCOVER_CLASSES = Object.keys(LANDCOVER_META).map(Number);
 
+// Throttle warnings for nearest-neighbor fallback (avoid spamming logs)
+const warnedNearestFallback = new Set();
+
 // Column names for continuous landcover percentages (V2 CSV schema, optional)
 const LC_PCT_COLUMNS = VALID_LANDCOVER_CLASSES.map(cls => `lc_pct_${cls}`);
 
@@ -66,6 +69,13 @@ function normalizeLandcoverClass(value) {
         if (diff < minDiff) {
             minDiff = diff;
             nearest = cls;
+        }
+    }
+
+    if (!warnedNearestFallback.has(rounded)) {
+        warnedNearestFallback.add(rounded);
+        if (warnedNearestFallback.size <= 20) {
+            console.warn(`[Landcover] Rounding invalid class ${rounded} → nearest valid ${nearest}`);
         }
     }
 

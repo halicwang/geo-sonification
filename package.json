@@ -7,6 +7,7 @@
     "start": "npm --prefix server start",
     "dev": "npm --prefix server run dev",
     "check:csv": "node scripts/check_csv_schema.js",
-    "clean:cache": "rm -rf data/cache"
+    "clean:cache": "rm -rf data/cache",
+    "test": "npm --prefix server test"
   }
 }

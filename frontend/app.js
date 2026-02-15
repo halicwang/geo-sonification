@@ -87,6 +87,15 @@ const VIEWPORT_DEBOUNCE = 200;
 // Keys are string class codes ("10", "20", …); values are { name, color }.
 let LANDCOVER_META = {};
 
+// Escape dynamic values before inserting into HTML (prevents XSS)
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 // Throttle console warnings for unknown classes
 const warnedUnknownLandcoverClasses = new Set();
 
@@ -201,15 +210,6 @@ function initMap() {
         onViewportChange();
     });
     
-    // Escape dynamic values before inserting into HTML (prevents XSS)
-    function escapeHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
     // Show coordinates on click (for debugging)
     map.on('click', 'grid-layer', (e) => {
         if (e.features.length > 0) {
@@ -447,12 +447,13 @@ function connectWebSocket() {
     };
     
     ws.onclose = () => {
+        // Bump delay before status check so stale indicator triggers sooner
+        wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX);
         console.log(`WebSocket disconnected, reconnecting in ${wsReconnectDelay / 1000}s...`);
         updateConnectionStatus(false);
-        
+
         // Reconnect with exponential backoff
         setTimeout(connectWebSocket, wsReconnectDelay);
-        wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX);
     };
     
     ws.onerror = (err) => {
@@ -503,8 +504,8 @@ function updateUI(stats) {
 
             return `<div class="landcover-item${otherClass}">
                 <span class="landcover-name">
-                    ${swatchColor ? `<span class="landcover-swatch" style="background:${swatchColor}"></span>` : ''}
-                    ${displayName}
+                    ${swatchColor ? `<span class="landcover-swatch" style="background:${escapeHtml(swatchColor)}"></span>` : ''}
+                    ${escapeHtml(displayName)}
                 </span>
                 <span class="landcover-percent">${formattedPercent}%</span>
             </div>`;
@@ -523,6 +524,7 @@ function updateConnectionStatus(connected) {
     if (connected) {
         _els.wsStatus.classList.remove('disconnected');
         _els.wsStatus.classList.add('connected');
+        _els.landcoverList.closest('#info-panel')?.classList.remove('stale');
         // Honest status display: WebSocket to server, OSC ready state (approximate, UDP has no handshake)
         if (OSC_READY) {
             _els.wsText.textContent = 'Connected to server / OSC: ready(approx)';
@@ -533,6 +535,10 @@ function updateConnectionStatus(connected) {
         _els.wsStatus.classList.remove('connected');
         _els.wsStatus.classList.add('disconnected');
         _els.wsText.textContent = 'Reconnecting...';
+        // After 2+ failed reconnects, mark panel data as potentially stale
+        if (wsReconnectDelay >= 4000) {
+            _els.landcoverList.closest('#info-panel')?.classList.add('stale');
+        }
     }
 }
 

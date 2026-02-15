@@ -110,6 +110,21 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* ============ Stale Data Indicator (shown when disconnected 2+ times) ============ */
+#info-panel.stale .stats-section {
+    opacity: 0.5;
+}
+
+#info-panel.stale .stats-section::after {
+    content: 'Data may be stale';
+    display: block;
+    text-align: center;
+    font-size: 0.75em;
+    color: var(--color-danger);
+    margin-top: 8px;
+    font-style: italic;
+}
+
 /* ============ Connection Status (bottom of info panel) ============ */
 .connection-status {
     display: flex;

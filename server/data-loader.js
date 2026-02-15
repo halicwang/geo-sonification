@@ -178,6 +178,16 @@ function parseCSVFile(csvContent, sourceLabel) {
                 row[key] = val;
             }
         }
+        // Validate coordinate ranges: lon ∈ [-180,180), lat ∈ [-90,90)
+        if (!Number.isFinite(row.lon) || row.lon < -180 || row.lon >= 180 ||
+            !Number.isFinite(row.lat) || row.lat < -90  || row.lat >= 90) {
+            parseErrors.push({
+                row: rowIndex + 2,
+                field: 'lon/lat',
+                value: `${row.lon},${row.lat}`,
+                file: sourceLabel
+            });
+        }
         row.population_density = (row.land_area_km2 != null && row.land_area_km2 > 0 && row.population_total != null)
             ? row.population_total / row.land_area_km2
             : 0;

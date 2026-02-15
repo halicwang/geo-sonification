@@ -37,10 +37,24 @@ const {
 /** Interval between WebSocket ping probes; clients that don't respond are terminated. */
 const WS_PING_INTERVAL_MS = 30000; // 30 seconds
 
+/** Max buffered bytes per WS client before skipping sends (backpressure). */
+const WS_MAX_BUFFERED = 64 * 1024; // 64KB
+
 // ============ State ============
 let dataLoaded = false;
 let httpServer = null;
 let wssServer = null;
+
+// ============ Runtime Monitoring ============
+let _statsCounter = { viewports: 0, totalMs: 0 };
+const STATS_LOG_INTERVAL_MS = 30000;
+setInterval(() => {
+    if (_statsCounter.viewports > 0) {
+        const avgMs = (_statsCounter.totalMs / _statsCounter.viewports).toFixed(1);
+        console.log(`[Stats] ${_statsCounter.viewports} viewport updates in 30s, avg ${avgMs}ms`);
+        _statsCounter = { viewports: 0, totalMs: 0 };
+    }
+}, STATS_LOG_INTERVAL_MS).unref();
 
 // ============ Shared Helpers ============
 
@@ -51,6 +65,8 @@ let wssServer = null;
  * @returns {{ stats, gridsInView } | { error }}
  */
 function processViewport(bounds, modeState) {
+    const t0 = Date.now();
+
     const validation = validateBounds(bounds);
     if (!validation.valid) {
         return { error: validation.error };
@@ -74,6 +90,10 @@ function processViewport(bounds, modeState) {
     stats.mode = modeState.currentMode;
     stats.perGridThresholdEnter = PER_GRID_THRESHOLD_ENTER;
     stats.perGridThresholdExit = PER_GRID_THRESHOLD_EXIT;
+
+    _statsCounter.viewports++;
+    _statsCounter.totalMs += Date.now() - t0;
+
     return { stats, gridsInView };
 }
 
@@ -246,10 +266,12 @@ async function startServer() {
                         // Default: unicast (only sender). BROADCAST_STATS=1: all clients.
                         if (BROADCAST_STATS) {
                             wss.clients.forEach(client => {
-                                if (client.readyState === WebSocket.OPEN) {
+                                if (client.readyState === WebSocket.OPEN && client.bufferedAmount < WS_MAX_BUFFERED) {
                                     try { client.send(payload); } catch (sendErr) {
                                         console.error('Failed to send to client:', sendErr);
                                     }
+                                } else if (client.readyState === WebSocket.OPEN) {
+                                    console.warn(`[WS] Skipping slow client (buffered=${client.bufferedAmount})`);
                                 }
                             });
                         } else {

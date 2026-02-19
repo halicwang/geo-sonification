@@ -219,19 +219,25 @@ function initMap() {
                 ? (getLandcoverName(props.landcover_class) || 'Unknown')
                 : 'No data';
 
-            // Build per-cell lc_pct_* breakdown if available
-            const lcClasses = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100];
+            // Build per-cell land-only lc_pct_* breakdown (Water class 80 excluded)
+            const lcClasses = [10, 20, 30, 40, 50, 60, 70, 90, 95, 100];
             const lcEntries = lcClasses
-                .map(cls => ({ cls, pct: props[`lc_pct_${cls}`] || 0 }))
-                .filter(e => e.pct >= 0.5)
-                .sort((a, b) => b.pct - a.pct);
+                .map(cls => ({ cls, pct: Number(props[`lc_pct_${cls}`]) || 0 }))
+                .filter(e => e.pct > 0);
+            const landTotal = lcEntries.reduce((sum, e) => sum + e.pct, 0);
 
             let lcBreakdownHtml = '';
-            if (lcEntries.length > 0) {
-                const top5 = lcEntries.slice(0, 5);
-                lcBreakdownHtml = '<br><small>' + top5.map(e =>
-                    `${escapeHtml(getLandcoverName(e.cls) || e.cls)}: ${e.pct.toFixed(1)}%`
-                ).join('<br>') + '</small>';
+            if (lcEntries.length > 0 && landTotal > 0) {
+                const top5 = lcEntries
+                    .map(e => ({ ...e, pct: (e.pct / landTotal) * 100 }))
+                    .filter(e => e.pct >= 0.5)
+                    .sort((a, b) => b.pct - a.pct)
+                    .slice(0, 5);
+                if (top5.length > 0) {
+                    lcBreakdownHtml = '<br><small>' + top5.map(e =>
+                        `${escapeHtml(getLandcoverName(e.cls) || e.cls)}: ${e.pct.toFixed(1)}%`
+                    ).join('<br>') + '</small>';
+                }
             }
 
             new mapboxgl.Popup()

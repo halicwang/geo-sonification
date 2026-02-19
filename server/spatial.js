@@ -14,7 +14,7 @@
  */
 
 const { normalizeOscValues } = require('./normalize');
-const { VALID_LANDCOVER_CLASSES, normalizeLandcoverClass, getCellLcDistribution } = require('./landcover');
+const { VALID_LANDCOVER_CLASSES, WATER_CLASS, normalizeLandcoverClass, getCellLcDistribution } = require('./landcover');
 const { USE_LEGACY_AGGREGATION, MIN_LAND_AREA_KM2, landFractionWeight, GRID_SIZE, LON_BUCKETS, LAT_BUCKETS } = require('./config');
 const { NIGHTLIGHT_NO_DATA } = require('./data-loader');
 
@@ -174,10 +174,10 @@ function buildStatsResult({ dominantLandcover, nightlightNorm, populationNorm, f
 
 /**
  * Default stats when viewport has no grid data (e.g. open ocean).
- * Uses 80 (Permanent Water Bodies) as the dominant landcover.
+ * dominantLandcover is null (no land data); OSC sends 0.
  */
 function emptyStats(gridCount = 0) {
-    return buildStatsResult({ dominantLandcover: 80, gridCount });
+    return buildStatsResult({ dominantLandcover: null, gridCount });
 }
 
 /**
@@ -185,11 +185,11 @@ function emptyStats(gridCount = 0) {
  * Shows the top 5 classes (each >= 1%), merges the rest into "Other".
  * @param {Object} lcCounts  — { classId: weight } (count or km2)
  * @param {number} totalWeight — denominator for percentage calculation
- * @returns {{ displayItems: Array, dominantLandcover: number }}
+ * @returns {{ displayItems: Array, dominantLandcover: number|null }}
  */
 function buildLandcoverBreakdown(lcCounts, totalWeight) {
     if (totalWeight <= 0 || Object.keys(lcCounts).length === 0) {
-        return { displayItems: [], dominantLandcover: 80 };
+        return { displayItems: [], dominantLandcover: null };
     }
 
     // Find dominant
@@ -277,7 +277,7 @@ function calculateLegacyStats(gridsInView) {
             validCount += 1;
         } else {
             const lc = getValidLandcover(g);
-            if (lc == null) return;
+            if (lc == null || lc === WATER_CLASS) return;
             lcCounts[lc] = (lcCounts[lc] || 0) + 1;
             validCount += 1;
         }
@@ -355,7 +355,7 @@ function calculateAreaWeightedStats(gridsInView) {
             validLandcoverWeight += weightLandAreaKm2;
         } else {
             const lc = getValidLandcover(g);
-            if (lc != null) {
+            if (lc != null && lc !== WATER_CLASS) {
                 lcCounts[lc] = (lcCounts[lc] || 0) + weightLandAreaKm2;
                 validLandcoverWeight += weightLandAreaKm2;
             }
@@ -374,7 +374,7 @@ function calculateAreaWeightedStats(gridsInView) {
 
     if (validLandcoverWeight <= 0) {
         return buildStatsResult({
-            dominantLandcover: 80, nightlightNorm, populationNorm, forestNorm,
+            dominantLandcover: null, nightlightNorm, populationNorm, forestNorm,
             avgForestPct: avgForest, avgPopulationDensity: avgPopulation,
             avgNightlightMean, avgNightlightP90,
             gridCount: gridsInView.length

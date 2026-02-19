@@ -1,4 +1,4 @@
-const { normalizeLandcoverClass, getCellLcDistribution, VALID_LANDCOVER_CLASSES } = require('../landcover');
+const { normalizeLandcoverClass, getCellLcDistribution, VALID_LANDCOVER_CLASSES, WATER_CLASS } = require('../landcover');
 
 describe('normalizeLandcoverClass', () => {
     test('returns null for null/undefined/empty', () => {
@@ -64,11 +64,11 @@ describe('getCellLcDistribution', () => {
         expect(getCellLcDistribution(cell)).toEqual({});
     });
 
-    test('returns populated classes with pct > 0', () => {
+    test('returns land classes with pct > 0, excludes Water (80)', () => {
         const cell = { lc_pct_10: 60, lc_pct_80: 30, lc_pct_20: 0 };
         const dist = getCellLcDistribution(cell);
         expect(dist[10]).toBe(60);
-        expect(dist[80]).toBe(30);
+        expect(dist[80]).toBeUndefined(); // Water excluded
         expect(dist[20]).toBeUndefined(); // 0 is excluded
     });
 
@@ -81,9 +81,35 @@ describe('getCellLcDistribution', () => {
     });
 
     test('excludes negative values', () => {
-        const cell = { lc_pct_10: -5, lc_pct_80: 100 };
+        const cell = { lc_pct_10: -5, lc_pct_30: 100 };
         const dist = getCellLcDistribution(cell);
         expect(dist[10]).toBeUndefined();
-        expect(dist[80]).toBe(100);
+        expect(dist[30]).toBe(100);
+    });
+
+    test('coastal cell: water excluded, land classes preserved for renormalization', () => {
+        // Simulates -78.0_33.5: 96% water, 2.5% forest, 1.2% grassland
+        const cell = { lc_pct_80: 96.3, lc_pct_10: 2.5, lc_pct_30: 1.2 };
+        const dist = getCellLcDistribution(cell);
+        expect(dist[80]).toBeUndefined();
+        expect(dist[10]).toBe(2.5);
+        expect(dist[30]).toBe(1.2);
+        // Consumer divides by sum(2.5+1.2)=3.7 → Tree:67.6%, Grass:32.4%
+    });
+
+    test('pure water cell: returns empty distribution', () => {
+        const cell = { lc_pct_80: 100 };
+        const dist = getCellLcDistribution(cell);
+        expect(Object.keys(dist)).toHaveLength(0);
+    });
+});
+
+describe('WATER_CLASS', () => {
+    test('is 80', () => {
+        expect(WATER_CLASS).toBe(80);
+    });
+
+    test('is in VALID_LANDCOVER_CLASSES', () => {
+        expect(VALID_LANDCOVER_CLASSES).toContain(WATER_CLASS);
     });
 });

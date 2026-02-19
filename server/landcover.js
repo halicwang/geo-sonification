@@ -21,6 +21,7 @@ const LANDCOVER_META = {
 };
 
 const VALID_LANDCOVER_CLASSES = Object.keys(LANDCOVER_META).map(Number);
+const WATER_CLASS = 80;  // ESA WorldCover class 80 — excluded from land-only distributions
 
 // Throttle warnings for nearest-neighbor fallback (avoid spamming logs)
 const warnedNearestFallback = new Set();
@@ -83,14 +84,16 @@ function normalizeLandcoverClass(value) {
 }
 
 /**
- * Extract per-class landcover percentages from a grid cell.
- * Returns { classCode: pct } for classes with pct > 0 (including Water class 80).
- * Note: lc_pct_* denominator includes all pixels (land + water), so percentages
- * reflect total cell coverage. This is consistent with both continuous and discrete paths.
+ * Extract per-class landcover percentages from a grid cell (land-only).
+ * Returns { classCode: pct } for land classes with pct > 0.
+ * Water (class 80) is excluded so that downstream consumers automatically
+ * renormalize to land-only fractions when dividing by pctSum.
+ * The raw lc_pct_80 remains on the cell object for reference.
  */
 function getCellLcDistribution(cell) {
     const dist = {};
     for (const cls of VALID_LANDCOVER_CLASSES) {
+        if (cls === WATER_CLASS) continue;
         const pct = cell[`lc_pct_${cls}`];
         if (Number.isFinite(pct) && pct > 0) {
             dist[cls] = pct;
@@ -110,6 +113,7 @@ function hasContinuousLcData(cell) {
 module.exports = {
     LANDCOVER_META,
     VALID_LANDCOVER_CLASSES,
+    WATER_CLASS,
     LC_PCT_COLUMNS,
     normalizeLandcoverClass,
     getCellLcDistribution,

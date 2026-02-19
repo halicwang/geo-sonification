@@ -5,7 +5,7 @@
  *   /mode        (string) — "aggregated" or "per-grid", sent before data on every update
  *
  * Aggregated mode: 15 OSC addresses per viewport update:
- *   /landcover  (int)    — dominant ESA class, 10-100
+ *   /landcover  (int)    — dominant ESA land class, 10-100; 0 = no land data
  *   /nightlight (float)  — 0-1 normalized brightness
  *   /population (float)  — 0-1 normalized density
  *   /forest     (float)  — 0-1 normalized forest cover
@@ -23,7 +23,7 @@
 
 const osc = require('osc');
 const { OSC_HOST, OSC_PORT, DEBUG_OSC, GRID_SIZE } = require('./config');
-const { VALID_LANDCOVER_CLASSES, getCellLcDistribution } = require('./landcover');
+const { VALID_LANDCOVER_CLASSES, WATER_CLASS, getCellLcDistribution } = require('./landcover');
 const { normalizeOscValues } = require('./normalize');
 
 // ESA WorldCover class range bounds, derived from the canonical class list
@@ -57,7 +57,7 @@ function isOscReady() {
 
 /**
  * Send 15 OSC messages to MaxMSP: 4 aggregated stats + 11 landcover class fractions.
- * @param {number} landcoverClass        — dominant ESA class (clamped 10-100; defaults to 10)
+ * @param {number|null} landcoverClass   — dominant ESA land class (10-100), or null (sent as 0)
  * @param {number} nightlightNorm        — 0-1 normalized
  * @param {number} populationNorm        — 0-1 normalized
  * @param {number} forestNorm            — 0-1 normalized
@@ -66,9 +66,9 @@ function isOscReady() {
 function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, landcoverDistribution) {
     if (!oscReady) return;
 
-    // ESA WorldCover classes range LC_CLASS_MIN–LC_CLASS_MAX; clamp to that range
-    let lc = (landcoverClass != null && Number.isFinite(landcoverClass)) ? Math.round(landcoverClass) : LC_CLASS_MIN;
-    lc = Math.max(LC_CLASS_MIN, Math.min(LC_CLASS_MAX, lc));
+    // ESA WorldCover classes range LC_CLASS_MIN–LC_CLASS_MAX; null → 0 (no land data)
+    let lc = (landcoverClass != null && Number.isFinite(landcoverClass)) ? Math.round(landcoverClass) : 0;
+    if (lc > 0) lc = Math.max(LC_CLASS_MIN, Math.min(LC_CLASS_MAX, lc));
 
     const clamp01 = (v) => {
         if (v == null || !Number.isFinite(v)) return 0;
@@ -178,7 +178,7 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
             // Fallback: if no lc_pct_* data, synthesize 100% distribution from discrete landcover_class
             let cellDist = getCellLcDistribution(g);
             let cellPctSum = Object.values(cellDist).reduce((s, v) => s + v, 0);
-            if (cellPctSum <= 0 && lc >= LC_CLASS_MIN) {
+            if (cellPctSum <= 0 && lc >= LC_CLASS_MIN && lc !== WATER_CLASS) {
                 cellDist = { [lc]: 100 };
                 cellPctSum = 100;
             }

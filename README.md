@@ -182,6 +182,12 @@ Sent to MaxMSP on port 7400 per viewport update.
 **Mode indicator (always sent first):**
 - `/mode` (string) - `"aggregated"` or `"per-grid"`, sent before data on every update
 
+**Viewport signals (sent after /mode, before data):**
+- `/proximity` (float 0–1) — Viewport zoom proximity. 0 = satellite/distant view, 1 = closest zoom. Based on grid cell count with configurable thresholds (default: 50–800 cells). Forced to 0 when viewport contains zero grid cells.
+- `/delta/lc` (11 floats) — Per-class land cover change since previous update, same class order as `/lc/*`. All zeros on first update.
+- `/delta/magnitude` (float 0–1) — Overall change magnitude: `0.5 × sum(|current_i − prev_i|)`. 0 = no change, 1 = maximum shift.
+- `/delta/rate` (float 0–1) — Rate of change: magnitude per second, normalized by `DELTA_RATE_CEILING` (default 5.0). Distinguishes slow panning from fast flicking. Uses clamped dt (50–5000ms) for edge cases.
+
 ### Aggregated Mode (always sent, 15 messages)
 
 **Aggregated stats (4):**
@@ -194,6 +200,9 @@ Sent to MaxMSP on port 7400 per viewport update.
 - `/lc/10` … `/lc/100` (float 0-1) - Area fraction per ESA WorldCover class
 - Classes: 10 (Tree), 20 (Shrub), 30 (Grass), 40 (Crop), 50 (Urban), 60 (Bare), 70 (Snow), 80 (Water), 90 (Wetland), 95 (Mangrove), 100 (Moss)
 - Classes not present in viewport send `0.0`; all 11 are always sent
+
+**Land coverage:**
+- `/coverage` (float 0–1) — Ratio of land grid cells to theoretical grid cells in viewport. Sent after aggregated messages.
 
 ### Per-Grid Mode (with hysteresis, default center threshold 50)
 

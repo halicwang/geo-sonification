@@ -113,7 +113,11 @@ geo-sonification/
 │   ├── app.js                            # Mapbox + WebSocket client
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
 ├── sonification/
-│   └── max_wav_osc.maxpat                # Max Data Hub: OSC in → numbers/outlets
+│   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → numbers/outlets
+│   ├── crossfade_controller.js           # 11-ch land cover crossfade with EMA smoothing
+│   ├── icon_trigger.js                   # Probabilistic auditory icon triggering
+│   ├── granulator.js                     # 4-voice granular synthesis scheduler
+│   └── water_bus.js                      # 3-level ocean detector (coverage-based)
 └── scripts/
     ├── check_csv_schema.js                # CSV schema validator
     └── test_bounds_validation.sh          # Bounds regression test
@@ -135,9 +139,17 @@ Caches live in `data/cache/` and include aggregation version in their keys. Chan
 
 ## Sound Mapping
 
-The provided Max patch is intentionally minimal (Data Hub only). Recommended mapping patterns (optional):
+The Max patch includes a sound engine with crossfade mixing, icon triggering, and granular synthesis. Land cover channels are folded into 4 audio buses:
 
-- `/landcover` → pick synth/timbre family
+- **Tree bus**: classes 10, 20, 30, 40, 90, 95, 100 (natural vegetation)
+- **Urban bus**: class 50
+- **Bare bus**: class 60
+- **Water bus**: classes 70, 80 + ocean 3-level detector (`water_bus.js` via `maximum`)
+
+The Water bus combines fine-grained grid-level water data (crossfade controller classes 70+80) with a macro ocean signal derived from `/coverage`. Three quantized levels: 1.0 (pure ocean, no grid data), 0.7 (coastal, coverage < 10% with high proximity), 0.0 (land). EMA smoothing provides gradual transitions.
+
+Additional recommended mappings (optional):
+
 - `/population` → rhythm density / event rate
 - `/nightlight` → presence / loudness / brightness
 - `/forest` → smoothness / texture / reverb amount

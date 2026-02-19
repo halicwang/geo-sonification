@@ -1652,7 +1652,7 @@
                         440,
                         20
                     ],
-                    "text": "--- FOLD-MAPPING: 11 ch → 3 buses (Tree / Urban / Bare) ---"
+                    "text": "--- FOLD-MAPPING: 11 ch → 4 buses (Tree / Urban / Bare / Water) ---"
                 }
             },
             {
@@ -1835,7 +1835,7 @@
             },
             {
                 "box": {
-                    "id": "bare_add1",
+                    "id": "water_add1",
                     "maxclass": "newobj",
                     "numinlets": 2,
                     "numoutlets": 1,
@@ -1843,7 +1843,7 @@
                         "float"
                     ],
                     "patching_rect": [
-                        560,
+                        800,
                         1080,
                         40,
                         22
@@ -1853,7 +1853,25 @@
             },
             {
                 "box": {
-                    "id": "bare_add2",
+                    "id": "js_water_bus",
+                    "maxclass": "newobj",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [
+                        ""
+                    ],
+                    "patching_rect": [
+                        800,
+                        1130,
+                        150,
+                        22
+                    ],
+                    "text": "js water_bus.js"
+                }
+            },
+            {
+                "box": {
+                    "id": "water_max",
                     "maxclass": "newobj",
                     "numinlets": 2,
                     "numoutlets": 1,
@@ -1861,12 +1879,12 @@
                         "float"
                     ],
                     "patching_rect": [
-                        560,
-                        1110,
-                        40,
+                        800,
+                        1200,
+                        80,
                         22
                     ],
-                    "text": "+ 0."
+                    "text": "maximum 0."
                 }
             },
             {
@@ -1898,10 +1916,45 @@
                     "patching_rect": [
                         630,
                         1262,
-                        160,
+                        100,
                         20
                     ],
-                    "text": "Bare bus (60,70,80)"
+                    "text": "Bare bus (60)"
+                }
+            },
+            {
+                "box": {
+                    "format": 6,
+                    "id": "flonum_water_bus",
+                    "maxclass": "flonum",
+                    "numinlets": 1,
+                    "numoutlets": 2,
+                    "outlettype": [
+                        "",
+                        "bang"
+                    ],
+                    "parameter_enable": 0,
+                    "patching_rect": [
+                        800,
+                        1260,
+                        60,
+                        22
+                    ]
+                }
+            },
+            {
+                "box": {
+                    "id": "lab_water_bus",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [
+                        870,
+                        1262,
+                        200,
+                        20
+                    ],
+                    "text": "Water bus (70,80,ocean)"
                 }
             },
             {
@@ -2922,7 +2975,21 @@
                     "source": [
                         "t_coverage",
                         0
-                    ]
+                    ],
+                    "order": 0
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [
+                        "js_water_bus",
+                        1
+                    ],
+                    "source": [
+                        "t_coverage",
+                        0
+                    ],
+                    "order": 1
                 }
             },
             {
@@ -3252,7 +3319,7 @@
             {
                 "patchline": {
                     "destination": [
-                        "bare_add1",
+                        "flonum_bare_bus",
                         0
                     ],
                     "source": [
@@ -3264,8 +3331,8 @@
             {
                 "patchline": {
                     "destination": [
-                        "bare_add1",
-                        1
+                        "water_add1",
+                        0
                     ],
                     "source": [
                         "js_crossfade",
@@ -3276,19 +3343,7 @@
             {
                 "patchline": {
                     "destination": [
-                        "bare_add2",
-                        0
-                    ],
-                    "source": [
-                        "bare_add1",
-                        0
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
-                        "bare_add2",
+                        "water_add1",
                         1
                     ],
                     "source": [
@@ -3300,11 +3355,35 @@
             {
                 "patchline": {
                     "destination": [
-                        "flonum_bare_bus",
+                        "water_max",
                         0
                     ],
                     "source": [
-                        "bare_add2",
+                        "water_add1",
+                        0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [
+                        "water_max",
+                        1
+                    ],
+                    "source": [
+                        "js_water_bus",
+                        0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [
+                        "flonum_water_bus",
+                        0
+                    ],
+                    "source": [
+                        "water_max",
                         0
                     ]
                 }
@@ -3463,6 +3542,19 @@
                         0
                     ],
                     "order": 2
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [
+                        "js_water_bus",
+                        0
+                    ],
+                    "source": [
+                        "t_proximity",
+                        0
+                    ],
+                    "order": 3
                 }
             },
             {

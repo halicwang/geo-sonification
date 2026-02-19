@@ -69,10 +69,12 @@
  *  1. Route /lc/10 .. /lc/100 from udpreceive → route → this js inlets
  *  2. Route /proximity → inlet 11
  *  3. Connect outlets 0–10 to gain~ or *~ objects controlling audio
- *  4. In Phase 1, fold 11 outlets into 3 audio buses in the patch:
+ *  4. Fold 11 outlets into 4 audio buses in the patch:
  *       Tree bus:  outlets 0,1,2,3,8,9,10 (classes 10,20,30,40,90,95,100)
  *       Urban bus: outlet 4               (class 50)
- *       Bare bus:  outlets 5,6,7          (classes 60,70,80)
+ *       Bare bus:  outlet 5               (class 60)
+ *       Water bus: outlets 6,7            (classes 70,80)
+ *                  + ocean 3-level detector (water_bus.js) via maximum
  *     This fold-mapping is a Max wiring concern — this script always
  *     outputs all 11 independent channels.
  */

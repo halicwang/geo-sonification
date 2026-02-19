@@ -241,10 +241,11 @@ Only 3 representative land cover types have dedicated audio assets:
 - **Urban** (city): low-frequency drone + mechanical texture + car horn icons
 - **Bare** (desert): wind synthesis + sand particles + wind gust icons
 
-To avoid large silent regions during global exploration, 11 output channels are folded into 3 audio buses **in the Max patch wiring** (not in server code or JS scripts):
+To avoid large silent regions during global exploration, 11 output channels are folded into 4 audio buses **in the Max patch wiring** (not in server code or JS scripts):
 - **Tree bus**: classes 10 (Tree), 20 (Shrub), 30 (Grass), 40 (Crop), 90 (Wetland), 95 (Mangrove), 100 (Moss) — all natural vegetation
 - **Urban bus**: class 50 (Urban) only
-- **Bare bus**: classes 60 (Bare), 70 (Snow/Ice), 80 (Water) — arid, barren, or open-surface types
+- **Bare bus**: class 60 (Bare)
+- **Water bus**: classes 70 (Snow/Ice), 80 (Water) + ocean 3-level detector (`water_bus.js`)
 
 As new audio assets are added, channels will be unbundled from buses. The crossfade controller and icon trigger always output all 11 independent channels — fold-mapping is purely a downstream wiring concern.
 
@@ -301,6 +302,67 @@ Companion wiring guide: `sonification/granulator_README.md`.
 3. Wires icon trigger: metro → bang, multiply intensity by `/delta/magnitude`
 4. Tests full pipeline with OSC simulator: `node scripts/osc_simulator.js gradual-transition`
 5. Optionally wires granulator for ambient texture processing
+
+---
+
+## 2026-02-19 — Milestone D: Water Bus & 4-Bus Fold-Mapping
+
+### Problem
+
+The original 3-bus fold-mapping grouped classes 60 (Bare), 70 (Snow/Ice), and 80 (Water) into a single "Bare bus". Two issues:
+
+1. Water and snow mixed with desert — semantically wrong and sonically muddled
+2. Over open ocean (no grid data), all crossfade outputs = 0 because proximity = 0. The sonification went silent over water, missing the most obvious geographic feature on Earth.
+
+### Solution: Water bus with ocean detection
+
+New 4th audio bus — **Water bus** — combining two signal paths via `[maximum]`:
+
+1. **Crossfade path**: crossfade controller outputs for class 70 + 80, summed with `[+ 0.]`. Provides fine-grained water signal when grid data exists.
+2. **Ocean path**: new `water_bus.js` — three-level ocean detector based on `/coverage` (fraction of viewport with grid data). Provides macro ocean signal when grids are absent.
+
+### `water_bus.js` — three-level quantized detection
+
+Ocean is defined as the **absence of grid data**, not a land cover class. The metric is `1 − coverage`.
+
+| Level | Condition | Target |
+|-------|-----------|--------|
+| Pure ocean | `proximity == 0` (no grids at all) | 1.0 |
+| Coastal | `coverage < 0.1` AND `proximity > 0.7` | 0.7 |
+| Land | otherwise | 0.0 |
+
+EMA smoothing (500ms time constant) prevents abrupt jumps. Triggered by `/coverage`, which arrives last in the server send cycle (`/proximity` → `/delta/*` → `/lc/*` → `/coverage`), ensuring proximity is already current when evaluation runs.
+
+### Signal flow
+
+```
+crossfade_controller
+  out6 (Snow/Ice 70) ──┐
+  out7 (Water 80)    ──┤
+                       [+ 0.]  (sum)
+                         │
+                    [maximum 0.] LEFT (triggers)
+                         │
+  [js water_bus.js] → RIGHT (stores)
+   ↑          ↑          │
+/proximity  /coverage   flonum (Water bus display)
+```
+
+### Behavior matrix
+
+| Scenario | proximity | coverage | ocean target | crossfade 70+80 | Water bus output |
+|----------|-----------|----------|-------------|-----------------|-----------------|
+| Open ocean (no grids) | 0 | 0 | **1.0** | 0 | **1.0** |
+| Coastline (few grids) | 0.8 | 0.05 | **0.7** | ~0.1 | **0.7** |
+| Inland lake (30% water) | 0.9 | 0.85 | 0 | ~0.27 | **0.27** |
+| Inland no water | 0.9 | 0.90 | 0 | 0 | **0** |
+
+### Files changed
+
+- **New**: `sonification/water_bus.js` — 3-level ocean detector + EMA smoothing (2 inlets, 1 outlet)
+- **Modified**: `sonification/max_wav_osc.maxpat` — added Water bus objects and wiring, simplified Bare bus to class 60 only, updated fold-mapping comment to 4 buses
+- **Modified**: `sonification/crossfade_controller.js` — updated wiring hints comment to reflect 4-bus layout
+- **No server changes** — `/coverage` and `/proximity` already provided the needed inputs
 
 ---
 

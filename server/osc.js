@@ -233,6 +233,23 @@ function sendModeToMax(mode) {
     }
 }
 
+/**
+ * Send land coverage ratio to MaxMSP.
+ * @param {number} ratio — 0-1 float (land grids / theoretical grids)
+ */
+function sendCoverageToMax(ratio) {
+    if (!oscReady) return;
+    try {
+        const value = (ratio != null && Number.isFinite(ratio))
+            ? Math.max(0, Math.min(1, ratio))
+            : 0;
+        oscPort.send({ address: '/coverage', args: [{ type: 'f', value }] });
+        if (DEBUG_OSC) console.log(`OSC sent: /coverage ${value.toFixed(3)}`);
+    } catch (err) {
+        console.error('OSC coverage send error:', err);
+    }
+}
+
 function closeOsc() {
     try {
         oscPort.close();
@@ -241,4 +258,4 @@ function closeOsc() {
     }
 }
 
-module.exports = { isOscReady, sendToMax, sendGridsToMax, sendModeToMax, closeOsc };
+module.exports = { isOscReady, sendToMax, sendGridsToMax, sendModeToMax, sendCoverageToMax, closeOsc };

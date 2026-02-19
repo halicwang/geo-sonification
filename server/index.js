@@ -22,7 +22,7 @@ const path = require('path');
 
 const { HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
-const { isOscReady, sendToMax, sendGridsToMax, sendModeToMax, closeOsc } = require('./osc');
+const { isOscReady, sendToMax, sendGridsToMax, sendModeToMax, sendCoverageToMax, closeOsc } = require('./osc');
 const { loadGridData } = require('./data-loader');
 const spatial = require('./spatial');
 const { validateBounds } = spatial;
@@ -81,6 +81,7 @@ function processViewport(bounds, modeState) {
 
     // Always send aggregated stats so Max displays/synth never go silent
     sendToMax(stats.dominantLandcover, stats.nightlightNorm, stats.populationNorm, stats.forestNorm, stats.landcoverDistribution);
+    sendCoverageToMax(stats.landCoverageRatio);
 
     // Additionally send per-grid data when zoomed in
     if (modeState.currentMode === 'per-grid') {

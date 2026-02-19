@@ -476,7 +476,14 @@ function connectWebSocket() {
  */
 function updateUI(stats) {
     // Fixed-structure elements — use cached refs (no getElementById per call)
-    _els.gridCount.textContent = stats.gridCount || 0;
+    const gc = stats.gridCount || 0;
+    const tgc = stats.theoreticalGridCount;
+    if (tgc != null && tgc > 0) {
+        const pct = ((stats.landCoverageRatio || 0) * 100).toFixed(0);
+        _els.gridCount.textContent = `${gc} / ${tgc} (${pct}%)`;
+    } else {
+        _els.gridCount.textContent = gc;
+    }
 
     if (_els.oscMode) {
         if (stats.mode === 'per-grid') {

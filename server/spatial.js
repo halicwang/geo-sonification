@@ -86,18 +86,43 @@ function buildSpatialIndex() {
  * Query grids that intersect the given bounds.
  * Handles date-line crossing (west > east).
  * @param {number[]} bounds - [west, south, east, north]
- * @returns {object[]} grids in viewport
+ * @returns {{ gridsInView: object[], theoreticalGridCount: number }}
  */
 function queryGridsInBounds(bounds) {
     const [west, south, east, north] = bounds;
     let gridsInView = [];
+    let theoreticalGridCount = 0;
+
+    const crossesDateLine = west > east;
+    const ranges = crossesDateLine
+        ? [{ west, east: 180 }, { west: -180, east }]
+        : [{ west, east }];
+
+    // Count theoretical grid cells (all possible 0.5° buckets in the viewport)
+    // using the same bucket-index ranges and fine-grained intersection test as
+    // the data query, so the two counts are perfectly consistent.
+    for (const range of ranges) {
+        const ixStart = Math.max(0, Math.floor((range.west + 180) / GRID_SIZE));
+        const ixEnd   = Math.min(LON_BUCKETS - 1, Math.ceil((range.east + 180) / GRID_SIZE) - 1);
+        const iyStart = Math.max(0, Math.floor((south + 90) / GRID_SIZE));
+        const iyEnd   = Math.min(LAT_BUCKETS - 1, Math.ceil((north + 90) / GRID_SIZE) - 1);
+
+        for (let ix = ixStart; ix <= ixEnd; ix++) {
+            const gw = ix * GRID_SIZE - 180;
+            const ge = gw + GRID_SIZE;
+            if (!(gw < range.east && ge > range.west)) continue;
+
+            for (let iy = iyStart; iy <= iyEnd; iy++) {
+                const gs = iy * GRID_SIZE - 90;
+                const gn = gs + GRID_SIZE;
+                if (gs < north && gn > south) {
+                    theoreticalGridCount++;
+                }
+            }
+        }
+    }
 
     if (spatialIndex && spatialIndex.size > 0) {
-        const crossesDateLine = west > east;
-        const ranges = crossesDateLine
-            ? [{ west, east: 180 }, { west: -180, east }]
-            : [{ west, east }];
-
         for (const range of ranges) {
             // Convert geographic bounds to bucket index ranges.
             // A bucket (ix, iy) covers [ix*GS-180, (ix+1)*GS-180) x [iy*GS-90, (iy+1)*GS-90).
@@ -134,7 +159,6 @@ function queryGridsInBounds(bounds) {
         }
     } else {
         // Fallback to O(N) filter if index not available
-        const crossesDateLine = west > east;
         gridsInView = gridData.filter(g => {
             const gridEast  = g.lon + GRID_SIZE;
             const gridNorth = g.lat + GRID_SIZE;
@@ -150,7 +174,7 @@ function queryGridsInBounds(bounds) {
         });
     }
 
-    return gridsInView;
+    return { gridsInView, theoreticalGridCount };
 }
 
 /** Assemble the stats object returned to the frontend and OSC pipeline. */
@@ -396,17 +420,21 @@ function calculateAreaWeightedStats(gridsInView) {
  * @param {number[]} bounds - [west, south, east, north]
  */
 function calculateViewportStats(bounds) {
-    const gridsInView = queryGridsInBounds(bounds);
+    const { gridsInView, theoreticalGridCount } = queryGridsInBounds(bounds);
+
+    const landCoverageRatio = theoreticalGridCount > 0
+        ? gridsInView.length / theoreticalGridCount
+        : 0;
 
     if (gridsInView.length === 0) {
-        return { ...emptyStats(0), gridsInView };
+        return { ...emptyStats(0), theoreticalGridCount, landCoverageRatio, gridsInView };
     }
 
     const stats = USE_LEGACY_AGGREGATION
         ? calculateLegacyStats(gridsInView)
         : calculateAreaWeightedStats(gridsInView);
 
-    return { ...stats, gridsInView };
+    return { ...stats, theoreticalGridCount, landCoverageRatio, gridsInView };
 }
 
 /** Get all loaded grid data. */

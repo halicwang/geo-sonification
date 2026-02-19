@@ -18,7 +18,7 @@ jest.mock('../normalize', () => ({
     })
 }));
 
-const { sendToMax, sendGridsToMax } = require('../osc');
+const { sendToMax, sendGridsToMax, sendCoverageToMax } = require('../osc');
 
 beforeEach(() => {
     mockSend.mockClear();
@@ -120,5 +120,32 @@ describe('sendGridsToMax', () => {
         expect(gridLcMsg.args[0].value).toBeCloseTo(1.0, 5);
         const restSum = gridLcMsg.args.slice(1).reduce((s, a) => s + a.value, 0);
         expect(restSum).toBe(0);
+    });
+});
+
+describe('sendCoverageToMax', () => {
+    test('sends /coverage float', () => {
+        sendCoverageToMax(0.5);
+        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        expect(call).toBeDefined();
+        expect(call[0].args[0]).toEqual({ type: 'f', value: 0.5 });
+    });
+
+    test('clamps ratio > 1 to 1', () => {
+        sendCoverageToMax(1.5);
+        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        expect(call[0].args[0].value).toBe(1);
+    });
+
+    test('null ratio sends 0', () => {
+        sendCoverageToMax(null);
+        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        expect(call[0].args[0].value).toBe(0);
+    });
+
+    test('NaN ratio sends 0', () => {
+        sendCoverageToMax(NaN);
+        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        expect(call[0].args[0].value).toBe(0);
     });
 });

@@ -20,6 +20,9 @@ frontend/config.local.js
 # Claude Code local config
 CLAUDE.md
 
+# Max/MSP backup files
+*.maxpat.bak
+
 # Sonification sample assets (large binaries; keep out of git)
 sonification/samples/ambience/*.wav
 sonification/samples/icons/**/*.wav

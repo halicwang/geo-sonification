@@ -90,11 +90,12 @@ describe('spatial landcover: water cell exclusion (area-weighted)', () => {
         expect(Object.keys(landcoverDistribution)).toHaveLength(0);
     });
 
-    test('empty viewport → dominantLandcover is null', () => {
+    test('empty viewport (ocean) → dominantLandcover is 80 (Water), /lc/80 = 1', () => {
         init([], null);
-        const { dominantLandcover, gridCount } = calculateViewportStats(bounds);
+        const { dominantLandcover, gridCount, landcoverDistribution } = calculateViewportStats(bounds);
 
-        expect(dominantLandcover).toBeNull();
+        expect(dominantLandcover).toBe(80);
         expect(gridCount).toBe(0);
+        expect(landcoverDistribution[80]).toBe(1);
     });
 });

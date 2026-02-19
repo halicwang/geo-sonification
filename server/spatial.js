@@ -174,10 +174,10 @@ function buildStatsResult({ dominantLandcover, nightlightNorm, populationNorm, f
 
 /**
  * Default stats when viewport has no grid data (e.g. open ocean).
- * dominantLandcover is null (no land data); OSC sends 0.
+ * dominantLandcover is 80 (Water); OSC sends /landcover 80, /lc/80 1.0.
  */
 function emptyStats(gridCount = 0) {
-    return buildStatsResult({ dominantLandcover: null, gridCount });
+    return buildStatsResult({ dominantLandcover: 80, gridCount, lcCounts: { 80: 1 } });
 }
 
 /**

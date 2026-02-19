@@ -1,34 +1,35 @@
 /**
  * OSC client: sends viewport stats to MaxMSP over UDP.
  *
- * Both modes:
- *   /mode        (string) — "aggregated" or "per-grid", sent before data on every update
+ * Message ordering per viewport update:
+ *   /mode -> /proximity -> /delta/* -> existing messages (unchanged order)
  *
- * Aggregated mode: 15 OSC addresses per viewport update:
- *   /landcover  (int)    — dominant ESA land class, 10-100; 0 = no land data
- *   /nightlight (float)  — 0-1 normalized brightness
- *   /population (float)  — 0-1 normalized density
- *   /forest     (float)  — 0-1 normalized forest cover
- *   /lc/10  … /lc/100   (float) — 0-1 area fraction per ESA class
+ * Aggregated mode payload (existing):
+ *   /landcover, /nightlight, /population, /forest, /lc/10 ... /lc/100
  *
- * Per-grid mode (when gridCount is within hysteresis threshold):
- *   /grid/count  (int)   — number of grid cells
- *   /viewport    (4 floats) — west, south, east, north bounds
- *   /grid        (int+5 floats) × N — lon, lat, landcover, nl, pop, forest per cell
- *   /grid/pos    (2 floats) × N — xNorm (0=west,1=east), yNorm (0=south,1=north)
- *   /grid/lc     (11 floats) × N — per-cell lc fraction [10..100], matches /lc/* order
+ * Per-grid mode payload (existing):
+ *   /grid/count, /viewport, N x (/grid, /grid/pos, /grid/lc)
  *
  * UDP is fire-and-forget; there is no delivery guarantee.
  */
 
 const osc = require('osc');
 const { OSC_HOST, OSC_PORT, DEBUG_OSC, GRID_SIZE } = require('./config');
-const { VALID_LANDCOVER_CLASSES, WATER_CLASS, getCellLcDistribution } = require('./landcover');
+const { WATER_CLASS, getCellLcDistribution } = require('./landcover');
 const { normalizeOscValues } = require('./normalize');
+const {
+    LC_CLASS_ORDER,
+    OSC_ADDRESSES,
+    clamp01,
+    clampLandcoverClass,
+    buildModePacket,
+    buildProximityPacket,
+    buildDeltaPackets,
+    buildCoveragePacket,
+    buildAggregatedPackets
+} = require('./osc_schema');
 
-// ESA WorldCover class range bounds, derived from the canonical class list
-const LC_CLASS_MIN = Math.min(...VALID_LANDCOVER_CLASSES); // 10
-const LC_CLASS_MAX = Math.max(...VALID_LANDCOVER_CLASSES); // 100
+const LC_CLASS_MIN = LC_CLASS_ORDER[0];
 
 let oscReady = false;
 
@@ -56,60 +57,41 @@ function isOscReady() {
 }
 
 /**
- * Send 15 OSC messages to MaxMSP: 4 aggregated stats + 11 landcover class fractions.
- * @param {number|null} landcoverClass   — dominant ESA land class (10-100), or null (sent as 0)
- * @param {number} nightlightNorm        — 0-1 normalized
- * @param {number} populationNorm        — 0-1 normalized
- * @param {number} forestNorm            — 0-1 normalized
- * @param {Object} [landcoverDistribution={}] — { classCode: weightedArea } from spatial stats
+ * Send aggregated OSC bundle:
+ * /landcover + /nightlight + /population + /forest + /lc/* x11
+ * @param {number} landcoverClass — dominant ESA land class
+ * @param {number} nightlightNorm — 0-1 normalized
+ * @param {number} populationNorm — 0-1 normalized
+ * @param {number} forestNorm — 0-1 normalized
+ * @param {number[]} lcFractions — length-11 array of 0-1 fractions (LC_CLASS_ORDER)
  */
-function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, landcoverDistribution) {
+function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, lcFractions) {
     if (!oscReady) return;
 
-    // ESA WorldCover classes range LC_CLASS_MIN–LC_CLASS_MAX; null → 0 (no land data)
-    let lc = (landcoverClass != null && Number.isFinite(landcoverClass)) ? Math.round(landcoverClass) : 0;
-    if (lc > 0) lc = Math.max(LC_CLASS_MIN, Math.min(LC_CLASS_MAX, lc));
-
-    const clamp01 = (v) => {
-        if (v == null || !Number.isFinite(v)) return 0;
-        return Math.max(0, Math.min(1, v));
-    };
-    const nl = clamp01(nightlightNorm);
-    const pop = clamp01(populationNorm);
-    const f = clamp01(forestNorm);
-
-    // Convert weighted-area distribution to 0-1 fractions
-    const dist = landcoverDistribution || {};
-    const totalWeight = Object.values(dist).reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
-
-    // Landcover distribution fractions — compute once, reuse for bundle and debug
-    const lcFracs = VALID_LANDCOVER_CLASSES.map(cls => {
-        const frac = totalWeight > 0 ? clamp01((dist[cls] || 0) / totalWeight) : 0;
-        return { cls, frac };
-    });
-
     try {
-        // Bundle all 15 messages (4 stats + 11 lc fractions) into a single UDP packet
-        const packets = [
-            { address: '/landcover', args: [{ type: 'i', value: lc }] },
-            { address: '/nightlight', args: [{ type: 'f', value: nl }] },
-            { address: '/population', args: [{ type: 'f', value: pop }] },
-            { address: '/forest', args: [{ type: 'f', value: f }] },
-            ...lcFracs.map(({ cls, frac }) => ({
-                address: `/lc/${cls}`, args: [{ type: 'f', value: frac }]
-            }))
-        ];
+        const packets = buildAggregatedPackets({
+            landcoverClass,
+            nightlightNorm,
+            populationNorm,
+            forestNorm,
+            lcFractions
+        });
 
         oscPort.send({ timeTag: osc.timeTag(0), packets });
 
         if (DEBUG_OSC) {
-            const top3 = lcFracs
+            const top3 = LC_CLASS_ORDER
+                .map((cls, index) => ({ cls, frac: lcFractions[index] }))
                 .filter(x => x.frac > 0)
                 .sort((a, b) => b.frac - a.frac)
                 .slice(0, 3)
                 .map(x => `${x.cls}:${(x.frac * 100).toFixed(1)}%`)
                 .join(' ');
-            console.log(`OSC sent (bundle): landcover=${lc}, nl=${nl.toFixed(3)}, pop=${pop.toFixed(3)}, forest=${f.toFixed(3)}, lc_dist=[${top3}]`);
+            console.log(
+                `OSC sent (bundle): landcover=${clampLandcoverClass(landcoverClass)}, ` +
+                `nl=${clamp01(nightlightNorm).toFixed(3)}, pop=${clamp01(populationNorm).toFixed(3)}, ` +
+                `forest=${clamp01(forestNorm).toFixed(3)}, lc_dist=[${top3}]`
+            );
         }
     } catch (err) {
         console.error('OSC aggregated send error:', err);
@@ -117,19 +99,12 @@ function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, l
 }
 
 /**
- * Send per-grid OSC messages: /grid/count, /viewport, then N × /grid.
- * @param {Object[]} gridsInView — array of grid cell objects from spatial index
- * @param {number[]} bounds — [west, south, east, north] viewport bounds
- * @param {Object} normalizeParams — normalization params from loadOrCalcNormalize()
+ * Send per-grid OSC messages: /grid/count, /viewport, then N × /grid bundle.
+ * Existing per-grid behavior is preserved.
  */
 function sendGridsToMax(gridsInView, bounds, normalizeParams) {
     if (!gridsInView || gridsInView.length === 0) return;
     if (!oscReady) return;
-
-    const clamp01 = (v) => {
-        if (v == null || !Number.isFinite(v)) return 0;
-        return Math.max(0, Math.min(1, v));
-    };
 
     const [west, south, east, north] = bounds;
 
@@ -140,26 +115,29 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
 
     try {
         // Header messages sent individually (not per-cell)
-        oscPort.send({ address: '/grid/count', args: [{ type: 'i', value: gridsInView.length }] });
-        oscPort.send({ address: '/viewport', args: [
-            { type: 'f', value: west },  { type: 'f', value: south },
-            { type: 'f', value: east },  { type: 'f', value: north }
-        ]});
+        oscPort.send({ address: OSC_ADDRESSES.GRID_COUNT, args: [{ type: 'i', value: gridsInView.length }] });
+        oscPort.send({
+            address: OSC_ADDRESSES.VIEWPORT,
+            args: [
+                { type: 'f', value: west }, { type: 'f', value: south },
+                { type: 'f', value: east }, { type: 'f', value: north }
+            ]
+        });
 
         // Bundle each cell's 3 messages (/grid, /grid/pos, /grid/lc) into one UDP packet
-        for (const [index, g] of gridsInView.entries()) {
+        for (const g of gridsInView) {
             const lon = Number.isFinite(g.lon) ? g.lon : 0;
             const lat = Number.isFinite(g.lat) ? g.lat : 0;
 
-            // Landcover class — clamp to valid ESA range, consistent with aggregated mode
+            // Landcover class — clamp to canonical ESA range, consistent with aggregated mode
             let lc = LC_CLASS_MIN;
             if (g.landcover_class != null && g.landcover_class !== '' && !isNaN(g.landcover_class)) {
-                lc = Math.round(Number(g.landcover_class));
+                const normalized = clampLandcoverClass(Number(g.landcover_class));
+                lc = normalized > 0 ? normalized : LC_CLASS_MIN;
             }
-            lc = Math.max(LC_CLASS_MIN, Math.min(LC_CLASS_MAX, lc));
 
             // Normalize per-cell values using same p1/p99 as aggregated mode
-            // Explicitly handle nightlight sentinel (-1 = no VIIRS data) → treat as 0
+            // Explicitly handle nightlight sentinel (-1 = no VIIRS data) -> treat as 0
             const nlP90ForNorm = (g.nightlight_p90 != null && g.nightlight_p90 >= 0) ? g.nightlight_p90 : 0;
             const { nightlightNorm, populationNorm, forestNorm } = normalizeOscValues(
                 nlP90ForNorm,
@@ -177,12 +155,12 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
             // Per-cell continuous landcover distribution (11 floats, same class order as /lc/*)
             // Fallback: if no lc_pct_* data, synthesize 100% distribution from discrete landcover_class
             let cellDist = getCellLcDistribution(g);
-            let cellPctSum = Object.values(cellDist).reduce((s, v) => s + v, 0);
-            if (cellPctSum <= 0 && lc >= LC_CLASS_MIN && lc !== WATER_CLASS) {
+            let cellPctSum = Object.values(cellDist).reduce((sum, value) => sum + value, 0);
+            if (cellPctSum <= 0 && lc !== WATER_CLASS) {
                 cellDist = { [lc]: 100 };
                 cellPctSum = 100;
             }
-            const lcArgs = VALID_LANDCOVER_CLASSES.map(cls => ({
+            const lcArgs = LC_CLASS_ORDER.map(cls => ({
                 type: 'f',
                 value: cellPctSum > 0 ? clamp01((cellDist[cls] || 0) / cellPctSum) : 0
             }));
@@ -190,25 +168,34 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
             oscPort.send({
                 timeTag: osc.timeTag(0),
                 packets: [
-                    { address: '/grid', args: [
-                        { type: 'f', value: lon },
-                        { type: 'f', value: lat },
-                        { type: 'i', value: lc },
-                        { type: 'f', value: clamp01(nightlightNorm) },
-                        { type: 'f', value: clamp01(populationNorm) },
-                        { type: 'f', value: clamp01(forestNorm) }
-                    ]},
-                    { address: '/grid/pos', args: [
-                        { type: 'f', value: xNorm },
-                        { type: 'f', value: yNorm }
-                    ]},
-                    { address: '/grid/lc', args: lcArgs }
+                    {
+                        address: OSC_ADDRESSES.GRID,
+                        args: [
+                            { type: 'f', value: lon },
+                            { type: 'f', value: lat },
+                            { type: 'i', value: lc },
+                            { type: 'f', value: clamp01(nightlightNorm) },
+                            { type: 'f', value: clamp01(populationNorm) },
+                            { type: 'f', value: clamp01(forestNorm) }
+                        ]
+                    },
+                    {
+                        address: OSC_ADDRESSES.GRID_POS,
+                        args: [
+                            { type: 'f', value: xNorm },
+                            { type: 'f', value: yNorm }
+                        ]
+                    },
+                    { address: OSC_ADDRESSES.GRID_LC, args: lcArgs }
                 ]
             });
         }
 
         if (DEBUG_OSC) {
-            console.log(`OSC per-grid: ${gridsInView.length} bundles (3 msgs each), viewport=[${west.toFixed(2)},${south.toFixed(2)},${east.toFixed(2)},${north.toFixed(2)}]`);
+            console.log(
+                `OSC per-grid: ${gridsInView.length} bundles (3 msgs each), ` +
+                `viewport=[${west.toFixed(2)},${south.toFixed(2)},${east.toFixed(2)},${north.toFixed(2)}]`
+            );
         }
     } catch (err) {
         console.error('OSC per-grid send error:', err);
@@ -218,11 +205,11 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
 /**
  * Send current mode to MaxMSP so it can handle transitions (e.g. crossfade).
  * Sent before any data messages on every viewport update.
- * @param {string} mode — "aggregated" or "per-grid"
  */
 function sendModeToMax(mode) {
+    if (!oscReady) return;
     try {
-        oscPort.send({ address: '/mode', args: [{ type: 's', value: mode }] });
+        oscPort.send(buildModePacket(mode));
         if (DEBUG_OSC) console.log(`OSC mode: ${mode}`);
     } catch (err) {
         if (DEBUG_OSC) {
@@ -234,17 +221,50 @@ function sendModeToMax(mode) {
 }
 
 /**
+ * Send viewport zoom proximity (0-1).
+ */
+function sendProximityToMax(proximity) {
+    if (!oscReady) return;
+    try {
+        oscPort.send(buildProximityPacket(proximity));
+        if (DEBUG_OSC) console.log(`OSC sent: /proximity ${clamp01(proximity).toFixed(3)}`);
+    } catch (err) {
+        console.error('OSC proximity send error:', err);
+    }
+}
+
+/**
+ * Send viewport delta signals.
+ * - /delta/lc (11 floats)
+ * - /delta/magnitude (float 0-1)
+ * - /delta/rate (float 0-1)
+ */
+function sendDeltaToMax(deltaLc, magnitude, rate) {
+    if (!oscReady) return;
+    try {
+        const packets = buildDeltaPackets({ deltaLc, magnitude, rate });
+        oscPort.send({ timeTag: osc.timeTag(0), packets });
+        if (DEBUG_OSC) {
+            console.log(
+                `OSC sent: /delta magnitude=${clamp01(magnitude).toFixed(3)} ` +
+                `rate=${clamp01(rate).toFixed(3)}`
+            );
+        }
+    } catch (err) {
+        console.error('OSC delta send error:', err);
+    }
+}
+
+/**
  * Send land coverage ratio to MaxMSP.
  * @param {number} ratio — 0-1 float (land grids / theoretical grids)
  */
 function sendCoverageToMax(ratio) {
     if (!oscReady) return;
     try {
-        const value = (ratio != null && Number.isFinite(ratio))
-            ? Math.max(0, Math.min(1, ratio))
-            : 0;
-        oscPort.send({ address: '/coverage', args: [{ type: 'f', value }] });
-        if (DEBUG_OSC) console.log(`OSC sent: /coverage ${value.toFixed(3)}`);
+        const packet = buildCoveragePacket(ratio);
+        oscPort.send(packet);
+        if (DEBUG_OSC) console.log(`OSC sent: /coverage ${packet.args[0].value.toFixed(3)}`);
     } catch (err) {
         console.error('OSC coverage send error:', err);
     }
@@ -258,4 +278,13 @@ function closeOsc() {
     }
 }
 
-module.exports = { isOscReady, sendToMax, sendGridsToMax, sendModeToMax, sendCoverageToMax, closeOsc };
+module.exports = {
+    isOscReady,
+    sendToMax,
+    sendGridsToMax,
+    sendModeToMax,
+    sendProximityToMax,
+    sendDeltaToMax,
+    sendCoverageToMax,
+    closeOsc
+};

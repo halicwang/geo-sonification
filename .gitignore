@@ -16,3 +16,7 @@ data/tiles/
 # Local configuration (not in repository)
 .env
 frontend/config.local.js
+
+# Sonification sample assets (large binaries; keep out of git)
+sonification/samples/ambience/*.wav
+sonification/samples/icons/**/*.wav

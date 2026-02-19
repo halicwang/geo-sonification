@@ -18,7 +18,15 @@ jest.mock('../normalize', () => ({
     })
 }));
 
-const { sendToMax, sendGridsToMax, sendCoverageToMax } = require('../osc');
+const {
+    sendToMax,
+    sendGridsToMax,
+    sendModeToMax,
+    sendProximityToMax,
+    sendDeltaToMax,
+    sendCoverageToMax
+} = require('../osc');
+const { OSC_ADDRESSES } = require('../osc_schema');
 
 beforeEach(() => {
     mockSend.mockClear();
@@ -27,31 +35,84 @@ beforeEach(() => {
 });
 
 describe('sendToMax', () => {
+    // sendToMax now expects a pre-computed lcFractions array (length 11)
+    const zeroFractions = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
     test('null dominantLandcover sends /landcover 0', () => {
-        sendToMax(null, 0.5, 0.3, 0.2, {});
+        sendToMax(null, 0.5, 0.3, 0.2, zeroFractions);
         expect(mockSend).toHaveBeenCalled();
 
         // First call is the OSC bundle with 15 messages
         const bundle = mockSend.mock.calls[0][0];
-        const lcMsg = bundle.packets.find(p => p.address === '/landcover');
+        const lcMsg = bundle.packets.find(p => p.address === OSC_ADDRESSES.LANDCOVER);
         expect(lcMsg.args[0].value).toBe(0);
     });
 
     test('valid dominantLandcover=30 sends /landcover 30', () => {
-        sendToMax(30, 0.5, 0.3, 0.2, { 30: 100 });
+        // class 30 is index 2 in LC_CLASS_ORDER
+        sendToMax(30, 0.5, 0.3, 0.2, [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
         const bundle = mockSend.mock.calls[0][0];
-        const lcMsg = bundle.packets.find(p => p.address === '/landcover');
+        const lcMsg = bundle.packets.find(p => p.address === OSC_ADDRESSES.LANDCOVER);
         expect(lcMsg.args[0].value).toBe(30);
     });
 
-    test('landcover distribution fractions sum to ~1', () => {
-        sendToMax(10, 0.5, 0.3, 0.2, { 10: 60, 30: 40 });
+    test('landcover fractions sum to ~1', () => {
+        // class 10 = 0.6 (index 0), class 30 = 0.4 (index 2)
+        sendToMax(10, 0.5, 0.3, 0.2, [0.6, 0, 0.4, 0, 0, 0, 0, 0, 0, 0, 0]);
         const bundle = mockSend.mock.calls[0][0];
         const lcMsgs = bundle.packets.filter(p => p.address.startsWith('/lc/'));
         expect(lcMsgs).toHaveLength(11);
 
         const fracSum = lcMsgs.reduce((s, m) => s + m.args[0].value, 0);
         expect(fracSum).toBeCloseTo(1.0, 5);
+    });
+});
+
+describe('sendModeToMax', () => {
+    test('sends /mode as string', () => {
+        sendModeToMax('per-grid');
+        const call = mockSend.mock.calls.find(c => c[0].address === OSC_ADDRESSES.MODE);
+        expect(call).toBeDefined();
+        expect(call[0].args[0]).toEqual({ type: 's', value: 'per-grid' });
+    });
+});
+
+describe('sendProximityToMax', () => {
+    test('sends /proximity float', () => {
+        sendProximityToMax(0.5);
+        const call = mockSend.mock.calls.find(c => c[0].address === OSC_ADDRESSES.PROXIMITY);
+        expect(call).toBeDefined();
+        expect(call[0].args[0]).toEqual({ type: 'f', value: 0.5 });
+    });
+
+    test('clamps proximity > 1 to 1', () => {
+        sendProximityToMax(1.5);
+        const call = mockSend.mock.calls.find(c => c[0].address === OSC_ADDRESSES.PROXIMITY);
+        expect(call[0].args[0].value).toBe(1);
+    });
+});
+
+describe('sendDeltaToMax', () => {
+    test('sends /delta bundle with canonical addresses', () => {
+        sendDeltaToMax([0.1, -0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0], 0.4, 0.8);
+
+        const bundle = mockSend.mock.calls[0][0];
+        expect(bundle.packets).toBeDefined();
+        expect(bundle.packets.map(p => p.address)).toEqual([
+            OSC_ADDRESSES.DELTA_LC,
+            OSC_ADDRESSES.DELTA_MAGNITUDE,
+            OSC_ADDRESSES.DELTA_RATE
+        ]);
+        expect(bundle.packets[0].args).toHaveLength(11);
+        expect(bundle.packets[1].args[0].value).toBeCloseTo(0.4, 6);
+        expect(bundle.packets[2].args[0].value).toBeCloseTo(0.8, 6);
+    });
+
+    test('clamps magnitude and rate to 0-1', () => {
+        sendDeltaToMax(new Array(11).fill(0), 2.0, -1.0);
+        const bundle = mockSend.mock.calls[0][0];
+        expect(bundle.packets[1].args[0].value).toBe(1);
+        expect(bundle.packets[2].args[0].value).toBe(0);
     });
 });
 
@@ -70,11 +131,11 @@ describe('sendGridsToMax', () => {
         // Find the bundle containing /grid/lc
         const bundleCall = mockSend.mock.calls.find(call => {
             const msg = call[0];
-            return msg.packets && msg.packets.some(p => p.address === '/grid/lc');
+            return msg.packets && msg.packets.some(p => p.address === OSC_ADDRESSES.GRID_LC);
         });
         expect(bundleCall).toBeDefined();
 
-        const gridLcMsg = bundleCall[0].packets.find(p => p.address === '/grid/lc');
+        const gridLcMsg = bundleCall[0].packets.find(p => p.address === OSC_ADDRESSES.GRID_LC);
         const allZero = gridLcMsg.args.every(a => a.value === 0);
         expect(allZero).toBe(true);
         expect(gridLcMsg.args).toHaveLength(11);
@@ -91,9 +152,9 @@ describe('sendGridsToMax', () => {
 
         const bundleCall = mockSend.mock.calls.find(call => {
             const msg = call[0];
-            return msg.packets && msg.packets.some(p => p.address === '/grid/lc');
+            return msg.packets && msg.packets.some(p => p.address === OSC_ADDRESSES.GRID_LC);
         });
-        const gridLcMsg = bundleCall[0].packets.find(p => p.address === '/grid/lc');
+        const gridLcMsg = bundleCall[0].packets.find(p => p.address === OSC_ADDRESSES.GRID_LC);
         const fracSum = gridLcMsg.args.reduce((s, a) => s + a.value, 0);
         expect(fracSum).toBeCloseTo(1.0, 5);
 
@@ -112,9 +173,9 @@ describe('sendGridsToMax', () => {
 
         const bundleCall = mockSend.mock.calls.find(call => {
             const msg = call[0];
-            return msg.packets && msg.packets.some(p => p.address === '/grid/lc');
+            return msg.packets && msg.packets.some(p => p.address === OSC_ADDRESSES.GRID_LC);
         });
-        const gridLcMsg = bundleCall[0].packets.find(p => p.address === '/grid/lc');
+        const gridLcMsg = bundleCall[0].packets.find(p => p.address === OSC_ADDRESSES.GRID_LC);
 
         // class 10 should be 1.0 (100%), rest should be 0
         expect(gridLcMsg.args[0].value).toBeCloseTo(1.0, 5);
@@ -126,26 +187,26 @@ describe('sendGridsToMax', () => {
 describe('sendCoverageToMax', () => {
     test('sends /coverage float', () => {
         sendCoverageToMax(0.5);
-        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        const call = mockSend.mock.calls.find(c => c[0].address === OSC_ADDRESSES.COVERAGE);
         expect(call).toBeDefined();
         expect(call[0].args[0]).toEqual({ type: 'f', value: 0.5 });
     });
 
     test('clamps ratio > 1 to 1', () => {
         sendCoverageToMax(1.5);
-        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        const call = mockSend.mock.calls.find(c => c[0].address === OSC_ADDRESSES.COVERAGE);
         expect(call[0].args[0].value).toBe(1);
     });
 
     test('null ratio sends 0', () => {
         sendCoverageToMax(null);
-        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        const call = mockSend.mock.calls.find(c => c[0].address === OSC_ADDRESSES.COVERAGE);
         expect(call[0].args[0].value).toBe(0);
     });
 
     test('NaN ratio sends 0', () => {
         sendCoverageToMax(NaN);
-        const call = mockSend.mock.calls.find(c => c[0].address === '/coverage');
+        const call = mockSend.mock.calls.find(c => c[0].address === OSC_ADDRESSES.COVERAGE);
         expect(call[0].args[0].value).toBe(0);
     });
 });

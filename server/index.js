@@ -20,12 +20,29 @@ const WebSocket = require('ws');
 const { WebSocketServer } = WebSocket;
 const path = require('path');
 
-const { HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
+const {
+    HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE,
+    PROXIMITY_LOWER, PROXIMITY_UPPER, DT_MIN_MS, DT_MAX_MS, DELTA_RATE_CEILING
+} = require('./config');
 const { LANDCOVER_META } = require('./landcover');
-const { isOscReady, sendToMax, sendGridsToMax, sendModeToMax, sendCoverageToMax, closeOsc } = require('./osc');
+const {
+    isOscReady, sendToMax, sendGridsToMax, sendModeToMax,
+    sendProximityToMax, sendDeltaToMax, sendCoverageToMax, closeOsc
+} = require('./osc');
 const { loadGridData } = require('./data-loader');
 const spatial = require('./spatial');
 const { validateBounds } = spatial;
+const {
+    getLcFractionsFromDistribution,
+    computeProximityFromGridCount,
+    computeDeltaMetrics
+} = require('./osc-metrics');
+const {
+    createDeltaState,
+    getHttpDeltaState,
+    saveHttpDeltaState,
+    getHttpDeltaClientKey
+} = require('./delta-state');
 const {
     createModeState, getHttpModeState, saveHttpModeState,
     applyHysteresis, getHttpClientKey,
@@ -62,9 +79,10 @@ setInterval(() => {
  * Validate bounds, compute viewport stats, and send to Max.
  * @param {Array} bounds - [west, south, east, north]
  * @param {{ currentMode: string }} modeState - per-client hysteresis state object (mutated in place)
+ * @param {{ previousSnapshot: { lcFractions:number[], timestampMs:number }|null }} deltaState
  * @returns {{ stats, gridsInView } | { error }}
  */
-function processViewport(bounds, modeState) {
+function processViewport(bounds, modeState, deltaState) {
     const t0 = Date.now();
 
     const validation = validateBounds(bounds);
@@ -72,15 +90,33 @@ function processViewport(bounds, modeState) {
         return { error: validation.error };
     }
     const { gridsInView, ...stats } = spatial.calculateViewportStats(validation.bounds);
+    const gridCount = gridsInView.length;
 
-    applyHysteresis(modeState, gridsInView.length);
+    applyHysteresis(modeState, gridCount);
 
     // Notify MaxMSP of current mode — sent before data messages so Max
     // can prepare for the incoming format (e.g., crossfade on mode change).
     sendModeToMax(modeState.currentMode);
 
+    // /proximity is sent immediately after /mode.
+    const proximity = computeProximityFromGridCount(gridCount, PROXIMITY_LOWER, PROXIMITY_UPPER);
+    sendProximityToMax(proximity);
+
+    // /delta/* is sent immediately after /proximity.
+    const lcFractions = getLcFractionsFromDistribution(stats.landcoverDistribution);
+    const delta = computeDeltaMetrics(
+        lcFractions,
+        deltaState?.previousSnapshot || null,
+        t0,
+        { dtMinMs: DT_MIN_MS, dtMaxMs: DT_MAX_MS, rateCeiling: DELTA_RATE_CEILING }
+    );
+    sendDeltaToMax(delta.deltaLc, delta.magnitude, delta.rate);
+    if (deltaState) {
+        deltaState.previousSnapshot = delta.snapshot;
+    }
+
     // Always send aggregated stats so Max displays/synth never go silent
-    sendToMax(stats.dominantLandcover, stats.nightlightNorm, stats.populationNorm, stats.forestNorm, stats.landcoverDistribution);
+    sendToMax(stats.dominantLandcover, stats.nightlightNorm, stats.populationNorm, stats.forestNorm, lcFractions);
     sendCoverageToMax(stats.landCoverageRatio);
 
     // Additionally send per-grid data when zoomed in
@@ -153,26 +189,31 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-// API: Calculate viewport stats (HTTP fallback keeps per-client hysteresis state by IP)
+// API: Calculate viewport stats
+// - Hysteresis state keying: mode-manager rules (existing behavior)
+// - Delta state keying: clientId-first, fallback to IP
 app.post('/api/viewport', (req, res) => {
     if (!dataLoaded) {
         return res.status(503).json({ error: 'Data not loaded yet', dataLoaded: false });
     }
-    const clientKey = getHttpClientKey(req);
-    const { modeState, previousMode } = getHttpModeState(clientKey);
+    const modeClientKey = getHttpClientKey(req);
+    const deltaClientKey = getHttpDeltaClientKey(req);
+    const { modeState, previousMode } = getHttpModeState(modeClientKey);
+    const { deltaState } = getHttpDeltaState(deltaClientKey);
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const parsedBounds = parseViewportBounds(body.bounds, 'HTTP');
     if (parsedBounds.error) {
         return res.status(400).json({ error: parsedBounds.error });
     }
 
-    const result = processViewport(parsedBounds.bounds, modeState);
+    const result = processViewport(parsedBounds.bounds, modeState, deltaState);
     if (result.error) {
         return res.status(400).json({ error: result.error });
     }
-    saveHttpModeState(clientKey, modeState);
+    saveHttpModeState(modeClientKey, modeState);
+    saveHttpDeltaState(deltaClientKey, deltaState);
     if (modeState.currentMode !== previousMode) {
-        console.log(`[HTTP mode] ${clientKey}: ${previousMode} -> ${modeState.currentMode}`);
+        console.log(`[HTTP mode] ${modeClientKey}: ${previousMode} -> ${modeState.currentMode}`);
     }
     res.json(result.stats);
 });
@@ -190,7 +231,7 @@ app.post('/api/manual', (req, res) => {
     const pop = Number.isFinite(popRaw) ? popRaw : 0;
     const fr = Number.isFinite(frRaw) ? frRaw : 0;
 
-    sendToMax(lc, nl, pop, fr, {});
+    sendToMax(lc, nl, pop, fr, getLcFractionsFromDistribution({}));
     res.json({ success: true, landcover: lc, nightlight: nl, population: pop, forest: fr });
 });
 
@@ -217,6 +258,7 @@ async function startServer() {
             // Per-client hysteresis state — each client tracks its own mode
             // so multiple viewports don't interfere with each other.
             const modeState = createModeState();
+            const deltaState = createDeltaState();
 
             // Mark alive; the ping timer will flip to false before each ping.
             // If pong comes back, it flips back to true.
@@ -256,7 +298,7 @@ async function startServer() {
                             return;
                         }
 
-                        const result = processViewport(parsedBounds.bounds, modeState);
+                        const result = processViewport(parsedBounds.bounds, modeState, deltaState);
                         if (result.error) {
                             ws.send(JSON.stringify({ type: 'error', error: result.error }));
                             return;

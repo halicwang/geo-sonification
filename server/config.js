@@ -45,6 +45,30 @@ function parseNonNegativeInt(envVar, defaultValue, name) {
     return parsed;
 }
 
+/** Parse an env var as a positive float (>0), exit on invalid. */
+function parsePositiveFloat(envVar, defaultValue, name) {
+    const value = process.env[envVar];
+    if (value === undefined || value === '') return defaultValue;
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        console.error(`ERROR: Invalid ${name} "${value}". Must be a positive number.`);
+        process.exit(1);
+    }
+    return parsed;
+}
+
+/** Parse an env var as a positive integer (>0), exit on invalid. */
+function parsePositiveInt(envVar, defaultValue, name) {
+    const value = process.env[envVar];
+    if (value === undefined || value === '') return defaultValue;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+        console.error(`ERROR: Invalid ${name} "${value}". Must be a positive integer.`);
+        process.exit(1);
+    }
+    return parsed;
+}
+
 // ---- Network ports ----
 
 const HTTP_PORT = parsePort('HTTP_PORT', 3000, 'HTTP');
@@ -176,6 +200,38 @@ if (PER_GRID_THRESHOLD_ENTER > PER_GRID_THRESHOLD_EXIT) {
 }
 console.log(`[PerGrid] thresholds: enter<=${PER_GRID_THRESHOLD_ENTER}, exit>${PER_GRID_THRESHOLD_EXIT}`);
 
+// ---- Proximity signal ----
+// Grid-count based mapping:
+//   gridCount <= lower => 1 (close)
+//   gridCount >= upper => 0 (distant)
+//   linear interpolation between
+const PROXIMITY_LOWER = parseNonNegativeInt('PROXIMITY_LOWER', 50, 'PROXIMITY_LOWER');
+const PROXIMITY_UPPER = parseNonNegativeInt('PROXIMITY_UPPER', 800, 'PROXIMITY_UPPER');
+
+if (PROXIMITY_LOWER > PROXIMITY_UPPER) {
+    console.error(
+        `ERROR: PROXIMITY_LOWER (${PROXIMITY_LOWER}) > ` +
+        `PROXIMITY_UPPER (${PROXIMITY_UPPER}). Lower must be <= Upper.`
+    );
+    process.exit(1);
+}
+console.log(`[Proximity] thresholds: lower=${PROXIMITY_LOWER}, upper=${PROXIMITY_UPPER}`);
+
+// ---- Delta signal ----
+// dt is clamped to avoid extreme rate spikes and stale-window artifacts.
+const DT_MIN_MS = parsePositiveInt('DT_MIN_MS', 50, 'DT_MIN_MS');
+const DT_MAX_MS = parsePositiveInt('DT_MAX_MS', 5000, 'DT_MAX_MS');
+if (DT_MIN_MS > DT_MAX_MS) {
+    console.error(
+        `ERROR: DT_MIN_MS (${DT_MIN_MS}) > DT_MAX_MS (${DT_MAX_MS}). ` +
+        `DT_MIN_MS must be <= DT_MAX_MS.`
+    );
+    process.exit(1);
+}
+
+const DELTA_RATE_CEILING = parsePositiveFloat('DELTA_RATE_CEILING', 5.0, 'DELTA_RATE_CEILING');
+console.log(`[Delta] dt=${DT_MIN_MS}-${DT_MAX_MS}ms, rate_ceiling=${DELTA_RATE_CEILING}`);
+
 // ---- Cache & broadcast ----
 const DISABLE_CACHE = process.env.DISABLE_CACHE === '1' || process.env.DISABLE_CACHE === 'true';
 const FORCE_REBUILD_CACHE = process.env.FORCE_REBUILD_CACHE === '1' || process.env.FORCE_REBUILD_CACHE === 'true';
@@ -199,6 +255,11 @@ module.exports = {
     LAT_BUCKETS,
     PER_GRID_THRESHOLD_ENTER,
     PER_GRID_THRESHOLD_EXIT,
+    PROXIMITY_LOWER,
+    PROXIMITY_UPPER,
+    DT_MIN_MS,
+    DT_MAX_MS,
+    DELTA_RATE_CEILING,
     DISABLE_CACHE,
     FORCE_REBUILD_CACHE,
     BROADCAST_STATS

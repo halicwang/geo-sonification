@@ -462,3 +462,55 @@ Add a new dated entry recording:
 - **OSC schema sharing**: extract a side-effect-free module (`server/osc_schema.js`) for message definitions. Both `server/osc.js` and `scripts/osc_simulator.js` import from it. Never duplicate message structure.
 - **Crossfade controller smoothing** must be frame-based (triggered by the last /lc inlet), not per-inlet. See Task 4 for details.
 - **Crossfade controller outputs 11 channels.** Fold-mapping to 3 audio buses is a Max patch wiring concern, not a JS script concern.
+
+---
+
+## Implementation Milestones
+
+The 8 tasks are grouped into 3 independently verifiable milestones. Each milestone ends with a concrete verification step — pause, test, adjust, then proceed.
+
+### Milestone A — Server-Side Foundation
+
+**Tasks**: 6 → 2 → 1 → 3 (in order)
+
+| Step | Task | What it delivers |
+|------|------|-----------------|
+| A.1 | Task 6 — Sample directory structure | `sonification/samples/` tree with README and `.gitignore` rules |
+| A.2 | Task 2 — `/proximity` OSC message | Grid-count-based zoom proximity signal (0–1), sent after `/mode` |
+| A.3 | Task 1 — `/delta` OSC messages + schema extraction | `/delta/lc`, `/delta/magnitude`, `/delta/rate`; shared `osc_schema.js` module; per-client delta state |
+| A.4 | Task 3 — OSC simulator | Standalone script with 6 scenarios, imports from `osc_schema.js` |
+
+**Verification**: Run each simulator scenario (`node scripts/osc_simulator.js <scenario>`). In Max, wire `udpreceive 7400` → `route` → `print` and confirm:
+- Message ordering: `/mode` → `/proximity` → `/delta/*` → existing 15 aggregated messages
+- `/proximity` ranges 0–1, responds to zoom sweep scenario
+- `/delta/magnitude` spikes on `abrupt-switch`, ramps on `gradual-transition`
+- All `/lc/*` values sum to ≤ 1.0 and match scenario expectations
+
+### Milestone B — Max JS Sound Engine
+
+**Tasks**: 4 → 5 (in order)
+
+| Step | Task | What it delivers |
+|------|------|-----------------|
+| B.1 | Task 4 — Crossfade controller | Frame-based smoothed 11-channel volume output with proximity attenuation |
+| B.2 | Task 5 — Icon trigger | Probabilistic icon triggering based on land cover %, proximity, and cooldown |
+
+**Verification**: Feed simulator data into Max (run `gradual-transition` and `zoom-sweep` scenarios). Wire crossfade controller outlets to `meter~` or `number~` objects and confirm:
+- 11 outputs transition smoothly (no abrupt jumps) during `gradual-transition`
+- All outputs attenuate toward zero during `zoom-sweep` as proximity → 0
+- Icon trigger fires appropriately at high proximity, goes silent at low proximity
+- Icon trigger respects cooldown intervals (no rapid-fire)
+
+### Milestone C — Documentation & Optional Extensions
+
+**Tasks**: 8, then optionally 7
+
+| Step | Task | What it delivers |
+|------|------|-----------------|
+| C.1 | Task 8 — README.md and DEVLOG.md updates | Complete documentation of new OSC messages, sound design decisions, architecture |
+| C.2 | Task 7 — Granulator *(optional)* | JS-based granular synthesis module with 4-voice polyphony and proximity modulation |
+
+**Verification**:
+- Review README OSC message table for accuracy against actual implementation
+- DEVLOG entry covers all design decisions listed in Task 8
+- *(If Task 7 implemented)* Test granulator with a loaded `buffer~` — confirm 4-voice cycling, envelope output, and proximity-driven parameter shifts

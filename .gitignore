@@ -17,6 +17,9 @@ data/tiles/
 .env
 frontend/config.local.js
 
+# Claude Code local config
+CLAUDE.md
+
 # Sonification sample assets (large binaries; keep out of git)
 sonification/samples/ambience/*.wav
 sonification/samples/icons/**/*.wav

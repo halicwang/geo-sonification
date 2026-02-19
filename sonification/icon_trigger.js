@@ -115,7 +115,7 @@ var NUM_CLASSES = 11;
 // Phase 1: only these classes have icon samples.
 // Add class codes here as you add icon samples for new land cover types.
 // All ESA codes for reference: 10 20 30 40 50 60 70 80 90 95 100
-var ACTIVE_CLASSES = [10, 50, 60];
+var ACTIVE_CLASSES = [10, 40, 50, 60];
 
 // ─── State ──────────────────────────────────────────────────────────
 

@@ -1649,10 +1649,10 @@
                     "patching_rect": [
                         20,
                         1060,
-                        440,
+                        500,
                         20
                     ],
-                    "text": "--- FOLD-MAPPING: 11 ch → 4 buses (Tree / Urban / Bare / Water) ---"
+                    "text": "--- FOLD-MAPPING: 11 ch → 5 buses (Tree / Crop / Urban / Bare / Water) ---"
                 }
             },
             {
@@ -1747,24 +1747,6 @@
             },
             {
                 "box": {
-                    "id": "tree_add6",
-                    "maxclass": "newobj",
-                    "numinlets": 2,
-                    "numoutlets": 1,
-                    "outlettype": [
-                        "float"
-                    ],
-                    "patching_rect": [
-                        20,
-                        1230,
-                        40,
-                        22
-                    ],
-                    "text": "+ 0."
-                }
-            },
-            {
-                "box": {
                     "format": 6,
                     "id": "flonum_tree_bus",
                     "maxclass": "flonum",
@@ -1795,7 +1777,42 @@
                         250,
                         20
                     ],
-                    "text": "Tree bus (10,20,30,40,90,95,100)"
+                    "text": "Tree bus (10,20,30,90,95,100)"
+                }
+            },
+            {
+                "box": {
+                    "format": 6,
+                    "id": "flonum_crop_bus",
+                    "maxclass": "flonum",
+                    "numinlets": 1,
+                    "numoutlets": 2,
+                    "outlettype": [
+                        "",
+                        "bang"
+                    ],
+                    "parameter_enable": 0,
+                    "patching_rect": [
+                        440,
+                        1260,
+                        60,
+                        22
+                    ]
+                }
+            },
+            {
+                "box": {
+                    "id": "lab_crop_bus",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [
+                        510,
+                        1262,
+                        100,
+                        20
+                    ],
+                    "text": "Crop bus (40)"
                 }
             },
             {
@@ -3216,7 +3233,7 @@
                     ],
                     "source": [
                         "js_crossfade",
-                        3
+                        8
                     ]
                 }
             },
@@ -3240,7 +3257,7 @@
                     ],
                     "source": [
                         "js_crossfade",
-                        8
+                        9
                     ]
                 }
             },
@@ -3264,30 +3281,6 @@
                     ],
                     "source": [
                         "js_crossfade",
-                        9
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
-                        "tree_add6",
-                        0
-                    ],
-                    "source": [
-                        "tree_add5",
-                        0
-                    ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [
-                        "tree_add6",
-                        1
-                    ],
-                    "source": [
-                        "js_crossfade",
                         10
                     ]
                 }
@@ -3299,8 +3292,20 @@
                         0
                     ],
                     "source": [
-                        "tree_add6",
+                        "tree_add5",
                         0
+                    ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [
+                        "flonum_crop_bus",
+                        0
+                    ],
+                    "source": [
+                        "js_crossfade",
+                        3
                     ]
                 }
             },

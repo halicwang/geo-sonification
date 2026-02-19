@@ -241,8 +241,9 @@ Only 3 representative land cover types have dedicated audio assets:
 - **Urban** (city): low-frequency drone + mechanical texture + car horn icons
 - **Bare** (desert): wind synthesis + sand particles + wind gust icons
 
-To avoid large silent regions during global exploration, 11 output channels are folded into 4 audio buses **in the Max patch wiring** (not in server code or JS scripts):
-- **Tree bus**: classes 10 (Tree), 20 (Shrub), 30 (Grass), 40 (Crop), 90 (Wetland), 95 (Mangrove), 100 (Moss) — all natural vegetation
+To avoid large silent regions during global exploration, 11 output channels are folded into 5 audio buses **in the Max patch wiring** (not in server code or JS scripts):
+- **Tree bus**: classes 10 (Tree), 20 (Shrub), 30 (Grass), 90 (Wetland), 95 (Mangrove), 100 (Moss) — natural vegetation
+- **Crop bus**: class 40 (Cropland)
 - **Urban bus**: class 50 (Urban) only
 - **Bare bus**: class 60 (Bare)
 - **Water bus**: classes 70 (Snow/Ice), 80 (Water) + ocean 3-level detector (`water_bus.js`)
@@ -363,6 +364,47 @@ crossfade_controller
 - **Modified**: `sonification/max_wav_osc.maxpat` — added Water bus objects and wiring, simplified Bare bus to class 60 only, updated fold-mapping comment to 4 buses
 - **Modified**: `sonification/crossfade_controller.js` — updated wiring hints comment to reflect 4-bus layout
 - **No server changes** — `/coverage` and `/proximity` already provided the needed inputs
+
+---
+
+## 2026-02-19 — Crop bus: 5th audio bus (class 40 extraction)
+
+### Problem
+
+Cropland (ESA class 40) was folded into the Tree bus along with 6 other natural vegetation classes. As crop-specific audio assets are developed, cropland needs its own independent bus — agricultural landscapes sound different from forests.
+
+### Solution
+
+Extracted class 40 from the Tree bus cascade into a new direct-wired **Crop bus**, matching the Urban/Bare direct-wire pattern.
+
+### Tree bus cascade changes
+
+- Removed the adder that summed class 40 into the tree cascade
+- Clean-renumbered remaining adders: `tree_add4→3`, `tree_add5→4`, `tree_add6→5`
+- Tree bus now sums 6 classes (was 7): 10, 20, 30, 90, 95, 100
+- Cascade: 5 adders (was 6), sequential `tree_add1` through `tree_add5`
+
+### Crop bus wiring
+
+Direct wire: `js_crossfade` outlet 3 → `flonum_crop_bus` (same pattern as Urban/Bare buses).
+
+### Updated fold-mapping (11 classes → 5 buses)
+
+- **Tree bus**: classes 10, 20, 30, 90, 95, 100
+- **Crop bus**: class 40
+- **Urban bus**: class 50
+- **Bare bus**: class 60
+- **Water bus**: classes 70, 80 + ocean 3-level detector
+
+### Files changed
+
+- **Modified**: `sonification/max_wav_osc.maxpat` — tree cascade renumber, new Crop bus objects + patchline, updated fold-mapping comment to 5 buses
+- **Modified**: `sonification/crossfade_controller.js` — updated wiring hints comment to 5-bus layout
+- **Modified**: `sonification/icon_trigger.js` — added class 40 to `ACTIVE_CLASSES`
+- **Modified**: `sonification/samples/README.md` — updated fold-mapping to 5 buses
+- **Modified**: `README.md` — updated Sound Mapping section
+- **New**: `sonification/samples/icons/crop/.gitkeep` — placeholder for crop icon samples
+- **No server changes** — fold-mapping is purely a Max patch wiring concern
 
 ---
 

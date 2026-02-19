@@ -69,8 +69,9 @@
  *  1. Route /lc/10 .. /lc/100 from udpreceive → route → this js inlets
  *  2. Route /proximity → inlet 11
  *  3. Connect outlets 0–10 to gain~ or *~ objects controlling audio
- *  4. Fold 11 outlets into 4 audio buses in the patch:
- *       Tree bus:  outlets 0,1,2,3,8,9,10 (classes 10,20,30,40,90,95,100)
+ *  4. Fold 11 outlets into 5 audio buses in the patch:
+ *       Tree bus:  outlets 0,1,2,8,9,10   (classes 10,20,30,90,95,100)
+ *       Crop bus:  outlet 3               (class 40)
  *       Urban bus: outlet 4               (class 50)
  *       Bare bus:  outlet 5               (class 60)
  *       Water bus: outlets 6,7            (classes 70,80)

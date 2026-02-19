@@ -139,9 +139,10 @@ Caches live in `data/cache/` and include aggregation version in their keys. Chan
 
 ## Sound Mapping
 
-The Max patch includes a sound engine with crossfade mixing, icon triggering, and granular synthesis. Land cover channels are folded into 4 audio buses:
+The Max patch includes a sound engine with crossfade mixing, icon triggering, and granular synthesis. Land cover channels are folded into 5 audio buses:
 
-- **Tree bus**: classes 10, 20, 30, 40, 90, 95, 100 (natural vegetation)
+- **Tree bus**: classes 10, 20, 30, 90, 95, 100 (natural vegetation)
+- **Crop bus**: class 40
 - **Urban bus**: class 50
 - **Bare bus**: class 60
 - **Water bus**: classes 70, 80 + ocean 3-level detector (`water_bus.js` via `maximum`)

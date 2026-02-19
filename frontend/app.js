@@ -203,10 +203,16 @@ function initMap() {
 
         // Set up viewport tracking
         map.on('moveend', () => {
+            if (_els.zoomLevel) {
+                _els.zoomLevel.textContent = map.getZoom().toFixed(2);
+            }
             onViewportChange();
         });
 
         // Initial viewport calculation
+        if (_els.zoomLevel) {
+            _els.zoomLevel.textContent = map.getZoom().toFixed(2);
+        }
         onViewportChange();
     });
     
@@ -574,6 +580,7 @@ function showToast(message, duration = 3000) {
 document.addEventListener('DOMContentLoaded', async () => {
     // Cache fixed DOM element references once — avoids getElementById on every update
     _els = {
+        zoomLevel: document.getElementById('zoom-level'),
         gridCount: document.getElementById('grid-count'),
         oscMode: document.getElementById('osc-mode'),
         landType: document.getElementById('land-type'),

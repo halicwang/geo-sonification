@@ -178,6 +178,10 @@ function parseCSVFile(csvContent, sourceLabel) {
                 row[key] = val;
             }
         }
+        // Wrap longitude to [-180, 180) — GEE exports may exceed 180°E (e.g. Asia → 190°E for Chukotka)
+        if (Number.isFinite(row.lon)) {
+            row.lon = ((((row.lon + 180) % 360) + 360) % 360) - 180;
+        }
         // Validate coordinate ranges: lon ∈ [-180,180), lat ∈ [-90,90)
         if (!Number.isFinite(row.lon) || row.lon < -180 || row.lon >= 180 ||
             !Number.isFinite(row.lat) || row.lat < -90  || row.lat >= 90) {

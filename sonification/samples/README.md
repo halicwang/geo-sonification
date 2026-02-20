@@ -11,10 +11,11 @@ This folder stores audio assets used by the Max patch.
 
 ### Ambience loops
 - WAV format
-- 44.1kHz or 48kHz
+- Recommended sample rate: **48 kHz** (1875ms crossfade = exactly 90000 samples)
 - Stereo
-- Seamlessly loopable
-- Recommended duration: 1-2 minutes per file
+- Duration: **2:01.875** (2 minutes + 1 bar at 128 BPM)
+- The last 1.875 seconds (1 bar) must be a copy of the first bar — this overlap enables seamless crossfade looping
+- Loop mechanism: global clock (`loop_clock.js`) + double-buffered `groove~` per bus (`loop_voice.js` inside `loop_bus.maxpat`) with 1875ms crossfade window
 
 ### Icon samples
 - WAV format

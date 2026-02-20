@@ -94,35 +94,49 @@ geo-sonification/
 │   ├── europe_grid.js
 │   ├── north_america_grid.js
 │   ├── oceania_grid.js
-│   ├── south_america_grid.js
-│   ├── test_brazil.js                    # Small-region test scripts
-│   ├── test_la.js
-│   └── test_tokyo.js
+│   ├── oceania_grid_q{1..4}.js           # Oceania quadrant exports (split for GEE limits)
+│   └── south_america_grid.js
 ├── server/
 │   ├── package.json
 │   ├── index.js                          # Express routes, WebSocket, startup
 │   ├── config.js                         # Env parsing, aggregation settings
 │   ├── landcover.js                      # ESA WorldCover class metadata + normalization
 │   ├── osc.js                            # OSC/UDP client → MaxMSP
+│   ├── osc_schema.js                     # Shared OSC addresses, class order, packet builders
+│   ├── osc-metrics.js                    # Pure computation: proximity, delta
+│   ├── delta-state.js                    # Per-client delta state management
+│   ├── mode-manager.js                   # Aggregated ↔ per-grid hysteresis
 │   ├── data-loader.js                    # CSV parsing, caching, deduplication
 │   ├── spatial.js                        # Spatial index, viewport stats, bounds validation
-│   └── normalize.js                      # p1/p99 percentile normalization + OSC value mapping
+│   ├── normalize.js                      # p1/p99 percentile normalization + OSC value mapping
+│   ├── types.js                          # JSDoc type definitions
+│   └── __tests__/                        # Jest test suite (98 tests, 10 suites)
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
-│   ├── app.js                            # Mapbox + WebSocket client
+│   ├── app.js                            # Mapbox + WebSocket client (color-coded grid overlay)
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
 ├── sonification/
-│   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → numbers/outlets → audio
+│   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → 5-bus fold-mapping → audio
 │   ├── loop_bus.maxpat                   # Per-bus abstraction: buffer + 2×groove~ + crossfade
 │   ├── loop_clock.js                     # Global crossfade clock (syncs all 5 buses)
 │   ├── loop_voice.js                     # Per-bus voice manager (double-buffered playback)
 │   ├── crossfade_controller.js           # 11-ch land cover crossfade with EMA smoothing
 │   ├── icon_trigger.js                   # Probabilistic auditory icon triggering
 │   ├── granulator.js                     # 4-voice granular synthesis scheduler
-│   └── water_bus.js                      # 3-level ocean detector (coverage-based)
+│   ├── water_bus.js                      # 3-level ocean detector (coverage-based)
+│   └── samples/
+│       ├── ambience/                     # 5 WAV loops (tree, crop, urban, bare, water)
+│       └── icons/                        # Future: icon samples per land cover type
+│           ├── tree/
+│           ├── crop/
+│           ├── urban/
+│           ├── bare/
+│           └── water/
 └── scripts/
     ├── check_csv_schema.js                # CSV schema validator
+    ├── osc_simulator.js                   # Standalone OSC simulator (6 scenarios)
+    ├── build-tiles.js                     # Tile builder
     └── test_bounds_validation.sh          # Bounds regression test
 ```
 
@@ -199,7 +213,7 @@ Sent to MaxMSP on port 7400 per viewport update.
 - `/mode` (string) - `"aggregated"` or `"per-grid"`, sent before data on every update
 
 **Viewport signals (sent after /mode, before data):**
-- `/proximity` (float 0–1) — Viewport zoom proximity. 0 = satellite/distant view, 1 = closest zoom. Based on grid cell count with configurable thresholds (default: 50–800 cells). Forced to 0 when viewport contains zero grid cells.
+- `/proximity` (float 0–1) — Viewport zoom proximity. 0 = satellite/distant view, 1 = closest zoom. Based on map zoom level with linear interpolation between configurable thresholds (default: zoom 4–6). See `PROXIMITY_ZOOM_LOW` / `PROXIMITY_ZOOM_HIGH` in `.env.example`.
 - `/delta/lc` (11 floats) — Per-class land cover change since previous update, same class order as `/lc/*`. All zeros on first update.
 
 ### Aggregated Mode (always sent, 15 messages)

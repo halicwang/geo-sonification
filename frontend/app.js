@@ -351,7 +351,8 @@ function onViewportChange() {
             try {
                 ws.send(JSON.stringify({
                     type: 'viewport',
-                    bounds: boundsArray
+                    bounds: boundsArray,
+                    zoom: map.getZoom()
                 }));
             } catch (err) {
                 console.error('WebSocket send failed, falling back to HTTP:', err);
@@ -373,6 +374,7 @@ async function sendViewportHTTP(bounds) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 bounds,
+                zoom: map.getZoom(),
                 clientId: getClientId()
             })
         });

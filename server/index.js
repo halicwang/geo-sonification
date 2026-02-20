@@ -22,7 +22,7 @@ const path = require('path');
 
 const {
     HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE,
-    PROXIMITY_LOWER, PROXIMITY_UPPER
+    PROXIMITY_ZOOM_LOW, PROXIMITY_ZOOM_HIGH
 } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
 const {
@@ -34,7 +34,7 @@ const spatial = require('./spatial');
 const { validateBounds } = spatial;
 const {
     getLcFractionsFromDistribution,
-    computeProximityFromGridCount,
+    computeProximityFromZoom,
     computeDeltaMetrics
 } = require('./osc-metrics');
 const {
@@ -82,7 +82,7 @@ setInterval(() => {
  * @param {{ previousSnapshot: { lcFractions:number[], timestampMs:number }|null }} deltaState
  * @returns {{ stats, gridsInView } | { error }}
  */
-function processViewport(bounds, modeState, deltaState) {
+function processViewport(bounds, modeState, deltaState, zoom) {
     const t0 = Date.now();
 
     const validation = validateBounds(bounds);
@@ -99,7 +99,7 @@ function processViewport(bounds, modeState, deltaState) {
     sendModeToMax(modeState.currentMode);
 
     // /proximity is sent immediately after /mode.
-    const proximity = computeProximityFromGridCount(gridCount, PROXIMITY_LOWER, PROXIMITY_UPPER);
+    const proximity = computeProximityFromZoom(zoom, PROXIMITY_ZOOM_LOW, PROXIMITY_ZOOM_HIGH);
     sendProximityToMax(proximity);
 
     // /delta/lc is sent immediately after /proximity.
@@ -201,7 +201,8 @@ app.post('/api/viewport', (req, res) => {
         return res.status(400).json({ error: parsedBounds.error });
     }
 
-    const result = processViewport(parsedBounds.bounds, modeState, deltaState);
+    const zoom = Number.isFinite(body.zoom) ? body.zoom : undefined;
+    const result = processViewport(parsedBounds.bounds, modeState, deltaState, zoom);
     if (result.error) {
         return res.status(400).json({ error: result.error });
     }
@@ -293,7 +294,8 @@ async function startServer() {
                             return;
                         }
 
-                        const result = processViewport(parsedBounds.bounds, modeState, deltaState);
+                        const zoom = Number.isFinite(data.zoom) ? data.zoom : undefined;
+                        const result = processViewport(parsedBounds.bounds, modeState, deltaState, zoom);
                         if (result.error) {
                             ws.send(JSON.stringify({ type: 'error', error: result.error }));
                             return;

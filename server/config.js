@@ -189,21 +189,21 @@ if (PER_GRID_THRESHOLD_ENTER > PER_GRID_THRESHOLD_EXIT) {
 console.log(`[PerGrid] thresholds: enter<=${PER_GRID_THRESHOLD_ENTER}, exit>${PER_GRID_THRESHOLD_EXIT}`);
 
 // ---- Proximity signal ----
-// Grid-count based mapping:
-//   gridCount <= lower => 1 (close)
-//   gridCount >= upper => 0 (distant)
+// Zoom-level based mapping:
+//   zoom >= PROXIMITY_ZOOM_HIGH => 1 (zoomed in — land detail)
+//   zoom <= PROXIMITY_ZOOM_LOW  => 0 (zoomed out — ocean/distant)
 //   linear interpolation between
-const PROXIMITY_LOWER = parseNonNegativeInt('PROXIMITY_LOWER', 50, 'PROXIMITY_LOWER');
-const PROXIMITY_UPPER = parseNonNegativeInt('PROXIMITY_UPPER', 800, 'PROXIMITY_UPPER');
+const PROXIMITY_ZOOM_LOW  = parseFloat(process.env.PROXIMITY_ZOOM_LOW)  || 4;
+const PROXIMITY_ZOOM_HIGH = parseFloat(process.env.PROXIMITY_ZOOM_HIGH) || 6;
 
-if (PROXIMITY_LOWER > PROXIMITY_UPPER) {
+if (PROXIMITY_ZOOM_LOW >= PROXIMITY_ZOOM_HIGH) {
     console.error(
-        `ERROR: PROXIMITY_LOWER (${PROXIMITY_LOWER}) > ` +
-        `PROXIMITY_UPPER (${PROXIMITY_UPPER}). Lower must be <= Upper.`
+        `ERROR: PROXIMITY_ZOOM_LOW (${PROXIMITY_ZOOM_LOW}) >= ` +
+        `PROXIMITY_ZOOM_HIGH (${PROXIMITY_ZOOM_HIGH}). Low must be < High.`
     );
     process.exit(1);
 }
-console.log(`[Proximity] thresholds: lower=${PROXIMITY_LOWER}, upper=${PROXIMITY_UPPER}`);
+console.log(`[Proximity] zoom thresholds: low=${PROXIMITY_ZOOM_LOW}, high=${PROXIMITY_ZOOM_HIGH}`);
 
 // ---- Cache & broadcast ----
 const DISABLE_CACHE = process.env.DISABLE_CACHE === '1' || process.env.DISABLE_CACHE === 'true';
@@ -228,8 +228,8 @@ module.exports = {
     LAT_BUCKETS,
     PER_GRID_THRESHOLD_ENTER,
     PER_GRID_THRESHOLD_EXIT,
-    PROXIMITY_LOWER,
-    PROXIMITY_UPPER,
+    PROXIMITY_ZOOM_LOW,
+    PROXIMITY_ZOOM_HIGH,
     DISABLE_CACHE,
     FORCE_REBUILD_CACHE,
     BROADCAST_STATS

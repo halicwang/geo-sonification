@@ -48,6 +48,25 @@ function computeProximityFromGridCount(gridCount, lower, upper) {
     return clamp01((high - count) / (high - low));
 }
 
+/**
+ * Proximity mapping from zoom level.
+ * - zoom >= zoomHigh => 1 (fully zoomed in — land detail mode)
+ * - zoom <= zoomLow  => 0 (fully zoomed out — ocean/distant mode)
+ * - linear interpolation between
+ */
+function computeProximityFromZoom(zoom, zoomLow, zoomHigh) {
+    const z = Number.isFinite(zoom) ? zoom : 0;
+    const low = Number.isFinite(zoomLow) ? zoomLow : 4;
+    const high = Number.isFinite(zoomHigh) ? zoomHigh : 6;
+
+    if (low >= high) {
+        return z >= high ? 1 : 0;
+    }
+    if (z >= high) return 1;
+    if (z <= low) return 0;
+    return clamp01((z - low) / (high - low));
+}
+
 function normalizeLcArray(values) {
     return LC_CLASS_ORDER.map((_, index) => clamp01(Array.isArray(values) ? finiteOrZero(values[index]) : 0));
 }
@@ -86,6 +105,7 @@ function computeDeltaMetrics(currentLcFractions, previousSnapshot) {
 module.exports = {
     getLcFractionsFromDistribution,
     computeProximityFromGridCount,
+    computeProximityFromZoom,
     createZeroDelta,
     computeDeltaMetrics
 };

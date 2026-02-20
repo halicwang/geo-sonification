@@ -1,6 +1,7 @@
 const {
     getLcFractionsFromDistribution,
     computeProximityFromGridCount,
+    computeProximityFromZoom,
     computeDeltaMetrics
 } = require('../osc-metrics');
 
@@ -22,6 +23,29 @@ describe('computeProximityFromGridCount', () => {
     test('linear interpolation between thresholds', () => {
         // Midpoint between 50 and 800 is 425 => proximity 0.5
         expect(computeProximityFromGridCount(425, 50, 800)).toBeCloseTo(0.5, 6);
+    });
+});
+
+describe('computeProximityFromZoom', () => {
+    test('zoom >= high maps to 1', () => {
+        expect(computeProximityFromZoom(6, 4, 6)).toBe(1);
+        expect(computeProximityFromZoom(10, 4, 6)).toBe(1);
+    });
+
+    test('zoom <= low maps to 0', () => {
+        expect(computeProximityFromZoom(4, 4, 6)).toBe(0);
+        expect(computeProximityFromZoom(2, 4, 6)).toBe(0);
+    });
+
+    test('linear interpolation between thresholds', () => {
+        expect(computeProximityFromZoom(5, 4, 6)).toBeCloseTo(0.5, 6);
+        expect(computeProximityFromZoom(4.5, 4, 6)).toBeCloseTo(0.25, 6);
+        expect(computeProximityFromZoom(5.5, 4, 6)).toBeCloseTo(0.75, 6);
+    });
+
+    test('non-finite zoom defaults to 0', () => {
+        expect(computeProximityFromZoom(undefined, 4, 6)).toBe(0);
+        expect(computeProximityFromZoom(NaN, 4, 6)).toBe(0);
     });
 });
 

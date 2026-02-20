@@ -176,7 +176,7 @@ For a coastal cell that's 50% water + 50% forest: `/forest` = 1.0, `/lc/10` ≈ 
 
 ### New config knobs
 
-- `PROXIMITY_LOWER` / `PROXIMITY_UPPER`
+- `PROXIMITY_ZOOM_LOW` / `PROXIMITY_ZOOM_HIGH` (originally `PROXIMITY_LOWER` / `PROXIMITY_UPPER` with grid-count mapping; later switched to zoom-level mapping — see 2026-02-20 entry)
 - `DT_MIN_MS` / `DT_MAX_MS`
 - `DELTA_RATE_CEILING`
 
@@ -184,9 +184,10 @@ All added to `server/config.js` with validation and documented in `.env.example`
 
 ### Formula notes (implemented)
 
-- `proximity` from grid count:
-  - `gridCount === 0` -> `0` (forced distant/no-data behavior)
-  - `<= lower` -> `1`, `>= upper` -> `0`, linear interpolation in between
+- `proximity` from zoom level (updated 2026-02-20, originally grid-count based):
+  - `zoom <= PROXIMITY_ZOOM_LOW` -> `0` (distant/ocean)
+  - `zoom >= PROXIMITY_ZOOM_HIGH` -> `1` (zoomed in)
+  - linear interpolation in between
 - `delta`:
   - `magnitude = clamp(0.5 * sum(abs(current_i - prev_i)), 0, 1)`
   - `dt` clamped to `[DT_MIN_MS, DT_MAX_MS]`
@@ -263,7 +264,7 @@ Transition is gradual, not abrupt. `/proximity` drives the attenuation curve.
 
 Key design: **frame-based smoothing** triggered by the last `/lc/100` message (inlet 10). The server sends 11 `/lc/*` messages in rapid succession per viewport update. If smoothing ran per-inlet, the first inlet would see dt ≈ 200ms while remaining 10 see dt ≈ 0ms, causing inconsistent behavior. Solution: inlets 0–9 store targets only; inlet 10 stores AND triggers `updateFrame()` applying EMA to all 11 channels with identical alpha and dt.
 
-Smoothing: EMA with `alpha = 1 - exp(-dt / smoothingTime)`, default tau = 500ms. Proximity attenuation: linear multiplication.
+Smoothing: EMA with `alpha = 1 - exp(-dt / smoothingTime)`, default tau = 500ms. Outputs pass through directly without proximity attenuation (proximity attenuation was removed — see 2026-02-20 fix entry).
 
 ### Icon trigger (Milestone B, Task 5)
 
@@ -463,6 +464,53 @@ Each WAV is 2 minutes + 1 bar (1.875 seconds at 128 BPM). The last bar is a copy
 - **Modified**: `sonification/samples/README.md` — updated ambience spec (48kHz, 2:01.875, crossfade tail)
 - **Modified**: `README.md` — updated file structure and Sound Mapping section
 - **No server changes**
+
+---
+
+## 2026-02-20 — Fix: Crossfade Controller Proximity Attenuation
+
+### Problem
+
+The crossfade controller multiplied all 11 smoothed outputs by `proximity` before sending them to outlets (`smoothed[i] * proximity`). When zoomed out (`proximity ≈ 0`), this zeroed every land-cover bus. Meanwhile, `water_bus.js` independently output 1.0 for open ocean — producing inverted behavior: water bus on, everything else silent, even over land areas that should still have ambient sound.
+
+### Fix
+
+Removed the `* proximity` attenuation from the crossfade controller output. Smoothed values now pass through directly. Proximity-based mixing is handled downstream where appropriate (e.g., `water_bus.js` already manages its own proximity logic).
+
+### Files changed
+
+- **Modified**: `sonification/crossfade_controller.js` — remove `* proximity` from outlet loop
+
+---
+
+## 2026-02-20 — Switch Proximity from Grid-Count to Zoom-Level Mapping
+
+### Problem
+
+The original proximity signal was computed from the number of visible grid cells: `gridCount ≤ 50 → proximity = 1`, `gridCount ≥ 800 → proximity = 0`, linear interpolation between. This hit 0 too early at moderate zoom levels — e.g., zooming into a continent still showed hundreds of cells, pushing proximity to 0 even though the user was clearly looking at a specific region.
+
+### Solution
+
+Replace grid-count mapping with zoom-level mapping. The frontend now sends `zoom` alongside viewport bounds. The server computes proximity as a linear ramp between two configurable thresholds:
+
+- `zoom ≤ PROXIMITY_ZOOM_LOW (default 4)` → proximity = 0 (distant/ocean)
+- `zoom ≥ PROXIMITY_ZOOM_HIGH (default 6)` → proximity = 1 (zoomed in)
+- Linear interpolation between
+
+This provides a more intuitive mapping: the user's zoom gesture directly controls how "close" the soundscape feels, independent of how many grid cells happen to be visible (which varies wildly by region density and land/ocean ratio).
+
+### New config knobs
+
+- `PROXIMITY_ZOOM_LOW` (default 4) — replaces `PROXIMITY_LOWER`
+- `PROXIMITY_ZOOM_HIGH` (default 6) — replaces `PROXIMITY_UPPER`
+
+### Files changed
+
+- **Modified**: `frontend/app.js` — send `zoom` in WebSocket viewport messages
+- **Modified**: `server/config.js` — new `PROXIMITY_ZOOM_LOW`/`PROXIMITY_ZOOM_HIGH` env vars (replaced `PROXIMITY_LOWER`/`PROXIMITY_UPPER`)
+- **Modified**: `server/index.js` — call `computeProximityFromZoom()` instead of `computeProximityFromGridCount()`
+- **Modified**: `server/osc-metrics.js` — add `computeProximityFromZoom()` function
+- **Modified**: `server/__tests__/osc-metrics.test.js` — add tests for zoom-based proximity
 
 ---
 

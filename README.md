@@ -198,8 +198,6 @@ Sent to MaxMSP on port 7400 per viewport update.
 **Viewport signals (sent after /mode, before data):**
 - `/proximity` (float 0–1) — Viewport zoom proximity. 0 = satellite/distant view, 1 = closest zoom. Based on grid cell count with configurable thresholds (default: 50–800 cells). Forced to 0 when viewport contains zero grid cells.
 - `/delta/lc` (11 floats) — Per-class land cover change since previous update, same class order as `/lc/*`. All zeros on first update.
-- `/delta/magnitude` (float 0–1) — Overall change magnitude: `0.5 × sum(|current_i − prev_i|)`. 0 = no change, 1 = maximum shift.
-- `/delta/rate` (float 0–1) — Rate of change: magnitude per second, normalized by `DELTA_RATE_CEILING` (default 5.0). Distinguishes slow panning from fast flicking. Uses clamped dt (50–5000ms) for edge cases.
 
 ### Aggregated Mode (always sent, 15 messages)
 

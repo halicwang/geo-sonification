@@ -32,11 +32,7 @@ function ensureCleanupTimer() {
 function cloneSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return null;
     if (!Array.isArray(snapshot.lcFractions)) return null;
-    if (!Number.isFinite(snapshot.timestampMs)) return null;
-    return {
-        lcFractions: snapshot.lcFractions.slice(),
-        timestampMs: snapshot.timestampMs
-    };
+    return { lcFractions: snapshot.lcFractions.slice() };
 }
 
 function createDeltaState() {

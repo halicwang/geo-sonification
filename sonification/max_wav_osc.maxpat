@@ -844,18 +844,18 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "patching_rect": [ 20.0, 780.0, 460.0, 20.0 ],
-                    "text": "--- VIEWPORT SIGNALS: /proximity, /delta/*, /coverage ---"
+                    "text": "--- VIEWPORT SIGNALS: /proximity, /delta/lc, /coverage ---"
                 }
             },
             {
                 "box": {
                     "id": "route_signals",
                     "maxclass": "newobj",
-                    "numinlets": 6,
-                    "numoutlets": 6,
-                    "outlettype": [ "", "", "", "", "", "" ],
+                    "numinlets": 4,
+                    "numoutlets": 4,
+                    "outlettype": [ "", "", "", "" ],
                     "patching_rect": [ 20.0, 810.0, 1000.0, 22.0 ],
-                    "text": "route /proximity /delta/lc /delta/magnitude /delta/rate /coverage"
+                    "text": "route /proximity /delta/lc /coverage"
                 }
             },
             {
@@ -879,52 +879,6 @@
                     "outlettype": [ "", "bang" ],
                     "parameter_enable": 0,
                     "patching_rect": [ 90.0, 850.0, 60.0, 22.0 ]
-                }
-            },
-            {
-                "box": {
-                    "id": "t_delta_mag",
-                    "maxclass": "newobj",
-                    "numinlets": 1,
-                    "numoutlets": 1,
-                    "outlettype": [ "float" ],
-                    "patching_rect": [ 420.0, 850.0, 65.0, 22.0 ],
-                    "text": "unpack f"
-                }
-            },
-            {
-                "box": {
-                    "format": 6,
-                    "id": "flonum_delta_mag",
-                    "maxclass": "flonum",
-                    "numinlets": 1,
-                    "numoutlets": 2,
-                    "outlettype": [ "", "bang" ],
-                    "parameter_enable": 0,
-                    "patching_rect": [ 490.0, 850.0, 60.0, 22.0 ]
-                }
-            },
-            {
-                "box": {
-                    "id": "t_delta_rate",
-                    "maxclass": "newobj",
-                    "numinlets": 1,
-                    "numoutlets": 1,
-                    "outlettype": [ "float" ],
-                    "patching_rect": [ 620.0, 850.0, 65.0, 22.0 ],
-                    "text": "unpack f"
-                }
-            },
-            {
-                "box": {
-                    "format": 6,
-                    "id": "flonum_delta_rate",
-                    "maxclass": "flonum",
-                    "numinlets": 1,
-                    "numoutlets": 2,
-                    "outlettype": [ "", "bang" ],
-                    "parameter_enable": 0,
-                    "patching_rect": [ 690.0, 850.0, 60.0, 22.0 ]
                 }
             },
             {
@@ -958,26 +912,6 @@
                     "numoutlets": 0,
                     "patching_rect": [ 20.0, 874.0, 80.0, 20.0 ],
                     "text": "proximity"
-                }
-            },
-            {
-                "box": {
-                    "id": "lab_dmag",
-                    "maxclass": "comment",
-                    "numinlets": 1,
-                    "numoutlets": 0,
-                    "patching_rect": [ 420.0, 874.0, 80.0, 20.0 ],
-                    "text": "delta/mag"
-                }
-            },
-            {
-                "box": {
-                    "id": "lab_drate",
-                    "maxclass": "comment",
-                    "numinlets": 1,
-                    "numoutlets": 0,
-                    "patching_rect": [ 620.0, 874.0, 80.0, 20.0 ],
-                    "text": "delta/rate"
                 }
             },
             {
@@ -1349,39 +1283,6 @@
             },
             {
                 "box": {
-                    "id": "mul_delta_int",
-                    "maxclass": "newobj",
-                    "numinlets": 2,
-                    "numoutlets": 1,
-                    "outlettype": [ "float" ],
-                    "patching_rect": [ 1110.0, 1510.0, 40.0, 22.0 ],
-                    "text": "* 0."
-                }
-            },
-            {
-                "box": {
-                    "format": 6,
-                    "id": "flonum_drama_int",
-                    "maxclass": "flonum",
-                    "numinlets": 1,
-                    "numoutlets": 2,
-                    "outlettype": [ "", "bang" ],
-                    "parameter_enable": 0,
-                    "patching_rect": [ 1110.0, 1540.0, 60.0, 22.0 ]
-                }
-            },
-            {
-                "box": {
-                    "id": "lab_drama",
-                    "maxclass": "comment",
-                    "numinlets": 1,
-                    "numoutlets": 0,
-                    "patching_rect": [ 1180.0, 1542.0, 170.0, 20.0 ],
-                    "text": "intensity × delta/mag"
-                }
-            },
-            {
-                "box": {
                     "id": "send_prox",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -1533,14 +1434,6 @@
             {
                 "patchline": {
                     "destination": [ "flonum_icon_int", 0 ],
-                    "order": 1,
-                    "source": [ "js_icontrig", 1 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "mul_delta_int", 0 ],
-                    "order": 0,
                     "source": [ "js_icontrig", 1 ]
                 }
             },
@@ -1560,12 +1453,6 @@
                 "patchline": {
                     "destination": [ "js_icontrig", 12 ],
                     "source": [ "metro_icon", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "flonum_drama_int", 0 ],
-                    "source": [ "mul_delta_int", 0 ]
                 }
             },
             {
@@ -1715,19 +1602,7 @@
             {
                 "patchline": {
                     "destination": [ "t_coverage", 0 ],
-                    "source": [ "route_signals", 4 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "t_delta_mag", 0 ],
                     "source": [ "route_signals", 2 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "t_delta_rate", 0 ],
-                    "source": [ "route_signals", 3 ]
                 }
             },
             {
@@ -1748,26 +1623,6 @@
                     "destination": [ "send_cov", 0 ],
                     "order": 1,
                     "source": [ "t_coverage", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "flonum_delta_mag", 0 ],
-                    "order": 1,
-                    "source": [ "t_delta_mag", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "mul_delta_int", 1 ],
-                    "order": 0,
-                    "source": [ "t_delta_mag", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "flonum_delta_rate", 0 ],
-                    "source": [ "t_delta_rate", 0 ]
                 }
             },
             {

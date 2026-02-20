@@ -42,14 +42,12 @@ describe('HTTP delta state', () => {
         const key = `client:test-${Date.now()}`;
         const state = createDeltaState();
         state.previousSnapshot = {
-            lcFractions: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            timestampMs: 1234
+            lcFractions: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         };
         saveHttpDeltaState(key, state);
 
         const { deltaState } = getHttpDeltaState(key);
         expect(deltaState.previousSnapshot).toBeDefined();
-        expect(deltaState.previousSnapshot.timestampMs).toBe(1234);
         expect(deltaState.previousSnapshot.lcFractions[0]).toBe(1);
     });
 });

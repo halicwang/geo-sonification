@@ -64,25 +64,6 @@
  *                     Higher = more frequent triggers.
  *  cooldown <ms>      Minimum interval between same-class triggers
  *                     (default 3000). Prevents rapid-fire.
- *
- * ═══════════════════════════════════════════════════════════════════════
- *  DELTA-DRIVEN DRAMA (recommended Max patch wiring)
- * ═══════════════════════════════════════════════════════════════════════
- *  This script does NOT receive /delta messages. For dynamic drama
- *  (icons prominent during viewport movement, quiet during stillness),
- *  multiply outlet 1 (intensity) by /delta/magnitude in the Max patch:
- *
- *    [icon_trigger.js]
- *         |              |
- *     outlet 0       outlet 1
- *     (category)     (intensity)
- *                        |
- *                       [*]───── /delta/magnitude
- *                        |
- *                   (scaled intensity → sample player gain)
- *
- *  This keeps the JS simple while achieving a narrative arc: stable
- *  texture when the map is still, active icons when the user explores.
  */
 
 // ─── Inlet / Outlet declaration ─────────────────────────────────────

@@ -19,7 +19,7 @@ const {
     clamp01,
     buildModePacket,
     buildProximityPacket,
-    buildDeltaPackets,
+    buildDeltaPacket,
     buildCoveragePacket,
     buildAggregatedPackets
 } = require('../server/osc_schema');
@@ -28,20 +28,6 @@ const { computeDeltaMetrics } = require('../server/osc-metrics');
 const DEFAULT_OSC_HOST = '127.0.0.1';
 const DEFAULT_OSC_PORT = 7400;
 const DEFAULT_FRAME_MS = 250;
-
-const DT_MIN_MS = parsePositiveInt(process.env.DT_MIN_MS, 50);
-const DT_MAX_MS = parsePositiveInt(process.env.DT_MAX_MS, 5000);
-const DELTA_RATE_CEILING = parsePositiveFloat(process.env.DELTA_RATE_CEILING, 5.0);
-
-function parsePositiveInt(value, fallback) {
-    const n = Number(value);
-    return Number.isInteger(n) && n > 0 ? n : fallback;
-}
-
-function parsePositiveFloat(value, fallback) {
-    const n = Number(value);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
-}
 
 function parseOscPort(value, fallback) {
     const n = Number(value);
@@ -467,17 +453,12 @@ async function run() {
         const lcFractions = normalizeLcFractions(state.lcFractions);
         const dominantLandcover = dominantClassFromFractions(lcFractions);
 
-        const delta = computeDeltaMetrics(
-            lcFractions,
-            previousSnapshot,
-            elapsedMs,
-            { dtMinMs: DT_MIN_MS, dtMaxMs: DT_MAX_MS, rateCeiling: DELTA_RATE_CEILING }
-        );
+        const delta = computeDeltaMetrics(lcFractions, previousSnapshot);
         previousSnapshot = delta.snapshot;
 
         oscPort.send(buildModePacket(state.mode));
         oscPort.send(buildProximityPacket(state.proximity));
-        oscPort.send({ timeTag: osc.timeTag(0), packets: buildDeltaPackets(delta) });
+        oscPort.send(buildDeltaPacket(delta.deltaLc));
         oscPort.send({
             timeTag: osc.timeTag(0),
             packets: buildAggregatedPackets({
@@ -493,8 +474,7 @@ async function run() {
         if (step % Math.max(1, Math.round(1000 / frameMs)) === 0 || step === totalSteps) {
             console.log(
                 `[Simulator] t=${(elapsedMs / 1000).toFixed(1)}s ` +
-                `proximity=${clamp01(state.proximity).toFixed(2)} ` +
-                `deltaMag=${delta.magnitude.toFixed(3)}`
+                `proximity=${clamp01(state.proximity).toFixed(2)}`
             );
         }
 

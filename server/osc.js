@@ -2,7 +2,7 @@
  * OSC client: sends viewport stats to MaxMSP over UDP.
  *
  * Message ordering per viewport update:
- *   /mode -> /proximity -> /delta/* -> existing messages (unchanged order)
+ *   /mode -> /proximity -> /delta/lc -> existing messages (unchanged order)
  *
  * Aggregated mode payload (existing):
  *   /landcover, /nightlight, /population, /forest, /lc/10 ... /lc/100
@@ -24,7 +24,7 @@ const {
     clampLandcoverClass,
     buildModePacket,
     buildProximityPacket,
-    buildDeltaPackets,
+    buildDeltaPacket,
     buildCoveragePacket,
     buildAggregatedPackets
 } = require('./osc_schema');
@@ -234,22 +234,13 @@ function sendProximityToMax(proximity) {
 }
 
 /**
- * Send viewport delta signals.
- * - /delta/lc (11 floats)
- * - /delta/magnitude (float 0-1)
- * - /delta/rate (float 0-1)
+ * Send /delta/lc (11 floats: per-class land cover change).
  */
-function sendDeltaToMax(deltaLc, magnitude, rate) {
+function sendDeltaToMax(deltaLc) {
     if (!oscReady) return;
     try {
-        const packets = buildDeltaPackets({ deltaLc, magnitude, rate });
-        oscPort.send({ timeTag: osc.timeTag(0), packets });
-        if (DEBUG_OSC) {
-            console.log(
-                `OSC sent: /delta magnitude=${clamp01(magnitude).toFixed(3)} ` +
-                `rate=${clamp01(rate).toFixed(3)}`
-            );
-        }
+        oscPort.send(buildDeltaPacket(deltaLc));
+        if (DEBUG_OSC) console.log('OSC sent: /delta/lc');
     } catch (err) {
         console.error('OSC delta send error:', err);
     }

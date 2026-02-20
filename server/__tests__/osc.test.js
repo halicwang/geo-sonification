@@ -93,26 +93,12 @@ describe('sendProximityToMax', () => {
 });
 
 describe('sendDeltaToMax', () => {
-    test('sends /delta bundle with canonical addresses', () => {
-        sendDeltaToMax([0.1, -0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0], 0.4, 0.8);
+    test('sends /delta/lc packet with 11 floats', () => {
+        sendDeltaToMax([0.1, -0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
-        const bundle = mockSend.mock.calls[0][0];
-        expect(bundle.packets).toBeDefined();
-        expect(bundle.packets.map(p => p.address)).toEqual([
-            OSC_ADDRESSES.DELTA_LC,
-            OSC_ADDRESSES.DELTA_MAGNITUDE,
-            OSC_ADDRESSES.DELTA_RATE
-        ]);
-        expect(bundle.packets[0].args).toHaveLength(11);
-        expect(bundle.packets[1].args[0].value).toBeCloseTo(0.4, 6);
-        expect(bundle.packets[2].args[0].value).toBeCloseTo(0.8, 6);
-    });
-
-    test('clamps magnitude and rate to 0-1', () => {
-        sendDeltaToMax(new Array(11).fill(0), 2.0, -1.0);
-        const bundle = mockSend.mock.calls[0][0];
-        expect(bundle.packets[1].args[0].value).toBe(1);
-        expect(bundle.packets[2].args[0].value).toBe(0);
+        const packet = mockSend.mock.calls[0][0];
+        expect(packet.address).toBe(OSC_ADDRESSES.DELTA_LC);
+        expect(packet.args).toHaveLength(11);
     });
 });
 

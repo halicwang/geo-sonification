@@ -5,7 +5,7 @@ const {
     AGGREGATED_OSC_ORDER,
     OSC_SEQUENCE_WITH_DELTA,
     buildAggregatedPackets,
-    buildDeltaPackets
+    buildDeltaPacket
 } = require('../osc_schema');
 
 describe('osc_schema constants', () => {
@@ -25,14 +25,12 @@ describe('osc_schema constants', () => {
     });
 
     test('sequence includes mode/proximity/delta before aggregated payload', () => {
-        expect(OSC_SEQUENCE_WITH_DELTA.slice(0, 5)).toEqual([
+        expect(OSC_SEQUENCE_WITH_DELTA.slice(0, 3)).toEqual([
             OSC_ADDRESSES.MODE,
             OSC_ADDRESSES.PROXIMITY,
-            OSC_ADDRESSES.DELTA_LC,
-            OSC_ADDRESSES.DELTA_MAGNITUDE,
-            OSC_ADDRESSES.DELTA_RATE
+            OSC_ADDRESSES.DELTA_LC
         ]);
-        expect(OSC_SEQUENCE_WITH_DELTA.slice(5, 5 + AGGREGATED_OSC_ORDER.length)).toEqual(AGGREGATED_OSC_ORDER);
+        expect(OSC_SEQUENCE_WITH_DELTA.slice(3, 3 + AGGREGATED_OSC_ORDER.length)).toEqual(AGGREGATED_OSC_ORDER);
         expect(OSC_SEQUENCE_WITH_DELTA[OSC_SEQUENCE_WITH_DELTA.length - 1]).toBe(OSC_ADDRESSES.COVERAGE);
     });
 });
@@ -53,20 +51,10 @@ describe('osc_schema packet builders', () => {
         expect(packets[4 + 4].args[0].value).toBeCloseTo(1.0, 6); // /lc/50
     });
 
-    test('buildDeltaPackets returns /delta canonical payload', () => {
-        const packets = buildDeltaPackets({
-            deltaLc: [0.1, -0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            magnitude: 0.5,
-            rate: 0.7
-        });
+    test('buildDeltaPacket returns /delta/lc packet', () => {
+        const packet = buildDeltaPacket([0.1, -0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
-        expect(packets.map(p => p.address)).toEqual([
-            OSC_ADDRESSES.DELTA_LC,
-            OSC_ADDRESSES.DELTA_MAGNITUDE,
-            OSC_ADDRESSES.DELTA_RATE
-        ]);
-        expect(packets[0].args).toHaveLength(11);
-        expect(packets[1].args[0].value).toBeCloseTo(0.5, 6);
-        expect(packets[2].args[0].value).toBeCloseTo(0.7, 6);
+        expect(packet.address).toBe(OSC_ADDRESSES.DELTA_LC);
+        expect(packet.args).toHaveLength(11);
     });
 });

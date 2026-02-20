@@ -42,70 +42,26 @@ describe('getLcFractionsFromDistribution', () => {
 });
 
 describe('computeDeltaMetrics', () => {
-    test('first snapshot returns all-zero delta', () => {
+    test('first snapshot returns all-zero deltaLc', () => {
         const result = computeDeltaMetrics(
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            null,
-            1000,
-            { dtMinMs: 50, dtMaxMs: 5000, rateCeiling: 5 }
+            null
         );
 
         expect(result.deltaLc.every(v => v === 0)).toBe(true);
-        expect(result.magnitude).toBe(0);
-        expect(result.rate).toBe(0);
-        expect(result.snapshot.timestampMs).toBe(1000);
+        expect(result.snapshot.lcFractions[0]).toBeCloseTo(1, 6);
     });
 
-    test('magnitude uses 0.5 * L1 and rate uses normalized per-second value', () => {
-        const prev = {
-            lcFractions: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            timestampMs: 0
-        };
+    test('computes per-class differences from previous snapshot', () => {
+        const prev = { lcFractions: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
 
         const result = computeDeltaMetrics(
             [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-            prev,
-            200,
-            { dtMinMs: 50, dtMaxMs: 5000, rateCeiling: 5 }
+            prev
         );
 
-        // L1=2 (1->0 and 0->1), magnitude=1
-        expect(result.magnitude).toBeCloseTo(1.0, 6);
-        // dt=200ms => rateRaw = 1 / 0.2 = 5 => normalized by ceiling 5 => 1
-        expect(result.rate).toBeCloseTo(1.0, 6);
-    });
-
-    test('rate uses dt min clamp for near-zero updates', () => {
-        const prev = {
-            lcFractions: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            timestampMs: 1000
-        };
-
-        const result = computeDeltaMetrics(
-            [0.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0], // L1=1 => magnitude=0.5
-            prev,
-            1010,
-            { dtMinMs: 50, dtMaxMs: 5000, rateCeiling: 5 }
-        );
-
-        // dt clamped to 50ms => rateRaw = 0.5 / 0.05 = 10 => normalized => 1
-        expect(result.rate).toBeCloseTo(1.0, 6);
-    });
-
-    test('rate uses dt max clamp for stale updates', () => {
-        const prev = {
-            lcFractions: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            timestampMs: 0
-        };
-
-        const result = computeDeltaMetrics(
-            [0.8, 0.2, 0, 0, 0, 0, 0, 0, 0, 0, 0], // L1=0.4 => magnitude=0.2
-            prev,
-            20000,
-            { dtMinMs: 50, dtMaxMs: 5000, rateCeiling: 5 }
-        );
-
-        // dt clamped to 5000ms => rateRaw = 0.2 / 5 = 0.04 => normalized => 0.008
-        expect(result.rate).toBeCloseTo(0.008, 6);
+        expect(result.deltaLc[0]).toBeCloseTo(-1, 6);
+        expect(result.deltaLc[5]).toBeCloseTo(1, 6);
+        expect(result.deltaLc[1]).toBe(0);
     });
 });

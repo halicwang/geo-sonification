@@ -22,7 +22,7 @@ const path = require('path');
 
 const {
     HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE,
-    PROXIMITY_LOWER, PROXIMITY_UPPER, DT_MIN_MS, DT_MAX_MS, DELTA_RATE_CEILING
+    PROXIMITY_LOWER, PROXIMITY_UPPER
 } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
 const {
@@ -102,15 +102,10 @@ function processViewport(bounds, modeState, deltaState) {
     const proximity = computeProximityFromGridCount(gridCount, PROXIMITY_LOWER, PROXIMITY_UPPER);
     sendProximityToMax(proximity);
 
-    // /delta/* is sent immediately after /proximity.
+    // /delta/lc is sent immediately after /proximity.
     const lcFractions = getLcFractionsFromDistribution(stats.landcoverDistribution);
-    const delta = computeDeltaMetrics(
-        lcFractions,
-        deltaState?.previousSnapshot || null,
-        t0,
-        { dtMinMs: DT_MIN_MS, dtMaxMs: DT_MAX_MS, rateCeiling: DELTA_RATE_CEILING }
-    );
-    sendDeltaToMax(delta.deltaLc, delta.magnitude, delta.rate);
+    const delta = computeDeltaMetrics(lcFractions, deltaState?.previousSnapshot || null);
+    sendDeltaToMax(delta.deltaLc);
     if (deltaState) {
         deltaState.previousSnapshot = delta.snapshot;
     }

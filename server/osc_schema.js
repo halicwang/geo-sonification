@@ -13,8 +13,6 @@ const OSC_ADDRESSES = Object.freeze({
     MODE: '/mode',
     PROXIMITY: '/proximity',
     DELTA_LC: '/delta/lc',
-    DELTA_MAGNITUDE: '/delta/magnitude',
-    DELTA_RATE: '/delta/rate',
     LANDCOVER: '/landcover',
     NIGHTLIGHT: '/nightlight',
     POPULATION: '/population',
@@ -45,8 +43,6 @@ const OSC_SEQUENCE_WITH_DELTA = Object.freeze([
     OSC_ADDRESSES.MODE,
     OSC_ADDRESSES.PROXIMITY,
     OSC_ADDRESSES.DELTA_LC,
-    OSC_ADDRESSES.DELTA_MAGNITUDE,
-    OSC_ADDRESSES.DELTA_RATE,
     ...AGGREGATED_OSC_ORDER,
     OSC_ADDRESSES.COVERAGE
 ]);
@@ -97,21 +93,11 @@ function buildProximityPacket(proximity) {
     };
 }
 
-function buildDeltaPackets({ deltaLc, magnitude, rate }) {
-    return [
-        {
-            address: OSC_ADDRESSES.DELTA_LC,
-            args: normalizeDeltaArray(deltaLc).map(value => ({ type: 'f', value }))
-        },
-        {
-            address: OSC_ADDRESSES.DELTA_MAGNITUDE,
-            args: [{ type: 'f', value: clamp01(magnitude) }]
-        },
-        {
-            address: OSC_ADDRESSES.DELTA_RATE,
-            args: [{ type: 'f', value: clamp01(rate) }]
-        }
-    ];
+function buildDeltaPacket(deltaLc) {
+    return {
+        address: OSC_ADDRESSES.DELTA_LC,
+        args: normalizeDeltaArray(deltaLc).map(value => ({ type: 'f', value }))
+    };
 }
 
 function buildCoveragePacket(ratio) {
@@ -153,7 +139,7 @@ module.exports = {
     normalizeLcFractionArray,
     buildModePacket,
     buildProximityPacket,
-    buildDeltaPackets,
+    buildDeltaPacket,
     buildCoveragePacket,
     buildAggregatedPackets
 };

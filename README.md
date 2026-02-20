@@ -113,7 +113,10 @@ geo-sonification/
 │   ├── app.js                            # Mapbox + WebSocket client
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
 ├── sonification/
-│   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → numbers/outlets
+│   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → numbers/outlets → audio
+│   ├── loop_bus.maxpat                   # Per-bus abstraction: buffer + 2×groove~ + crossfade
+│   ├── loop_clock.js                     # Global crossfade clock (syncs all 5 buses)
+│   ├── loop_voice.js                     # Per-bus voice manager (double-buffered playback)
 │   ├── crossfade_controller.js           # 11-ch land cover crossfade with EMA smoothing
 │   ├── icon_trigger.js                   # Probabilistic auditory icon triggering
 │   ├── granulator.js                     # 4-voice granular synthesis scheduler
@@ -139,7 +142,7 @@ Caches live in `data/cache/` and include aggregation version in their keys. Chan
 
 ## Sound Mapping
 
-The Max patch includes a sound engine with crossfade mixing, icon triggering, and granular synthesis. Land cover channels are folded into 5 audio buses:
+The Max patch includes a sound engine with loop playback, crossfade mixing, icon triggering, and granular synthesis. Five ambience WAVs (2:01.875 each, 128 BPM) are played via double-buffered `groove~` objects with a 1875ms crossfade window, synchronized by a global clock (`loop_clock.js`). Land cover channels are folded into 5 audio buses:
 
 - **Tree bus**: classes 10, 20, 30, 90, 95, 100 (natural vegetation)
 - **Crop bus**: class 40

@@ -3,7 +3,7 @@
  *
  * Receives 11 land cover percentage values (/lc/10 through /lc/100) and a
  * /proximity value. Applies frame-based exponential smoothing to produce
- * 11 independent volume outputs (0–1), attenuated by proximity.
+ * 11 independent volume outputs (0–1).
  *
  * ═══════════════════════════════════════════════════════════════════════
  *  INLETS (12)
@@ -168,8 +168,9 @@ function updateFrame() {
     }
 
     // Output right-to-left (Max convention: rightmost outlet first)
-    // Each output is the smoothed value attenuated by proximity
+    // Output smoothed values directly — proximity-based mixing is
+    // handled downstream (water_bus.js, per-grid mode switching, etc.)
     for (i = NUM_CHANNELS - 1; i >= 0; i--) {
-        outlet(i, smoothed[i] * proximity);
+        outlet(i, smoothed[i]);
     }
 }

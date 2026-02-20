@@ -8,9 +8,9 @@
 
 ## 1. Introduction
 
-This report documents the work completed between Milestone 1 and Milestone 2 of the Geo-Sonification project. Where Milestone 1 established the data pipeline --- getting geographic data from Google Earth Engine through a Node.js server to Max/MSP via OSC --- Milestone 2 focused on transforming that raw data into a real-time, listenable soundscape. The central question driving this phase was: *how do you make a map that you can hear?*
+Milestone 1 established the data pipeline: Google Earth Engine exports geographic data, a Node.js server aggregates it in real time as the user pans and zooms a world map, and the results are streamed to Max/MSP via OSC. By the end of Milestone 1, the server was sending 11 land cover class percentages per viewport update --- one for each ESA WorldCover category (forest, shrubland, grassland, cropland, built-up, bare, snow/ice, water, wetland, mangrove, moss/lichen). The data arrived in Max, but produced no sound.
 
-The system now produces continuous ambient sound that changes as the user pans and zooms across a world map. Five distinct sonic environments --- forest, cropland, city, desert, and ocean --- crossfade smoothly based on the geographic composition of whatever region the user is viewing. This report describes every component built to achieve that result.
+The central design challenge of Milestone 2 was: how do you turn 11 simultaneous, continuously changing land cover percentages into a coherent listening experience? Playing 11 independent audio streams would be chaotic and unlistenable. The solution was a **fold-mapping** architecture: the 11 ESA classes are grouped by sonic similarity into **5 audio buses** --- Tree, Crop, Urban, Bare, and Water --- each driving a single ambient loop authored in Ableton Live. A crossfade controller smooths the 11 raw percentages with exponential moving average filtering and sums the grouped channels into 5 bus volumes. As the user pans the map, the 5 loops play simultaneously and their relative volumes shift in real time, producing a continuous soundscape where forest fades into desert, city gives way to ocean, and the listener can feel the geography change without reading a single number.
 
 ---
 

@@ -134,10 +134,89 @@ function computeDeltaMetrics(currentLcFractions, previousSnapshot) {
     return { deltaLc, snapshot: { lcFractions: current } };
 }
 
+// ── Bus fold-mapping (11 LC classes → 5 audio buses) ────────────────
+
+/**
+ * Bus index-to-name mapping. Matches Max/MSP patch wiring.
+ * @type {readonly string[]}
+ */
+const BUS_NAMES = Object.freeze(['tree', 'crop', 'urban', 'bare', 'water']);
+
+/**
+ * LC_CLASS_ORDER index sets for each bus.
+ * Derived from crossfade_controller.js wiring (lines 73-78).
+ * @type {readonly number[][]}
+ */
+const BUS_LC_INDICES = Object.freeze([
+    [0, 1, 2, 8, 9, 10], // tree: classes 10,20,30,90,95,100
+    [3], // crop: class 40
+    [4], // urban: class 50
+    [5], // bare: class 60
+    [6, 7], // water: classes 70,80
+]);
+
+/**
+ * Fold 11-class LC fractions into 5 bus target values.
+ *
+ * Each bus value is the sum of its constituent LC class fractions,
+ * clamped to [0, 1]. This mirrors the Max patch wiring where
+ * multiple crossfade controller outlets feed into a single bus.
+ *
+ * @param {number[]} lcFractions - length-11 array of 0-1 fractions (LC_CLASS_ORDER)
+ * @returns {number[]} length-5 array [tree, crop, urban, bare, water]
+ */
+function computeBusTargets(lcFractions) {
+    const f = Array.isArray(lcFractions) ? lcFractions : [];
+    const safeVal = (i) => {
+        const v = f[i];
+        return Number.isFinite(v) ? v : 0;
+    };
+    return BUS_LC_INDICES.map((indices) =>
+        clamp01(indices.reduce((sum, i) => sum + safeVal(i), 0))
+    );
+}
+
+// ── Ocean detection (mirrors water_bus.js three-level logic) ────────
+
+/** Coverage below this means "mostly ocean" (water_bus.js line 93). */
+const OCEAN_COVERAGE_THRESHOLD = 0.1;
+
+/** Proximity above this qualifies as "zoomed in enough" for coastal (water_bus.js line 94). */
+const COASTAL_PROXIMITY_THRESHOLD = 0.7;
+
+/** Output level for the coastal zone (water_bus.js line 95). */
+const COASTAL_LEVEL = 0.7;
+
+/**
+ * Three-level ocean detection, pre-smoothing.
+ *
+ * Replicates the target-level logic from water_bus.js (lines 140-149).
+ * Smoothing is NOT applied here — the frontend EMA handles it.
+ *
+ *   proximity == 0                                       → 1.0  (pure ocean)
+ *   coverage < OCEAN_COVERAGE_THRESHOLD && prox > 0.7    → 0.7  (coastal)
+ *   otherwise                                            → 0.0  (land)
+ *
+ * @param {number} proximity - 0-1 zoom-based proximity
+ * @param {number} coverage  - 0-1 land coverage ratio
+ * @returns {number} Raw ocean level target (0.0, 0.7, or 1.0)
+ */
+function computeOceanLevel(proximity, coverage) {
+    const prox = Number.isFinite(proximity) ? clamp01(proximity) : 0;
+    const cov = Number.isFinite(coverage) ? clamp01(coverage) : 0;
+    if (prox <= 0) return 1.0;
+    if (cov < OCEAN_COVERAGE_THRESHOLD && prox > COASTAL_PROXIMITY_THRESHOLD) return COASTAL_LEVEL;
+    return 0.0;
+}
+
 module.exports = {
     getLcFractionsFromDistribution,
     computeProximityFromGridCount,
     computeProximityFromZoom,
     createZeroDelta,
     computeDeltaMetrics,
+    BUS_NAMES,
+    BUS_LC_INDICES,
+    computeBusTargets,
+    computeOceanLevel,
 };

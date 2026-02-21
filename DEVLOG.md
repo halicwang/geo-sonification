@@ -7,11 +7,42 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 - **Order**: Reverse chronological — newest entry first, oldest last.
 - **Heading format**: `## YYYY-MM-DD — <Category>: <Short Title>`
 - **Categories**: `Feature`, `Fix`, `Refactor`, `Design`, `Milestone`, `Discussion` (pick the most fitting one).
-- **Entry body**: Start with a 1–3 sentence summary of *what* and *why*. Then add subsections (`###`) as needed for details, file lists, formulas, behavior matrices, etc.
+- **Entry body**: Start with a 1–3 sentence summary of _what_ and _why_. Then add subsections (`###`) as needed for details, file lists, formulas, behavior matrices, etc.
 - **Scope**: One entry per logical change. If a single session produces multiple independent changes, write separate entries (same date is fine).
 - **File lists**: End each entry with a "Files changed" section listing new/modified/deleted files with a one-line description.
 - **Idea Backlog**: Undated ideas and future directions go in the `## Idea Backlog` section at the bottom of this file, not as dated entries.
 - **Separator**: Use `---` between entries.
+
+---
+
+## 2026-02-21 — Feature: Web Audio Migration (Phase W)
+
+Added browser-based audio playback using Web Audio API, enabling the sonification system to run without Max/MSP.
+
+### Changes
+
+- **ENABLE_OSC flag:** New `ENABLE_OSC` config variable (default `true`). When `false`, `osc.js` exports a null-object interface and never opens a UDP port. Added `parseBool` helper to `config.js`.
+- **Server-side fold mapping:** `osc-metrics.js` gains `computeBusTargets()` (folds 11 LC classes into 5 bus values per the Max patch wiring) and `computeOceanLevel()` (three-level ocean detection per `water_bus.js` logic). `viewport-processor.js` attaches `audioParams` to every stats response.
+- **Static audio route:** `/audio/ambience/` serves only the ambience subdirectory of `sonification/samples/`, not the entire samples tree.
+- **Frontend audio engine:** New `frontend/audio-engine.js`. Progressive WAV loading with priority (tree/water first). EMA smoothing computed in `update()` using `performance.now()`, applied to GainNodes via `requestAnimationFrame`. Snap threshold set to 2000ms. AudioContext lifecycle: suspend/resume on `visibilitychange`, no-data fade (3s) and suspend (10s) timeout on WS disconnect.
+- **Audio UI controls:** Play/stop button and per-bus loading progress bars in the info panel, between stats section and connection status.
+- **Icon triggers dropped:** All icon sample folders contain only `.gitkeep`. No icon trigger code implemented (YAGNI).
+
+### Files changed
+
+- `server/config.js` — `parseBool`, `ENABLE_OSC` (modified)
+- `server/osc.js` — ENABLE_OSC guard with null object (modified)
+- `server/osc-metrics.js` — `computeBusTargets`, `computeOceanLevel`, `BUS_NAMES`, `BUS_LC_INDICES` (modified)
+- `server/viewport-processor.js` — `audioParams` in stats (modified)
+- `server/index.js` — `/audio/ambience/` route, `ENABLE_OSC` in banner (modified)
+- `frontend/audio-engine.js` — Web Audio engine (new)
+- `frontend/index.html` — audio controls HTML (modified)
+- `frontend/style.css` — audio controls CSS (modified)
+- `frontend/main.js` — engine import, update wiring, toggle handler (modified)
+- `frontend/config.js` — `audioEnabled` state flag (modified)
+- `.env.example` — `ENABLE_OSC` documentation (modified)
+- `server/__tests__/osc-disabled.test.js` — ENABLE_OSC=false tests (new)
+- `server/__tests__/osc-metrics-bus.test.js` — bus fold + ocean tests (new)
 
 ---
 
@@ -20,6 +51,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 Comprehensive JSDoc `@param`/`@returns` annotations added across all 12 server modules. Previously only ~17% of public functions were annotated (14 of 82); `types.js` defined 5 typedefs but no module actually referenced them.
 
 **Changes:**
+
 - `server/types.js`: Added 5 new cross-module typedefs (`OscPacket`, `OscArg`, `Snapshot`, `DeltaState`, `ModeState`)
 - All 12 source files in `server/` now have typed annotations on exported functions
 - Existing loose types tightened (e.g. `object[]` → `GridCell[]`, `{Object}` → `{Object<number, number>}`)
@@ -27,6 +59,7 @@ Comprehensive JSDoc `@param`/`@returns` annotations added across all 12 server m
 - `mode-manager.js` inline types updated to reference `ModeState` from `types.js`
 
 **Principles applied:**
+
 - `types.js` only holds types referenced by 2+ modules; single-module types stay inline
 - `@type` only added to constants where VS Code can't infer (e.g. `Object.freeze()` results)
 - Zero runtime change — all modifications are JSDoc comments only
@@ -43,14 +76,14 @@ Comprehensive JSDoc `@param`/`@returns` annotations added across all 12 server m
 
 Split into 6 native ES modules using `<script type="module">`. No bundler — browsers handle the import graph natively.
 
-| Module           | Lines | Responsibility                                          |
-| ---------------- | ----- | ------------------------------------------------------- |
-| `config.js`      | 131   | Shared state (grouped), constants, server config, client ID |
-| `landcover.js`   | 57    | Pure lookup utilities (name, color, XSS escape)         |
-| `ui.js`          | 115   | `updateUI`, `updateConnectionStatus`, `showToast`       |
-| `map.js`         | 257   | Mapbox init, grid overlay, viewport debounce, HTTP fallback, `refreshServerConfig` |
-| `websocket.js`   | 68    | WS connection + reconnect (callback-based, no map/ui dependency) |
-| `main.js`        | 67    | Entry point — caches DOM refs, wires WS callbacks       |
+| Module         | Lines | Responsibility                                                                     |
+| -------------- | ----- | ---------------------------------------------------------------------------------- |
+| `config.js`    | 131   | Shared state (grouped), constants, server config, client ID                        |
+| `landcover.js` | 57    | Pure lookup utilities (name, color, XSS escape)                                    |
+| `ui.js`        | 115   | `updateUI`, `updateConnectionStatus`, `showToast`                                  |
+| `map.js`       | 257   | Mapbox init, grid overlay, viewport debounce, HTTP fallback, `refreshServerConfig` |
+| `websocket.js` | 68    | WS connection + reconnect (callback-based, no map/ui dependency)                   |
+| `main.js`      | 67    | Entry point — caches DOM refs, wires WS callbacks                                  |
 
 ### Key design decisions
 

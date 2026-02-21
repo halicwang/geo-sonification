@@ -28,6 +28,7 @@ export const state = {
         clientId: null,
         wsUrl: null,
         wsReconnectDelay: 1000,
+        audioEnabled: false,
     },
     /** Cached DOM element references (populated in main.js DOMContentLoaded). */
     els: {},

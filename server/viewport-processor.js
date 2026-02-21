@@ -25,6 +25,9 @@ const {
     getLcFractionsFromDistribution,
     computeProximityFromZoom,
     computeDeltaMetrics,
+    BUS_NAMES,
+    computeBusTargets,
+    computeOceanLevel,
 } = require('./osc-metrics');
 const {
     applyHysteresis,
@@ -86,6 +89,16 @@ function processViewport(bounds, modeState, deltaState, zoom) {
     stats.mode = modeState.currentMode;
     stats.perGridThresholdEnter = PER_GRID_THRESHOLD_ENTER;
     stats.perGridThresholdExit = PER_GRID_THRESHOLD_EXIT;
+
+    // Audio parameters for Web Audio frontend.
+    // Server performs fold-mapping so the frontend only receives bus-level data.
+    stats.audioParams = {
+        busTargets: computeBusTargets(lcFractions),
+        busNames: BUS_NAMES,
+        oceanLevel: computeOceanLevel(proximity, stats.landCoverageRatio),
+        proximity,
+        coverage: stats.landCoverageRatio,
+    };
 
     const elapsedMs = Date.now() - t0;
 

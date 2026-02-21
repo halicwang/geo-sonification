@@ -26,8 +26,17 @@ cleanup() {
 # Only trap EXIT to avoid double cleanup (EXIT fires on any exit, including INT/TERM)
 trap cleanup EXIT
 
+## Source .env if present (so ENABLE_OSC, ports, etc. are available)
+if [[ -f ".env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 HTTP_PORT=${HTTP_PORT:-3000}
 WS_PORT=${WS_PORT:-3001}
+ENABLE_OSC=${ENABLE_OSC:-true}
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "ERROR: $1 not found. $2"; exit 1; }
@@ -97,23 +106,28 @@ if [[ "$SERVER_READY" != "true" ]]; then
 fi
 echo "  OK: Server is ready"
 
-# 4. Open MaxMSP patch
-echo "[2/3] Opening MaxMSP patch..."
+# 4. Open MaxMSP patch (skip when OSC is disabled — Web Audio only)
 PATCH_FILE="sonification/max_wav_osc.maxpat"
-PATCH_STATUS="(not opened)"
+PATCH_STATUS="(disabled — Web Audio mode)"
 
-if [[ -f "$PATCH_FILE" ]]; then
-  if open -a "Max" "$PATCH_FILE" >/dev/null 2>&1; then
-    PATCH_STATUS="$PATCH_FILE"
-    # Wait for Max to open
-    sleep 2
+OSC_LOWER=$(echo "$ENABLE_OSC" | tr '[:upper:]' '[:lower:]')
+if [[ "$OSC_LOWER" == "true" || "$ENABLE_OSC" == "1" ]]; then
+  echo "[2/3] Opening MaxMSP patch..."
+  if [[ -f "$PATCH_FILE" ]]; then
+    if open -a "Max" "$PATCH_FILE" >/dev/null 2>&1; then
+      PATCH_STATUS="$PATCH_FILE"
+      # Wait for Max to open
+      sleep 2
+    else
+      PATCH_STATUS="(not opened - could not open with Max)"
+      echo "  WARN: Could not open MaxMSP patch (is Max installed?): $PATCH_FILE"
+    fi
   else
-    PATCH_STATUS="(not opened - could not open with Max)"
-    echo "  WARN: Could not open MaxMSP patch (is Max installed?): $PATCH_FILE"
+    PATCH_STATUS="(not opened - patch file not found)"
+    echo "  WARN: Max patch not found: $PATCH_FILE (skipping)"
   fi
 else
-  PATCH_STATUS="(not opened - patch file not found)"
-  echo "  WARN: Max patch not found: $PATCH_FILE (skipping)"
+  echo "[2/3] Skipping MaxMSP (ENABLE_OSC=false, Web Audio mode)"
 fi
 
 # 5. Open browser
@@ -126,8 +140,9 @@ echo "========================================"
 echo "  All systems launched!"
 echo "========================================"
 echo ""
-echo "  - Server: http://localhost:${HTTP_PORT}"
-echo "  - MaxMSP: $PATCH_STATUS"
+echo "  - Server:  http://localhost:${HTTP_PORT}"
+echo "  - MaxMSP:  $PATCH_STATUS"
+echo "  - Audio:   $(if [[ "$OSC_LOWER" == "true" || "$ENABLE_OSC" == "1" ]]; then echo "Max/MSP + Web Audio"; else echo "Web Audio only"; fi)"
 echo "  - Browser: Should open automatically"
 echo ""
 echo "  Press Ctrl+C to stop the server"

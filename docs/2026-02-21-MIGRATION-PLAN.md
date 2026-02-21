@@ -19,25 +19,25 @@
 
 The following locations in the existing codebase hardcode WorldCover's 11 classes or the 0.5-degree grid:
 
-| File | Coupling Point | Severity |
-| ---- | -------------- | -------- |
-| `server/osc_schema.js` | `LC_CLASS_ORDER = [10,20,...,100]`, `/lc/10` through `/lc/100` addresses | High — core of the OSC protocol |
-| `server/types.js` | `GridCell` typedef hardcodes `lc_pct_10` through `lc_pct_100` | Medium — type annotations only |
-| `server/config.js` | `GRID_SIZE = 0.5`, `LON_BUCKETS` / `LAT_BUCKETS` | High — spatial index foundation |
-| `server/landcover.js` | ESA class metadata (names, colors, normalization) | High — but can become adapter-internal |
-| `server/data-loader.js` | CSV parsing, `grid_id` generation, field mapping | High — refactor into worldcover adapter |
-| `server/spatial.js` | Spatial index and viewport queries based on `lon_buckets` / `lat_buckets` | High — needs H3 enumeration replacement |
-| `server/normalize.js` | p1/p99 percentile normalization | Low — logic is generic, just needs an interface |
-| `server/osc.js` | `sendAggregatedToMax()`, `sendGridsToMax()` hardcode 11 channels | High — needs registry-driven channel dispatch |
-| `server/osc-metrics.js` | `proximity`, `delta` computation | Low — already generic math |
-| `server/delta-state.js` | Delta computation for 11 channels | Medium — needs dynamic channel count |
-| `server/index.js` | Routing, viewport processing pipeline | Medium — pipeline unchanged, internal calls change |
-| `frontend/config.js` | State structure | Low |
-| `frontend/landcover.js` | ESA class color/name lookup | Medium — needs dynamic metadata from server |
-| `frontend/map.js` | 0.5-degree grid overlay rendering | High — needs H3 hexagon replacement |
-| `sonification/crossfade_controller.js` | 12 inlets (11 channels + proximity) | High risk — 12 hardcoded inlets, `NUM_CHANNELS = 11`, ES5 engine. Dynamic channel count requires message-based protocol rewrite or full Max-side redesign — not a small change (see Future Work) |
-| `sonification/icon_trigger.js` | `ACTIVE_CLASSES` hardcoded | Low — make config-driven |
-| `sonification/max_wav_osc.maxpat` | Route and fold-mapping wiring | High — but unchanged in Phase 1 |
+| File                                   | Coupling Point                                                            | Severity                                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `server/osc_schema.js`                 | `LC_CLASS_ORDER = [10,20,...,100]`, `/lc/10` through `/lc/100` addresses  | High — core of the OSC protocol                                                                           |
+| `server/types.js`                      | `GridCell` typedef hardcodes `lc_pct_10` through `lc_pct_100`             | Medium — type annotations only                                                                            |
+| `server/config.js`                     | `GRID_SIZE = 0.5`, `LON_BUCKETS` / `LAT_BUCKETS`                          | High — spatial index foundation                                                                           |
+| `server/landcover.js`                  | ESA class metadata (names, colors, normalization)                         | High — but can become adapter-internal                                                                    |
+| `server/data-loader.js`                | CSV parsing, `grid_id` generation, field mapping                          | High — refactor into worldcover adapter                                                                   |
+| `server/spatial.js`                    | Spatial index and viewport queries based on `lon_buckets` / `lat_buckets` | High — needs H3 enumeration replacement                                                                   |
+| `server/normalize.js`                  | p1/p99 percentile normalization                                           | Low — logic is generic, just needs an interface                                                           |
+| `server/osc.js`                        | `sendAggregatedToMax()`, `sendGridsToMax()` hardcode 11 channels          | High — needs registry-driven channel dispatch                                                             |
+| `server/osc-metrics.js`                | `proximity`, `delta` computation                                          | Low — already generic math                                                                                |
+| `server/delta-state.js`                | Delta computation for 11 channels                                         | Medium — needs dynamic channel count                                                                      |
+| `server/index.js`                      | Routing, viewport processing pipeline                                     | Medium — pipeline unchanged, internal calls change                                                        |
+| `frontend/config.js`                   | State structure                                                           | Low                                                                                                       |
+| `frontend/landcover.js`                | ESA class color/name lookup                                               | Medium — needs dynamic metadata from server                                                               |
+| `frontend/map.js`                      | 0.5-degree grid overlay rendering                                         | High — needs H3 hexagon replacement                                                                       |
+| `sonification/crossfade_controller.js` | 12 inlets (11 channels + proximity)                                       | **Resolved by Phase W:** browser audio engine replaces Max crossfade. Max path optional via `ENABLE_OSC`. |
+| `sonification/icon_trigger.js`         | `ACTIVE_CLASSES` hardcoded                                                | **Deferred:** icon sample folders empty. Web Audio engine does not implement icon triggers.               |
+| `sonification/max_wav_osc.maxpat`      | Route and fold-mapping wiring                                             | **Optional:** Max path preserved for `ENABLE_OSC=true` but no longer required.                            |
 
 ---
 
@@ -45,15 +45,15 @@ The following locations in the existing codebase hardcode WorldCover's 11 classe
 
 All new npm dependencies require explicit approval per CLAUDE.md. The following table consolidates every planned dependency across all phases:
 
-| Phase | Dependency | Size | Purpose | Gate |
-| ----- | ---------- | ---- | ------- | ---- |
-| 0 | `h3-js` | ~1.2 MB (JS/WASM) | H3 hexagonal encoding | Approve before Phase 0 begins |
-| 1.5 | `multer` or `busboy` | ~50 KB | Multipart form-data parsing | Approve before Phase 1.5 begins |
-| Future (§8.1) | `fast-xml-parser` | ~40 KB | KML/GPX XML parsing | Approve when work begins |
+| Phase         | Dependency           | Size              | Purpose                     | Gate                            |
+| ------------- | -------------------- | ----------------- | --------------------------- | ------------------------------- |
+| 0             | `h3-js`              | ~1.2 MB (JS/WASM) | H3 hexagonal encoding       | Approve before Phase 0 begins   |
+| 1.5           | `multer` or `busboy` | ~50 KB            | Multipart form-data parsing | Approve before Phase 1.5 begins |
+| Future (§8.1) | `fast-xml-parser`    | ~40 KB            | KML/GPX XML parsing         | Approve when work begins        |
 
-**ES5 constraint reminder:** All `sonification/*.js` files must be ES5 — no `let`/`const`, no arrow functions, no template literals, no destructuring. This is enforced by the Max/MSP JS engine (see CLAUDE.md).
+**ES5 note:** The `sonification/*.js` ES5 constraint only applies when `ENABLE_OSC=true`. New audio features target `frontend/audio-engine.js` (modern JS).
 
-**`.maxpat` files are read-only:** Per CLAUDE.md, `.maxpat` files cannot be edited as text. Any future Max-side changes (Phase 3 / Future Work §8.2) must follow **extend-only semantics** and require a dedicated "Max-side change proposal" documenting the exact inlet/outlet changes, backward-compatibility impact, and ES5 compliance verification. No casual `.maxpat` edits.
+**`.maxpat` files are read-only:** Per CLAUDE.md, `.maxpat` files cannot be edited as text. Any future Max-side changes (Phase 3 / Future Work §8.2) must follow **extend-only semantics** and require a dedicated "Max-side change proposal" documenting the exact inlet/outlet changes, backward-compatibility impact, and ES5 compliance verification. No casual `.maxpat` edits. With `ENABLE_OSC=false`, no Max-side changes are needed.
 
 **Decision documentation:** Major architectural decisions in this migration (H3 over Quadkey, adapter-first vs. grid-first, fold-on-server vs. fold-in-Max) are documented inline in each phase's "Key Design Constraints" or "Additional Considerations" subsections. A future improvement is to adopt a formal **Architecture Decision Record (ADR)** format (e.g., `docs/adr/0001-h3-over-quadkey.md`) for long-term traceability. This is not required for the course timeline but would strengthen the portfolio presentation.
 
@@ -86,11 +86,11 @@ Requires approval per CLAUDE.md ("Do not introduce new npm dependencies without 
 
 ### 2.3 Modified Files
 
-| File | Change | Notes |
-| ---- | ------ | ----- |
-| `server/config.js` | Add `DEFAULT_H3_RESOLUTION = 4` | Coexists with existing `GRID_SIZE` |
-| `server/types.js` | Add `DataRecord`, `ChannelManifest`, `CellEncoder` typedefs | No impact on existing types |
-| `server/package.json` | Add `h3-js` dependency | — |
+| File                  | Change                                                      | Notes                              |
+| --------------------- | ----------------------------------------------------------- | ---------------------------------- |
+| `server/config.js`    | Add `DEFAULT_H3_RESOLUTION = 4`                             | Coexists with existing `GRID_SIZE` |
+| `server/types.js`     | Add `DataRecord`, `ChannelManifest`, `CellEncoder` typedefs | No impact on existing types        |
+| `server/package.json` | Add `h3-js` dependency                                      | —                                  |
 
 ### 2.4 Effort Estimate
 
@@ -107,6 +107,27 @@ Requires approval per CLAUDE.md ("Do not introduce new npm dependencies without 
 - [ ] `enumerateBounds()` regression test with two fixed bounding boxes: one normal (e.g., continental Europe) and one **dateline-crossing** (e.g., Pacific viewport spanning 170°E–170°W)
 - [ ] Coordinate order regression test: verify `latLngToCell(lat, lon)` vs `polygonToCells([lon, lat])` use their documented conventions — catch h3-js version-specific convention changes
 - [ ] All existing tests (`npm test`) pass with zero changes to existing code
+
+---
+
+## 2w. Phase W: Web Audio Migration (Completed)
+
+**Goal:** Move the 5-bus ambient crossfade and ocean detection from Max/MSP to the browser using Web Audio API. Max/MSP becomes optional via `ENABLE_OSC` flag.
+
+**Status:** Implemented (see DEVLOG entry 2026-02-21).
+
+### Summary of Changes
+
+- **`ENABLE_OSC` flag:** `server/config.js` + `server/osc.js` null-object pattern. When `false`, no UDP port is opened.
+- **Server-side fold mapping:** `server/osc-metrics.js` gains `computeBusTargets()` (11→5 fold) and `computeOceanLevel()` (three-level ocean detection). `viewport-processor.js` attaches `audioParams` to every stats response.
+- **Frontend audio engine:** `frontend/audio-engine.js` — 5-bus looping crossfade, EMA smoothing via `performance.now()`, progressive WAV loading, `visibilitychange` lifecycle, no-data timeout.
+- **Audio UI:** Play/stop button with per-bus loading progress in the info panel.
+
+### Impact on Downstream Phases
+
+- Phase 1a fold-mapping (§3.5.6): Server-side fold is already implemented. Phase 1a only needs to extend `computeBusTargets()` to read from `audio_mapping.json` instead of hardcoded `BUS_LC_INDICES`.
+- Phase 4.5 alert sound: Implement as `engine.triggerAlert()` in `audio-engine.js` (~30 lines modern JS) instead of a separate ES5 `alert_sound.js` for Max.
+- Future Work §8.2 (web console): Directly manipulates `audio-engine.js` parameters via WebSocket — no Max crossfade_controller rewrite needed.
 
 ---
 
@@ -131,24 +152,25 @@ server/
 
 ### 3.2 Modified Files
 
-| File | Change | Impact |
-| ---- | ------ | ------ |
-| `server/data-loader.js` | Internal logic migrated to `adapters/worldcover.js`; this file becomes a thin wrapper calling the adapter | External interface unchanged |
-| `server/landcover.js` | ESA metadata migrated to `adapters/worldcover.js`; this file retains lookup functions needed by the frontend | Frontend API unchanged |
-| `server/osc_schema.js` | Add `/ch/register` (with optional `group` arg), `/ch/meta` (optional display metadata — see SPEC §6.3), and `/ch/{index}` addresses; retain all existing `/lc/*` addresses | Backward-compatible |
-| `server/osc.js` | `sendAggregatedToMax()` reads channel list from registry; sends both `/lc/*` (compat) and `/ch/*` (new) | Max requires no changes |
-| `server/delta-state.js` | Channel count changes from hardcoded 11 to registry-driven | Internal change |
-| `server/index.js` | Load adapters and initialize registry at startup; route handlers call registry | Pipeline unchanged |
+| File                    | Change                                                                                                                                                                     | Impact                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `server/data-loader.js` | Internal logic migrated to `adapters/worldcover.js`; this file becomes a thin wrapper calling the adapter                                                                  | External interface unchanged |
+| `server/landcover.js`   | ESA metadata migrated to `adapters/worldcover.js`; this file retains lookup functions needed by the frontend                                                               | Frontend API unchanged       |
+| `server/osc_schema.js`  | Add `/ch/register` (with optional `group` arg), `/ch/meta` (optional display metadata — see SPEC §6.3), and `/ch/{index}` addresses; retain all existing `/lc/*` addresses | Backward-compatible          |
+| `server/osc.js`         | `sendAggregatedToMax()` reads channel list from registry; sends both `/lc/*` (compat) and `/ch/*` (new)                                                                    | Max requires no changes      |
+| `server/delta-state.js` | Channel count changes from hardcoded 11 to registry-driven                                                                                                                 | Internal change              |
+| `server/index.js`       | Load adapters and initialize registry at startup; route handlers call registry                                                                                             | Pipeline unchanged           |
 
 ### 3.3 Key Design Constraints
 
-- **The WorldCover adapter must produce OSC data identical to the current output** — including `/lc/10`–`/lc/100`, `/nightlight`, `/population`, and `/forest` — enforced by regression tests.
+- **The WorldCover adapter must produce data identical to the current output** — both WebSocket `audioParams` and (when `ENABLE_OSC=true`) OSC messages — including `/lc/10`–`/lc/100`, `/nightlight`, `/population`, and `/forest` — enforced by regression tests.
 - The generic CSV adapter at this stage only needs to import data and expose channels; full audio mapping is not required.
 - When only WorldCover is loaded, the channel registry behaves identically to the hardcoded 11-class system.
 
 ### 3.4 Additional Considerations
 
 **Dual-value DataRecord (`channelsRaw` + `channels`).** Per OPEN-PLATFORM-SPEC.md §3.1, each DataRecord stores both raw source values (`channelsRaw`) and normalized 0–1 values (`channels`). Adapters must populate both fields at ingest time:
+
 - **WorldCover adapter:** raw values are already 0–1 fractions, so `channelsRaw === channels` — zero overhead.
 - **csv-generic adapter:** `channelsRaw` stores the original CSV values; `channels` is computed using the ChannelManifest's normalization method and range (inferred from data or declared by user).
 - **Resolution field:** Each DataRecord includes a `resolution` field recording the H3 resolution at which it was encoded. This enables cross-resolution queries (see OPEN-PLATFORM-SPEC.md §4.3).
@@ -187,11 +209,11 @@ server/
 
 **Modified Files:**
 
-| File | Change | Notes |
-| ---- | ------ | ----- |
-| `server/index.js` | Add `POST /api/audio-mapping/reload` route | Delegates to `audio-mapping.js` |
-| `server/osc_schema.js` | Add `/bus/reload` address (promoted from Future Work §8.2) | Backward-compatible, extend-only |
-| `server/config.js` | Add `AUDIO_MAPPING_PATH` constant (default: `./audio_mapping.json`) | New config entry |
+| File                   | Change                                                              | Notes                            |
+| ---------------------- | ------------------------------------------------------------------- | -------------------------------- |
+| `server/index.js`      | Add `POST /api/audio-mapping/reload` route                          | Delegates to `audio-mapping.js`  |
+| `server/osc_schema.js` | Add `/bus/reload` address (promoted from Future Work §8.2)          | Backward-compatible, extend-only |
+| `server/config.js`     | Add `AUDIO_MAPPING_PATH` constant (default: `./audio_mapping.json`) | New config entry                 |
 
 **Endpoint spec:**
 
@@ -212,11 +234,13 @@ Response (400):
 }
 ```
 
-**Behavior:** Reads `audio_mapping.json` from disk, validates against the schema defined in OPEN-PLATFORM-SPEC.md §7.1, replaces the in-memory bus configuration, and sends `/bus/reload` OSC to notify Max. Invalid JSON returns 400 without changing the running configuration.
+**Behavior:** Reads `audio_mapping.json` from disk, validates against the schema defined in OPEN-PLATFORM-SPEC.md §7.1, replaces the in-memory bus configuration, and sends `/bus/reload` OSC to notify Max (when `ENABLE_OSC=true`) and a `bus_config_update` WebSocket event to notify the frontend audio engine. Invalid JSON returns 400 without changing the running configuration.
 
 **Effort:** ~80 lines (`audio-mapping.js`), ~30 lines (route + config changes), ~60 lines (tests). **Total: ~170 lines.**
 
 ### 3.5.6 Minimal Bus Fold-Mapping (Closes the Sound Path for Non-WorldCover Data)
+
+> **Phase W update:** The basic 5-bus fold mapping (`computeBusTargets()` in `osc-metrics.js`) is already implemented by Phase W. Phase 1a extends this to support `audio_mapping.json`-driven fold configuration, `foldMethod` selection, and the `default_bus` for unmapped channels.
 
 **Problem:** After Phase 1a, imported channels send `/ch/{index}` OSC messages, but Max has no receiver for these — `crossfade_controller.js` only understands `/lc/*` addresses (11 fixed inlets). Without fold-mapping, **all non-WorldCover data is silent.** The full Phase 3 web console is deferred (see Future Work), but the sound path must not be broken for new data sources.
 
@@ -232,11 +256,11 @@ Response (400):
 
 **Modified Files:**
 
-| File | Change | Notes |
-| ---- | ------ | ----- |
-| `server/osc.js` | Add fold-mapping loop after channel dispatch in `sendAggregatedToMax()` | ~100 lines |
-| `server/osc_schema.js` | Add `/bus/{index}` address template and `buildBusPacket()` builder | ~30 lines, extend-only |
-| `server/config.js` | Add `DEFAULT_BUS_FOLD_METHOD = 'max'` | 1 line |
+| File                   | Change                                                                                                                                                                                       | Notes                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `server/osc.js`        | Add fold-mapping loop after channel dispatch. When `ENABLE_OSC=true`, sends `/bus/{index}` OSC. Always updates `audioParams.busTargets` in the stats response for the frontend audio engine. | ~100 lines             |
+| `server/osc_schema.js` | Add `/bus/{index}` address template and `buildBusPacket()` builder                                                                                                                           | ~30 lines, extend-only |
+| `server/config.js`     | Add `DEFAULT_BUS_FOLD_METHOD = 'max'`                                                                                                                                                        | 1 line                 |
 
 **Effort:** ~130 lines (100 in `osc.js`, 30 in `osc_schema.js`). Covered by Phase 1a effort estimate below.
 
@@ -248,11 +272,11 @@ Response (400):
 - csv-generic adapter: ~150 lines
 - Channel registry: ~200 lines (includes namespace key generation and bare-name reverse lookup for backward-compat OSC)
 - Audio-mapping reload module + endpoint: ~110 lines (see §3.5.5)
-- Minimal bus fold-mapping in osc.js + osc_schema.js: ~130 lines (see §3.5.6)
+- Minimal bus fold-mapping extension in osc.js + osc_schema.js: ~130 lines (see §3.5.6 — extends Phase W's `computeBusTargets()` to support `audio_mapping.json`)
 - Audio-mapping tests: ~60 lines
 - Tests (adapter + registry): ~250 lines
 - Existing file modifications: ~120 lines (primarily splitting and thin wrappers)
-- **Total: ~1320 lines, of which ~1200 new and ~120 modified**
+- **Total: ~1100 lines, of which ~980 new and ~120 modified** (reduced from ~1320 — Phase W already implemented basic fold mapping)
 
 ### 3.7 Definition of Done (Phase 1a)
 
@@ -281,19 +305,19 @@ scripts/
 
 ### 3b.2 Modified Files
 
-| File | Change | Impact |
-| ---- | ------ | ------ |
+| File                | Change                                                                                                                                                                                                                                       | Impact              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
 | `server/spatial.js` | Add `queryByH3(bounds, resolution)` method alongside existing `queryByBounds()`. Returns `CellSnapshot[]` (merged from multiple `DataRecord`s per cell — see SPEC §3.2). Internal index structure: `Map<cellId, Map<sourceId, DataRecord>>`. | Gradual replacement |
 
 ### 3b.2.5 Recommended Refactoring Approach
 
 The current `spatial.js` (627 lines) has hidden responsibilities that make adding `queryByH3()` riskier than a simple "one method addition." The module simultaneously handles spatial index construction, bucket-key lookup, viewport hit-testing, date-line crossing, legacy aggregation, area-weighted aggregation, landcover breakdown assembly, and bounds validation. Recommend splitting before H3 work:
 
-| New Module | Extracted From | Responsibility | ~Lines |
-| ---------- | -------------- | -------------- | ------ |
-| `server/spatial-index.js` | Index build, bucket-key lookup, viewport hit-test, date-line crossing | Cell lookup & enumeration | ~130 |
-| `server/viewport-aggregator.js` | Legacy & area-weighted aggregation, landcover breakdown, stats assembly | Stats computation | ~280 |
-| `server/spatial.js` (retained) | Orchestration + `validateBounds()` | Thin facade delegating to index + aggregator | ~120 |
+| New Module                      | Extracted From                                                          | Responsibility                               | ~Lines |
+| ------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------- | ------ |
+| `server/spatial-index.js`       | Index build, bucket-key lookup, viewport hit-test, date-line crossing   | Cell lookup & enumeration                    | ~130   |
+| `server/viewport-aggregator.js` | Legacy & area-weighted aggregation, landcover breakdown, stats assembly | Stats computation                            | ~280   |
+| `server/spatial.js` (retained)  | Orchestration + `validateBounds()`                                      | Thin facade delegating to index + aggregator | ~120   |
 
 **Rationale:** `spatial-index.js` is the only file that needs H3 changes in Phase 1b. `viewport-aggregator.js` is minimally affected by Phase 1b (input shape unchanged, but may need minor adaptation if index return type changes). `viewport-processor.js` (95 lines) stays as-is — it orchestrates spatial queries and OSC dispatch, both of which are transparent to the index implementation.
 
@@ -302,6 +326,7 @@ The current `spatial.js` (627 lines) has hidden responsibilities that make addin
 ### 3b.3 Additional Considerations
 
 **Data re-indexing step.** Migrating from 0.5-degree grid IDs to H3 cell IDs requires all CSV data to be re-processed. This should be an explicit step in Phase 1b:
+
 1. The WorldCover adapter's `ingest()` reads the raw CSV and encodes each row to an H3 cell ID.
 2. The re-indexed data is written to `data/cache/` (which is `.gitignore`-d and auto-rebuilt).
 3. During the transition period, `GridCell` retains both `grid_id` (legacy) and `cellId` (H3) so downstream consumers can migrate incrementally.
@@ -405,9 +430,9 @@ OPEN-PLATFORM-SPEC §8 lists GeoJSON as P0 (same priority as CSV). Phase 1.5 inc
 1. Detect `.geojson` file extension in `import-manager.js`; route to the GeoJSON adapter
 2. Parse `FeatureCollection` (or single `Feature`) from uploaded file
 3. Extract geometry coordinates per geometry type:
-   - **Point** → direct `latLngToCell(lat, lon, res)` — one cell per point
-   - **LineString** → distance-sampled points every `IMPORT_LINE_SAMPLE_METERS` (default: 250m), each encoded to H3, cell-deduplicated (reuses rasterization rules from OPEN-PLATFORM-SPEC §8.1)
-   - **Polygon** → `polygonToCells(boundary, res)` interior fill (reuses rasterization rules from OPEN-PLATFORM-SPEC §8.1)
+    - **Point** → direct `latLngToCell(lat, lon, res)` — one cell per point
+    - **LineString** → distance-sampled points every `IMPORT_LINE_SAMPLE_METERS` (default: 250m), each encoded to H3, cell-deduplicated (reuses rasterization rules from OPEN-PLATFORM-SPEC §8.1)
+    - **Polygon** → `polygonToCells(boundary, res)` interior fill (reuses rasterization rules from OPEN-PLATFORM-SPEC §8.1)
 4. Extract `properties` as channels: numeric properties are auto-registered as channels; non-numeric properties are ignored with a warning
 5. Produce `DataRecord[]` and feed into the same H3 encoding + spatial index pipeline as CSV
 
@@ -417,14 +442,14 @@ OPEN-PLATFORM-SPEC §8 lists GeoJSON as P0 (same priority as CSV). Phase 1.5 inc
 
 > Note: `server/package.json` also needs updating to add the `multer` (or `busboy`) dependency.
 
-| File | Change | Notes |
-| ---- | ------ | ----- |
-| `server/index.js` | Add `POST /api/import` endpoint (single-step); add `POST /api/import/preview` stub (delegates to same pipeline, returns confirm-format response — keeps API contract stable for future two-step separation); scan `data/imports/manifest.json` on startup to reload | New routes |
-| `server/config.js` | Add `H3_RESOLUTION_LABELS` constant (human-readable scale labels per resolution), `IMPORT_PREVIEW_ROWS` (default: 50,000), `IMPORT_LINE_SAMPLE_METERS` (default: 250) | Used by import API and future KML/GPX rasterization |
-| `server/spatial.js` | Add `addCells(records)` method to support runtime data append to spatial index | Existing `Map` structure naturally supports append; primarily interface wrapping |
-| `server/channel-registry.js` | Add `registerRuntime(adapter)` method to support runtime channel addition; trigger WebSocket notification | Extends Phase 1a registry |
-| `server/osc_schema.js` | Add `/ch/reload` message address (notifies Max that the channel list has changed) | Backward-compatible |
-| `server/import-manager.js` | Detect `.geojson` extension and route to `geojson-generic` adapter | Extension-based routing alongside CSV |
+| File                         | Change                                                                                                                                                                                                                                                              | Notes                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `server/index.js`            | Add `POST /api/import` endpoint (single-step); add `POST /api/import/preview` stub (delegates to same pipeline, returns confirm-format response — keeps API contract stable for future two-step separation); scan `data/imports/manifest.json` on startup to reload | New routes                                                                       |
+| `server/config.js`           | Add `H3_RESOLUTION_LABELS` constant (human-readable scale labels per resolution), `IMPORT_PREVIEW_ROWS` (default: 50,000), `IMPORT_LINE_SAMPLE_METERS` (default: 250)                                                                                               | Used by import API and future KML/GPX rasterization                              |
+| `server/spatial.js`          | Add `addCells(records)` method to support runtime data append to spatial index                                                                                                                                                                                      | Existing `Map` structure naturally supports append; primarily interface wrapping |
+| `server/channel-registry.js` | Add `registerRuntime(adapter)` method to support runtime channel addition; trigger WebSocket notification                                                                                                                                                           | Extends Phase 1a registry                                                        |
+| `server/osc_schema.js`       | Add `/ch/reload` message address (notifies Max that the channel list has changed)                                                                                                                                                                                   | Backward-compatible                                                              |
+| `server/import-manager.js`   | Detect `.geojson` extension and route to `geojson-generic` adapter                                                                                                                                                                                                  | Extension-based routing alongside CSV                                            |
 
 ### 4.6 API Design: Single-Step Import with Preview Stub
 
@@ -476,10 +501,24 @@ Three read/delete endpoints for inspecting and managing runtime state:
 
 ```json
 {
-  "sources": [
-    { "id": "worldcover", "name": "ESA WorldCover 2021", "type": "builtin", "channelCount": 14, "cellCount": 17000, "resolution": 4 },
-    { "id": "air_quality", "name": "air_quality.csv", "type": "imported", "channelCount": 2, "cellCount": 1247, "resolution": 4 }
-  ]
+    "sources": [
+        {
+            "id": "worldcover",
+            "name": "ESA WorldCover 2021",
+            "type": "builtin",
+            "channelCount": 14,
+            "cellCount": 17000,
+            "resolution": 4
+        },
+        {
+            "id": "air_quality",
+            "name": "air_quality.csv",
+            "type": "imported",
+            "channelCount": 2,
+            "cellCount": 1247,
+            "resolution": 4
+        }
+    ]
 }
 ```
 
@@ -487,10 +526,26 @@ Three read/delete endpoints for inspecting and managing runtime state:
 
 ```json
 {
-  "channels": [
-    { "index": 0, "key": "worldcover.tree", "source": "worldcover", "name": "tree", "label": "Tree / Forest", "unit": "fraction", "group": "distribution" },
-    { "index": 14, "key": "air_quality.pm25", "source": "air_quality", "name": "pm25", "label": "pm25", "unit": "auto", "group": "metric" }
-  ]
+    "channels": [
+        {
+            "index": 0,
+            "key": "worldcover.tree",
+            "source": "worldcover",
+            "name": "tree",
+            "label": "Tree / Forest",
+            "unit": "fraction",
+            "group": "distribution"
+        },
+        {
+            "index": 14,
+            "key": "air_quality.pm25",
+            "source": "air_quality",
+            "name": "pm25",
+            "label": "pm25",
+            "unit": "auto",
+            "group": "metric"
+        }
+    ]
 }
 ```
 
@@ -543,13 +598,13 @@ Three read/delete endpoints for inspecting and managing runtime state:
 
 ### 5.1 Modified Files
 
-| File | Change | Notes |
-| ---- | ------ | ----- |
-| `frontend/config.js` | Fetch channel metadata (names, colors, ranges) from `/api/config` | Replaces hardcoded ESA classes |
-| `frontend/landcover.js` | Rename to `frontend/channels.js`; lookup functions read from dynamic metadata | Generalized |
-| `frontend/map.js` | Grid overlay changes from 0.5-degree rectangles to H3 hexagonal polygons (via `cellToBoundary()` to GeoJSON) | Largest frontend change |
-| `frontend/ui.js` | Panel display changes from "landcover breakdown" to "channel breakdown" | Data-driven |
-| `server/index.js` | `/api/config` response adds a `channels` field | Additive change |
+| File                    | Change                                                                                                       | Notes                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| `frontend/config.js`    | Fetch channel metadata (names, colors, ranges) from `/api/config`                                            | Replaces hardcoded ESA classes |
+| `frontend/landcover.js` | Rename to `frontend/channels.js`; lookup functions read from dynamic metadata                                | Generalized                    |
+| `frontend/map.js`       | Grid overlay changes from 0.5-degree rectangles to H3 hexagonal polygons (via `cellToBoundary()` to GeoJSON) | Largest frontend change        |
+| `frontend/ui.js`        | Panel display changes from "landcover breakdown" to "channel breakdown"                                      | Data-driven                    |
+| `server/index.js`       | `/api/config` response adds a `channels` field                                                               | Additive change                |
 
 ### 5.2 New Files
 
@@ -597,7 +652,7 @@ Phase 2.5 (KML/GPX Import Adapters) has been deferred to Future Work. The full d
 
 ## 6. Phase 3: Configurable Audio Mapping and Web Console — DEFERRED
 
-Phase 3 (Configurable Audio Mapping and Web Console) has been deferred to Future Work. See §8.2 for the full design and the Max/MSP dynamic channel risk callout — `crossfade_controller.js` has 12 hardcoded inlets, `NUM_CHANNELS = 11`, ES5 only; this is not a ~100 line change. The `audio_mapping.json` config file (SPEC §7.1) can be hand-edited without the console in the interim.
+Phase 3 (Configurable Audio Mapping and Web Console) has been deferred to Future Work. See §8.2 for the remaining scope — Phase W eliminated the `crossfade_controller.js` rewrite, reducing this to a web console only (~400 lines). The `audio_mapping.json` config file (SPEC §7.1) can be hand-edited without the console in the interim.
 
 ---
 
@@ -609,7 +664,7 @@ Phase 3 (Configurable Audio Mapping and Web Console) has been deferred to Future
 
 The original plan treated USGS Earthquake as a static GeoJSON one-time import to validate the plugin system. But USGS Earthquake is inherently a continuously updating event stream (new earthquakes every minute) — making it static is an artificial downgrade. Building the stream pipeline and the second data source together validates two things in one pass: whether the adapter interface is truly generic, and whether the real-time pipeline is reliable.
 
-> **Platform positioning:** This platform integrates and sonifies *authoritative, processed data feeds* — it does not perform raw signal processing or detection algorithms. Earthquakes come from USGS processed catalogs, air quality from sensor network APIs, etc. The same principle applies to all stream adapters.
+> **Platform positioning:** This platform integrates and sonifies _authoritative, processed data feeds_ — it does not perform raw signal processing or detection algorithms. Earthquakes come from USGS processed catalogs, air quality from sensor network APIs, etc. The same principle applies to all stream adapters.
 
 ### 7.2 Real-time Stream Architecture
 
@@ -638,16 +693,16 @@ The original plan treated USGS Earthquake as a static GeoJSON one-time import to
   (data-change driven) (cell data update event)
 ```
 
-### 7.3 Two OSC Push Trigger Sources
+### 7.3 Two Push Trigger Sources
 
-Before Phase 4, OSC push only fires when the user drags the map. Phase 4 adds a second trigger source:
+Before Phase 4, push notification (OSC when enabled, always via WebSocket) only fires when the user drags the map. Phase 4 adds a second trigger source:
 
-| Trigger Source | When | Behavior |
-| -------------- | ---- | -------- |
-| User interaction (existing) | Frontend sends viewport update | Query all data in current viewport, push to Max |
-| Data change (new) | Stream adapter fetches new data | Check if new data falls within current viewport; if so, push incremental update to Max |
+| Trigger Source              | When                            | Behavior                                                                                                                 |
+| --------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| User interaction (existing) | Frontend sends viewport update  | Query all data in current viewport, push notification (OSC when enabled, always via WebSocket)                           |
+| Data change (new)           | Stream adapter fetches new data | Check if new data falls within current viewport; if so, push incremental update (OSC when enabled, always via WebSocket) |
 
-Data-change-triggered pushes only send affected channel values (incremental), avoiding full viewport re-push. This prevents OSC flooding from high-frequency data sources.
+Data-change-triggered pushes only send affected channel values (incremental), avoiding full viewport re-push. This prevents flooding from high-frequency data sources.
 
 **Per-client viewport caching:** To support data-change push, the server must cache each WebSocket client's current viewport (`lastViewport`). When new stream data arrives, each client's `lastViewport` is checked to determine whether an incremental push is needed. This is a new per-connection state requirement — add a `lastViewport` field to the existing per-client state (alongside `createDeltaState()` etc.).
 
@@ -676,13 +731,31 @@ module.exports = {
     id: 'usgs-earthquake',
     name: 'USGS Real-time Earthquakes',
     temporalType: 'stream',
-    pollIntervalMs: 60_000,        // Poll every 60 seconds
-    windowMs: 24 * 60 * 60_000,   // Retain last 24 hours of earthquakes
-    windowAggregate: 'max',        // Within same cell, take max magnitude
+    pollIntervalMs: 60_000, // Poll every 60 seconds
+    windowMs: 24 * 60 * 60_000, // Retain last 24 hours of earthquakes
+    windowAggregate: 'max', // Within same cell, take max magnitude
     channels: [
-        { name: 'quake_mag',   label: 'Earthquake Magnitude', range: [0, 10], unit: 'Mw',    normalization: 'linear' },
-        { name: 'quake_depth', label: 'Earthquake Depth',     range: [0, 700], unit: 'km',   normalization: 'log' },
-        { name: 'quake_count', label: 'Earthquake Count',     range: [0, 50], unit: 'count', normalization: 'linear' },
+        {
+            name: 'quake_mag',
+            label: 'Earthquake Magnitude',
+            range: [0, 10],
+            unit: 'Mw',
+            normalization: 'linear',
+        },
+        {
+            name: 'quake_depth',
+            label: 'Earthquake Depth',
+            range: [0, 700],
+            unit: 'km',
+            normalization: 'log',
+        },
+        {
+            name: 'quake_count',
+            label: 'Earthquake Count',
+            range: [0, 50],
+            unit: 'count',
+            normalization: 'linear',
+        },
     ],
     async fetch(encoder, precision) {
         // GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson
@@ -734,13 +807,13 @@ server/
 
 ### 7.8 Modified Files
 
-| File | Change | Notes |
-| ---- | ------ | ----- |
-| `server/index.js` | Initialize `stream-scheduler` at startup; register stream adapters; add `GET /api/streams` status endpoint; store `lastViewport` per WebSocket connection (update on each viewport message) for data-change-driven incremental push | New startup logic + per-client state |
-| `server/spatial.js` | `queryByH3()` results merge static data with time-window aggregated data | Query logic extension |
-| `server/osc_schema.js` | Add `/adapter/error` address (adapter ID + error message); used by stream scheduler to notify Max of adapter failures | New address, backward-compatible |
-| `server/osc.js` | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push; add `sendAdapterError()` for `/adapter/error` dispatch | New push paths |
-| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS` | New config entries |
+| File                   | Change                                                                                                                                                                                                                              | Notes                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `server/index.js`      | Initialize `stream-scheduler` at startup; register stream adapters; add `GET /api/streams` status endpoint; store `lastViewport` per WebSocket connection (update on each viewport message) for data-change-driven incremental push | New startup logic + per-client state |
+| `server/spatial.js`    | `queryByH3()` results merge static data with time-window aggregated data                                                                                                                                                            | Query logic extension                |
+| `server/osc_schema.js` | Add `/adapter/error` address (adapter ID + error message); used by stream scheduler to notify Max of adapter failures                                                                                                               | New address, backward-compatible     |
+| `server/osc.js`        | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push; add `sendAdapterError()` for `/adapter/error` dispatch                                                                                                     | New push paths                       |
+| `server/config.js`     | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS`                                                                                                                                          | New config entries                   |
 
 ### 7.9 New API Endpoint
 
@@ -773,11 +846,11 @@ Response:
 
 ### 7.11 Sound Mapping Suggestions (USGS Earthquake → Max)
 
-| Channel | Suggested Mapping | Sound Effect |
-| ------- | ----------------- | ------------ |
-| `quake_mag` | Icon trigger intensity + probability | Higher magnitude → more frequent triggers, louder sound |
+| Channel       | Suggested Mapping                        | Sound Effect                                                           |
+| ------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| `quake_mag`   | Icon trigger intensity + probability     | Higher magnitude → more frequent triggers, louder sound                |
 | `quake_depth` | Pitch / low-pass filter cutoff frequency | Shallow quake = high-pitched sharp, deep quake = muffled low-frequency |
-| `quake_count` | Background texture density | Dense earthquake clusters = sustained granular texture |
+| `quake_count` | Background texture density               | Dense earthquake clusters = sustained granular texture                 |
 
 These mappings can be freely adjusted by the user once Phase 3 (audio config console) is complete. During Phase 4, a hardwired demo in the Max patch is sufficient.
 
@@ -789,7 +862,7 @@ These mappings can be freely adjusted by the user once Phase 3 (audio config con
 - `osc.js` incremental push: ~80 lines
 - Tests (three modules): ~200 lines
 - Existing file modifications: ~80 lines
-- **Total: ~800 lines, of which ~750 new and ~80 modified**
+- **Total: ~720 lines, of which ~640 new and ~80 modified** (reduced from ~800 — simpler push path with WebSocket-first delivery)
 
 ### 7.13 Definition of Done (Phase 4)
 
@@ -818,26 +891,26 @@ Rules are declarative and JSON-configurable, following the same pattern as `audi
 ```jsonc
 // alert_rules.json
 {
-  "rules": [
-    {
-      "ruleId": "high_magnitude_quake",
-      "channel": "usgs_earthquake.quake_mag",
-      "enterThreshold": 0.7,    // Normalized value that triggers the alert
-      "exitThreshold": 0.5,     // Hysteresis: alert clears when value drops below this
-      "severity": "critical",   // "info" | "warning" | "critical"
-      "cooldownMs": 30000,      // Minimum time between re-fires for the same cell
-      "dedupKey": "cellId"      // One active alert per (ruleId, cellId) pair
-    },
-    {
-      "ruleId": "pm25_warning",
-      "channel": "air_quality.pm25",
-      "enterThreshold": 0.6,
-      "exitThreshold": 0.4,
-      "severity": "warning",
-      "cooldownMs": 60000,
-      "dedupKey": "cellId"
-    }
-  ]
+    "rules": [
+        {
+            "ruleId": "high_magnitude_quake",
+            "channel": "usgs_earthquake.quake_mag",
+            "enterThreshold": 0.7, // Normalized value that triggers the alert
+            "exitThreshold": 0.5, // Hysteresis: alert clears when value drops below this
+            "severity": "critical", // "info" | "warning" | "critical"
+            "cooldownMs": 30000, // Minimum time between re-fires for the same cell
+            "dedupKey": "cellId", // One active alert per (ruleId, cellId) pair
+        },
+        {
+            "ruleId": "pm25_warning",
+            "channel": "air_quality.pm25",
+            "enterThreshold": 0.6,
+            "exitThreshold": 0.4,
+            "severity": "warning",
+            "cooldownMs": 60000,
+            "dedupKey": "cellId",
+        },
+    ],
 }
 ```
 
@@ -863,60 +936,50 @@ server/
 ├── __tests__/
 │   └── alert-engine.test.js
 alert_rules.json                 # Default alert rules configuration (hand-editable)
-
-sonification/
-├── alert_sound.js               # ES5 Max [js] object: receives /alert/fire and /alert/clear,
-                                 # triggers one-shot alert sounds by severity, fades on clear.
-                                 # Wired via [route /alert] → [route fire clear] → [js alert_sound.js].
-                                 # No .maxpat editing required — same [route] → [js] pattern as icon_trigger.js.
 ```
+
+Alert sounds are handled by `frontend/audio-engine.js` (see §7.5.5.5) — no separate Max-side script needed.
 
 ### 7.5.4 Modified Files
 
-| File | Change | Notes |
-| ---- | ------ | ----- |
-| `server/osc_schema.js` | Add `/alert/fire`, `/alert/clear`, `/alert/mute`, `/alert/ack` addresses with payload schemas | Extend-only, backward-compatible |
-| `server/osc.js` | Add `sendAlertFire()`, `sendAlertClear()`, `sendAlertMute()`, `sendAlertAck()` dispatch functions | New OSC push paths |
-| `server/config.js` | Add `ALERT_RULES_PATH` constant (default: `./alert_rules.json`), `ALERT_MAX_ACTIVE` (default: 1000) | New config entries |
-| `server/index.js` | Initialize alert engine at startup; wire into viewport-processor post-aggregation callback | New startup logic |
-| `server/viewport-processor.js` | After aggregation, pass `CellSnapshot[]` to alert engine for rule evaluation | Hook point for static/imported data alerts during navigation |
+| File                           | Change                                                                                              | Notes                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `server/osc_schema.js`         | Add `/alert/fire`, `/alert/clear`, `/alert/mute`, `/alert/ack` addresses with payload schemas       | Extend-only, backward-compatible                             |
+| `server/osc.js`                | Add `sendAlertFire()`, `sendAlertClear()`, `sendAlertMute()`, `sendAlertAck()` dispatch functions   | New OSC push paths                                           |
+| `server/config.js`             | Add `ALERT_RULES_PATH` constant (default: `./alert_rules.json`), `ALERT_MAX_ACTIVE` (default: 1000) | New config entries                                           |
+| `server/index.js`              | Initialize alert engine at startup; wire into viewport-processor post-aggregation callback          | New startup logic                                            |
+| `server/viewport-processor.js` | After aggregation, pass `CellSnapshot[]` to alert engine for rule evaluation                        | Hook point for static/imported data alerts during navigation |
 
 ### 7.5.5 OSC Addresses (Extend-Only)
 
-| Address | Payload | Trigger |
-| ------- | ------- | ------- |
-| `/alert/fire` | `ruleId(s) cellId(s) severity(s) value(f) timestamp(i)` | Channel crosses `enterThreshold` upward |
-| `/alert/clear` | `ruleId(s) cellId(s) timestamp(i)` | Channel drops below `exitThreshold` |
-| `/alert/mute` | `ruleId(s) duration(i)` | User/API mutes a rule |
-| `/alert/ack` | `ruleId(s) cellId(s) timestamp(i)` | Downstream consumer acknowledges alert |
+| Address        | Payload                                                 | Trigger                                 |
+| -------------- | ------------------------------------------------------- | --------------------------------------- |
+| `/alert/fire`  | `ruleId(s) cellId(s) severity(s) value(f) timestamp(i)` | Channel crosses `enterThreshold` upward |
+| `/alert/clear` | `ruleId(s) cellId(s) timestamp(i)`                      | Channel drops below `exitThreshold`     |
+| `/alert/mute`  | `ruleId(s) duration(i)`                                 | User/API mutes a rule                   |
+| `/alert/ack`   | `ruleId(s) cellId(s) timestamp(i)`                      | Downstream consumer acknowledges alert  |
 
-### 7.5.5.5 Max-Side Alert Sound Handler (alert_sound.js)
+#### 7.5.5.5 Browser-Side Alert Sound
 
-**Problem:** `/alert/fire` and `/alert/clear` OSC messages are defined above, but without a Max-side handler, alert sounds cannot be heard. The alert engine's auditory output path is broken until this is addressed.
+**Phase W update:** Alert sounds are implemented in `frontend/audio-engine.js` instead of a separate ES5 Max script.
 
-**Solution:** Add `sonification/alert_sound.js` (~80 lines, ES5 strict):
+Add `engine.triggerAlert(severity, cellId)` method (~30 lines):
 
-- **Inlet 0:** Receives messages routed from `[udpreceive]` via `[route /alert]` then `[route fire clear]`.
-- **`fire` handler:** Parses `ruleId(s) cellId(s) severity(s) value(f) timestamp(i)`. Selects a one-shot sample based on `severity`:
-  - `"critical"` → sharp percussive hit (high urgency)
-  - `"warning"` → mid-frequency tone (moderate urgency)
-  - `"info"` → soft chime (low urgency)
-  - Outputs: bang to trigger `[sfplay~]` or `[buffer~]` playback, plus float for amplitude scaling from `value`.
-- **`clear` handler:** Parses `ruleId(s) cellId(s) timestamp(i)`. Outputs a fade-out ramp message (200ms linear ramp to 0) to the corresponding playback voice.
-- **Internal cooldown:** Same `ruleId` cannot re-trigger within 500ms (prevents rapid-fire from multiple cells crossing threshold simultaneously).
+- Receives alert events via WebSocket JSON (`{ type: 'alert', severity, cellId }`)
+- Creates a short `OscillatorNode` or plays a one-shot `AudioBuffer` based on severity
+- Severity levels: `warning` (single tone), `critical` (dual tone), `clear` (descending tone)
+- Respects master volume and AudioContext state
 
-**Max wiring pattern:** Same as `icon_trigger.js` — `[udpreceive] → [route /alert] → [route fire clear] → [js alert_sound.js] → [sfplay~]`. No `.maxpat` file editing required; wiring is done in the Max patcher UI.
-
-**ES5 constraint:** All code uses `var`, function declarations, no template literals — verified against the same rules as `crossfade_controller.js` and `icon_trigger.js`.
+This replaces the ~80-line ES5 `alert_sound.js` that would have been needed for Max.
 
 ### 7.5.6 Effort Estimate
 
 - `alert-engine.js` (rule evaluation + state machine + cooldown/dedup + config loader): ~200 lines
-- `alert_sound.js` (ES5 Max [js] alert handler, see §7.5.5.5): ~80 lines
+- `engine.triggerAlert()` in `frontend/audio-engine.js` (browser-side alert sound, see §7.5.5.5): ~30 lines
 - OSC dispatch functions in `osc.js`: ~50 lines
 - Tests (state machine transitions, cooldown timing, dedup, hysteresis, OSC output verification): ~120 lines
 - Existing file modifications (`osc_schema.js`, `config.js`, `index.js` hookup, `viewport-processor.js` hook): ~50 lines
-- **Total: ~500 lines, of which ~450 new and ~50 modified**
+- **Total: ~370 lines, of which ~320 new and ~50 modified** (reduced from ~500 by replacing ~80-line ES5 `alert_sound.js` with ~30-line browser method)
 
 ### 7.5.7 Definition of Done (Phase 4.5)
 
@@ -928,8 +991,7 @@ sonification/
 - [ ] `/alert/fire` OSC is sent with correct payload (`ruleId`, `cellId`, `severity`, `value`, `timestamp`) — verified by unit test with mock UDP transport
 - [ ] `/alert/clear` OSC is sent when value drops below `exitThreshold`
 - [ ] Invalid `alert_rules.json` is rejected at startup with a descriptive error (server still starts with alerting disabled)
-- [ ] `sonification/alert_sound.js` receives `/alert/fire` message and outputs trigger bang + amplitude float (verified by manual Max test — load the script, send test `/alert/fire` message via Max message box, confirm `[sfplay~]` triggers)
-- [ ] `alert_sound.js` is ES5 compliant — no `let`/`const`, no arrow functions, no template literals, no destructuring (verified by loading in Max [js] object without errors)
+- [ ] Alert sound audible in browser within 200ms of threshold crossing
 - [ ] `npm test` + `npm run lint` pass
 
 ---
@@ -956,47 +1018,18 @@ Deferred from course scope. Prerequisite: Phase 1.5. Rasterization rules already
 
 **New files:** `server/adapters/kml.js` (~120 lines), `server/adapters/gpx.js` (~100 lines), tests (~120 lines). **Modified files:** `import-manager.js` (accept `.kml`/`.gpx` extensions), `index.js` (register adapters), `package.json`. **Total: ~380 lines (~340 new, ~40 modified).**
 
-### 8.2 Configurable Audio Mapping and Web Console (was Phase 3)
+### 8.2 Phase 3: Configurable Audio Mapping — Web Console
 
-Deferred from course scope. Prerequisite: Phase 1a. The `audio_mapping.json` config file (SPEC §7.1) can be hand-edited without the console in the interim.
+**Phase W update:** The crossfade_controller.js rewrite (Option A message-based protocol, ~200 lines ES5) is **eliminated entirely** — the browser audio engine (`frontend/audio-engine.js`) handles dynamic channel-to-bus mapping natively in modern JS.
 
-> **Architectural principle: Server as fold-mapper, Max as audio renderer.** The server reads `audio_mapping.json`, computes folded bus values from channel data, and sends stable per-bus floats to Max via `/bus/{index}`. Max never needs to know about channel counts or fold methods. Adding new data channels = server folds them into existing buses → no Max changes required. The crossfade controller rewrite (Option A below) only handles `N_BUSES` messages, not `N_CHANNELS`.
+**Remaining scope (web console only):**
 
-> **Note:** Existing per-channel `/ch/*` addresses are retained for debugging and visualization. `/bus/*` is additive — it does not replace `/ch/*`. This follows the extend-only OSC principle (CLAUDE.md).
+- Browser UI for editing `audio_mapping.json`: bus assignment, fold method selection, channel reordering
+- Live preview: changes apply immediately to the running audio engine via WebSocket
+- Save to server: `POST /api/audio-mapping/reload` persists changes
+- **Minimum scope:** ~400 lines (console UI + WebSocket handlers)
 
-> **Bus registration (minimal self-description):** To avoid shifting the "Max doesn't know what index N means" problem from channels to buses, add bus-level registration messages:
-> - `/bus/register {index} {busName}` — sent at startup and after bus config change (foldMethod, volume range as optional trailing args)
-> - `/bus/reload` — sent when bus configuration changes at runtime (analogous to `/ch/reload`)
->
-> These are extend-only additions. Max-side handling is optional — `/bus/register` can be silently ignored until a future Max patch decides to use bus names. **Note:** `/bus/reload` is implemented in Phase 1a (§3.5.5) via the audio-mapping reload API. Phase 3 builds on this foundation.
-
-**Goal:** Move audio mapping from hardcoded Max patch wiring to a configuration file, and provide a web console for real-time adjustment.
-
-**New files:** `server/audio-mapping.js` (config loading + validation, ~150 lines), `audio-mapping.json` (default 5-bus mapping), `frontend/console.html` + `frontend/console.js` (console frontend, ~400 lines), OSC config messages (~100 lines).
-
-**Modified files:** `server/osc.js` (fold-mapping logic), `server/index.js` (`/console` route), `sonification/crossfade_controller.js` (dynamic channel count).
-
-**Max/MSP dynamic channel risk callout:** `crossfade_controller.js` has the following hardcoded values:
-
-- `inlets = 12` (11 land cover classes + proximity)
-- `outlets = 11`
-- `var NUM_CHANNELS = 11`
-- `var target = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]` — fixed-length array of 11
-- `var smoothed = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]` — fixed-length array of 11
-- Inlet 10 is hardwired as the frame trigger (the last land cover class in the canonical send order)
-- ES5 only — no `let`/`const`, no arrow functions, no destructuring
-
-Two viable options for dynamic channel count:
-
-**(A) Message-based protocol (recommended).** Replace 12 inlets with a single inlet that receives `/ch/val <index> <float>` messages. The script maintains dynamic-length `target`/`smoothed` arrays. Frame update is triggered by a `/ch/frame` message sent after all channel values. This is a full protocol rewrite of the crossfade controller — the inlet-per-channel paradigm is replaced by a message-per-channel paradigm.
-
-**(B) Parameterized Max patch via `[poly~]` or scripted patching.** Dynamically create/destroy inlets in the Max patch using `[thispatcher]` scripting or `[poly~]` voices. This requires editing the `.maxpat` file (prohibited by CLAUDE.md) and is significantly more complex.
-
-Option A is the viable path. Effort is substantially higher than the original ~650 line estimate — the crossfade controller rewrite alone is ~200 lines (ES5), plus integration testing with the Max patch.
-
-**Original total estimate: ~650 lines.** Revised estimate with crossfade controller rewrite: ~850+ lines.
-
-**Minimum Console scope (for "non-technical user" demo):** A minimal console providing only bus-channel drag-and-drop mapping + per-bus volume sliders (no icon/smoothing configuration) would be ~250 lines of frontend code. This provides the core "configure audio without editing JSON" experience at reduced effort.
+The "Minimum Console scope" note from earlier remains valid but simplified: the web console directly manipulates `audio-engine.js` parameters via WebSocket, no OSC intermediary needed.
 
 ### 8.3 AOI-Scoped Stream Adapters and NASA FIRMS
 
@@ -1015,13 +1048,34 @@ module.exports = {
     name: 'NASA FIRMS Active Fire',
     temporalType: 'stream',
     aoiStrategy: 'aoi',
-    pollIntervalMs: 10 * 60_000,       // 10 minutes (FIRMS NRT update cadence)
-    windowMs: 24 * 60 * 60_000,        // Retain last 24 hours
+    pollIntervalMs: 10 * 60_000, // 10 minutes (FIRMS NRT update cadence)
+    windowMs: 24 * 60 * 60_000, // Retain last 24 hours
     windowAggregate: 'max',
     channels: [
-        { name: 'fire_count',     label: 'Active Fire Count',    range: [0, 100], unit: 'count', normalization: 'log',    group: 'metric' },
-        { name: 'fire_intensity', label: 'Fire Radiative Power', range: [0, 500], unit: 'MW',    normalization: 'log',    group: 'metric' },
-        { name: 'fire_newness',   label: 'Time Since Detection', range: [0, 1],   unit: 'ratio', normalization: 'linear', group: 'metric' },
+        {
+            name: 'fire_count',
+            label: 'Active Fire Count',
+            range: [0, 100],
+            unit: 'count',
+            normalization: 'log',
+            group: 'metric',
+        },
+        {
+            name: 'fire_intensity',
+            label: 'Fire Radiative Power',
+            range: [0, 500],
+            unit: 'MW',
+            normalization: 'log',
+            group: 'metric',
+        },
+        {
+            name: 'fire_newness',
+            label: 'Time Since Detection',
+            range: [0, 1],
+            unit: 'ratio',
+            normalization: 'linear',
+            group: 'metric',
+        },
     ],
 };
 ```
@@ -1030,11 +1084,11 @@ module.exports = {
 
 **Sound mapping (FIRMS Fire → Max):**
 
-| Channel | Suggested Mapping | Sound Effect |
-| ------- | ----------------- | ------------ |
-| `fire_count` | Background texture density + urgency | More fires in cell = denser, more agitated granular texture |
-| `fire_intensity` | Icon trigger intensity + filter brightness | Higher FRP = brighter, more piercing alert tone |
-| `fire_newness` | Temporal envelope / attack sharpness | Fresh detection = sharp attack; aging detections = softer, sustained |
+| Channel          | Suggested Mapping                          | Sound Effect                                                         |
+| ---------------- | ------------------------------------------ | -------------------------------------------------------------------- |
+| `fire_count`     | Background texture density + urgency       | More fires in cell = denser, more agitated granular texture          |
+| `fire_intensity` | Icon trigger intensity + filter brightness | Higher FRP = brighter, more piercing alert tone                      |
+| `fire_newness`   | Temporal envelope / attack sharpness       | Fresh detection = sharp attack; aging detections = softer, sustained |
 
 **New files:** `server/aoi-manager.js` (~100 lines), `server/adapters/firms-fire.js` (~140 lines), tests (~200 lines). **New config entries:** `DEFAULT_AOI_STRATEGY`, `AOI_MARGIN_DEG`, `AOI_DEBOUNCE_SEC`, `MAX_AOI_AREA_KM2`, `MAX_AOI_BUCKETS`. **Stream pause/resume endpoints:** `POST /api/streams/:id/pause`, `POST /api/streams/:id/resume`. **Total: ~440+ lines.**
 
@@ -1067,21 +1121,22 @@ The alert rule engine design has been promoted from Future Work to a formal phas
 
 ## 9. Total Engineering Effort Summary
 
-| Phase | New Code | Modified Code | Risk | Prerequisites |
-| ----- | -------- | ------------- | ---- | ------------- |
-| 0: H3 Encoding Layer | ~300 lines | ~30 lines | Very low (pure addition) | None (requires `h3-js` dependency approval) |
-| 1a: Adapters + Registry + Audio-Mapping + Minimal Fold-Mapping | ~1200 lines | ~120 lines | Medium (refactors core data flow) | Phase 0 |
-| 1b: spatial.js H3 Migration | ~250 lines | ~600 lines | **High** (parallel index structure + recommended module split) | Phase 1a |
-| 1.5: Runtime Import (CSV + GeoJSON) | ~900 lines | ~70 lines | Medium (runtime state mutation + validation logic) | Phase 1a |
-| 2: Frontend Decoupling | ~400 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1b |
-| 4: Stream + USGS Earthquake | ~750 lines | ~80 lines | Medium (real-time state + external dependency) | Phase 1a + Phase 1.5 |
-| 4.5: Alert Rule Engine + Max Alert Handler | ~450 lines | ~50 lines | Low-medium (state machine + config parsing + ES5 script) | Phase 1a |
+| Phase                                                          | New Code                | Modified Code | Risk                                                           | Prerequisites                               |
+| -------------------------------------------------------------- | ----------------------- | ------------- | -------------------------------------------------------------- | ------------------------------------------- |
+| W: Web Audio Migration                                         | ~460 new, ~160 modified | —             | Completed                                                      | —                                           |
+| 0: H3 Encoding Layer                                           | ~300 lines              | ~30 lines     | Very low (pure addition)                                       | None (requires `h3-js` dependency approval) |
+| 1a: Adapters + Registry + Audio-Mapping + Minimal Fold-Mapping | ~980 lines              | ~120 lines    | Medium (refactors core data flow)                              | Phase 0                                     |
+| 1b: spatial.js H3 Migration                                    | ~250 lines              | ~600 lines    | **High** (parallel index structure + recommended module split) | Phase 1a                                    |
+| 1.5: Runtime Import (CSV + GeoJSON)                            | ~900 lines              | ~70 lines     | Medium (runtime state mutation + validation logic)             | Phase 1a                                    |
+| 2: Frontend Decoupling                                         | ~400 lines              | ~200 lines    | Medium (grid rendering rewrite)                                | Phase 1b                                    |
+| 4: Stream + USGS Earthquake                                    | ~640 lines              | ~80 lines     | Medium (real-time state + external dependency)                 | Phase 1a + Phase 1.5                        |
+| 4.5: Alert Rule Engine + Browser Alert Sound                   | ~320 lines              | ~50 lines     | Low-medium (state machine + config parsing)                    | Phase 1a                                    |
 
-**In-scope total: ~4250 lines of new code, ~1150 lines modified.** The modified total includes ~530 lines of reorganized code from the Phase 1b spatial.js module split — these are existing lines being moved across files, not net new logic. If the split is skipped (see §3b.4), the modified total drops to ~620.
+**In-scope total (excluding completed Phase W): ~3790 lines of new code, ~1150 lines modified.** The modified total includes ~530 lines of reorganized code from the Phase 1b spatial.js module split — these are existing lines being moved across files, not net new logic. If the split is skipped (see §3b.4), the modified total drops to ~620.
 
-> **Disclaimer:** Line counts are complexity proxies, not schedule predictors. Actual calendar time depends on debugging, Max integration testing, and iteration cycles. Use these numbers for relative sizing between phases, not for setting deadlines.
+> **Disclaimer:** Line counts are complexity proxies, not schedule predictors. Actual calendar time depends on debugging, integration testing, and iteration cycles. Use these numbers for relative sizing between phases, not for setting deadlines.
 
-**`spatial.js` modification ordering:** Phases 1b, 1.5, and 4 all modify `spatial.js`. Apply changes in order: Phase 1b adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does *not* modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
+**`spatial.js` modification ordering:** Phases 1b, 1.5, and 4 all modify `spatial.js`. Apply changes in order: Phase 1b adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does _not_ modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
 
 **Shortest path to "CSV upload → hex grid → sound":** Phase 0 → 1a → 1b → 1.5 → 2 (~3050 lines new).
 
@@ -1089,7 +1144,7 @@ The alert rule engine design has been promoted from Future Work to a formal phas
 
 **Shortest path to "real-time earthquake → alert sound":** Phase 0 → 1a → 4.5 → 1.5 → 4 (~3600 lines new).
 
-**Earliest alert capability:** Phase 0 → 1a → 4.5 (~1950 lines new). Alert rules evaluate WorldCover static data during viewport navigation immediately — no streaming or import pipeline needed. With `alert_sound.js`, alert sounds are audible in Max.
+**Earliest alert capability:** Phase 0 → 1a → 4.5 (~1820 lines new). Alert rules evaluate WorldCover static data during viewport navigation immediately — no streaming or import pipeline needed. Alert sounds play in the browser via `engine.triggerAlert()`.
 
 > **Note:** Phase 1b is required for Phase 2 (frontend needs `queryByH3()`), but not for Phase 4 (stream scheduler encodes H3 cell IDs directly and injects via `addCells()`). Phase 4.5 depends only on Phase 1a (channel registry) and can be slotted in at any point after 1a.
 
@@ -1099,26 +1154,26 @@ The alert rule engine design has been promoted from Future Work to a formal phas
 
 - **This week:** Phase 0 — pure addition, changes only touch config and type definitions (no runtime logic modified), safe to run in parallel with the milestone demo.
 - **After the next milestone:** Phase 1a — independently demoable (adapter pattern + channel registry + audio-mapping reload, no spatial.js risk).
-- **Immediately after Phase 1a:** Phase 4.5 — Alert rule engine + Max alert handler. Only depends on the channel registry from Phase 1a. Lightweight addition (~500 lines) that enables alert capability for both static and imported data, with audible alert sounds via `alert_sound.js`. Can be demonstrated with WorldCover data immediately (e.g., alert when a cell's forest coverage drops below threshold during viewport navigation).
+- **Immediately after Phase 1a:** Phase 4.5 — Alert rule engine + browser alert sound. Only depends on the channel registry from Phase 1a. Lightweight addition (~370 lines) that enables alert capability for both static and imported data, with audible alert sounds in the browser via `engine.triggerAlert()`. Can be demonstrated with WorldCover data immediately (e.g., alert when a cell's forest coverage drops below threshold during viewport navigation).
 - **If time permits:** Phase 1b — spatial.js H3 migration. Can defer if Phase 2 is not needed for demo.
 - **Phase 1.5:** Runtime import — opens the CSV + GeoJSON data path.
 - **Before end of course:** Phase 2 OR Phase 4, depending on desired showcase:
-  - **Choose Phase 2** → Showcase "hexagonal map + multi-source data visualization" (strong visual impact; requires Phase 1b)
-  - **Choose Phase 4** → Showcase "real-time earthquake data driving sound changes + alert triggering" (strong auditory impact; **does not require Phase 1b**; alert engine from Phase 4.5 fires on earthquake threshold crossing)
-  - If time permits, do both.
+    - **Choose Phase 2** → Showcase "hexagonal map + multi-source data visualization" (strong visual impact; requires Phase 1b)
+    - **Choose Phase 4** → Showcase "real-time earthquake data driving sound changes + alert triggering" (strong auditory impact; **does not require Phase 1b**; alert engine from Phase 4.5 fires on earthquake threshold crossing)
+    - If time permits, do both.
 - **After the course ends:** Remaining Future Work (§8).
 
 ### 10.0.1 Capability Milestones (End-to-End Status Per Phase)
 
 Each milestone describes what the system **can and cannot do** at that point. This prevents showcase narratives from implying capabilities that have not yet landed.
 
-| After Phase | What Works End-to-End | What Does NOT Work Yet |
-| ----------- | --------------------- | ---------------------- |
-| Phase 0 | H3 encoding available as library. Existing demo unchanged. | No new data flows through H3 yet. |
-| Phase 1a | Adapter framework + channel registry operational. WorldCover data flows identically. Imported channels send `/ch/{index}` OSC. Minimal fold-mapping computes `/bus/{index}` values. | Frontend still shows legacy grid. No real-time streaming. |
-| Phase 1a + import (Phase 1.5) | Upload CSV → channels registered → server fold-maps to `/bus/*` → Max receives bus values → **sound from arbitrary data.** First "upload to sound" demo possible. | No hexagonal grid display (needs Phase 1b + 2). No real-time streaming. |
-| Phase 4.5 | Alert rules evaluate channel values. `/alert/fire` and `/alert/clear` OSC fire on threshold crossing. `alert_sound.js` triggers audible alert sounds in Max. | Alerts only fire during viewport navigation (static/imported data). No real-time stream triggers yet. |
-| Phase 4 | Real-time USGS earthquake data streams in. Data-change-driven OSC push. Alert engine fires on live earthquake events. **First "live monitoring" demo possible.** | Frontend hex rendering requires Phase 1b + Phase 2. |
+| After Phase                   | What Works End-to-End                                                                                                                                                                                 | What Does NOT Work Yet                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Phase 0                       | H3 encoding available as library. Existing demo unchanged.                                                                                                                                            | No new data flows through H3 yet.                                                                     |
+| Phase 1a                      | Adapter framework + channel registry operational. WorldCover data flows identically. Imported channels send `/ch/{index}` OSC. Minimal fold-mapping computes `/bus/{index}` values.                   | Frontend still shows legacy grid. No real-time streaming.                                             |
+| Phase 1a + import (Phase 1.5) | Upload CSV → channels registered → server fold-maps to `/bus/*` → **sound plays in browser** from arbitrary data. First "upload to sound" demo possible.                                              | No hexagonal grid display (needs Phase 1b + 2). No real-time streaming.                               |
+| Phase 4.5                     | Alert rules evaluate channel values. `/alert/fire` and `/alert/clear` fire on threshold crossing. Alert sound plays in browser via `engine.triggerAlert()`.                                           | Alerts only fire during viewport navigation (static/imported data). No real-time stream triggers yet. |
+| Phase 4                       | Real-time USGS earthquake data streams in. Data-change-driven push (OSC when enabled, always via WebSocket). Alert engine fires on live earthquake events. **First "live monitoring" demo possible.** | Frontend hex rendering requires Phase 1b + Phase 2.                                                   |
 
 ### 10.1 Showcase Narratives and Product Verification Mainlines
 
@@ -1131,16 +1186,16 @@ The two closed loops below serve a dual purpose: **demo scripts** for course pre
 - Demo flow: `POST /api/import` via curl with a CSV → server validates and ingests → hex grid appears on map → pan/zoom viewport → ambient sound changes in real time → navigate into a high-PM2.5 zone → alert engine fires `/alert/fire` → percussive alert sounds.
 - Audience sees: hexagonal grid fills in, colors shift as the viewport moves across regions; alert indicator flashes when entering a threshold-crossing zone.
 - Audience hears: tonal gradient reflecting data values across the viewport — smooth crossfades between zones, punctuated by a sharp alert tone when a cell exceeds the configured threshold.
-- Core message: *"Any tabular geodata becomes an audible landscape in under a minute — and you hear the anomaly before you see it."*
+- Core message: _"Any tabular geodata becomes an audible landscape in under a minute — and you hear the anomaly before you see it."_
 - **Verification criteria:** (1) API returns 200 with valid source/channels/cellCount, (2) hex grid appears within 2s of import, (3) panning produces audible change within 500ms, (4) alert engine fires `/alert/fire` when navigating into a cell exceeding `enterThreshold`, (5) no browser console errors.
 
 **Closed Loop B — "Live Earthquake Alert" (auditory emphasis, Phases 0 → 1a → 4.5 → 1.5 → 4)**
 
-- Demo flow: USGS adapter is running → earthquake event arrives → new cells appear on map → alert engine evaluates magnitude against threshold → `/alert/fire` OSC fires → alert sound triggers in Max.
+- Demo flow: USGS adapter is running → earthquake event arrives → new cells appear on map → alert engine evaluates magnitude against threshold → `/alert/fire` fires → alert sound plays in browser.
 - Audience sees: new hex cells pulse onto the map at the epicenter location.
 - Audience hears: immediate percussive alert driven by `/alert/fire` when magnitude crosses threshold (Phase 4.5 alert engine), ambient low rumble conveying depth.
-- Core message: *"You hear the earthquake before you see the dashboard notification."*
-- **Verification criteria:** (1) `GET /api/streams` shows USGS adapter as `"running"`, (2) new earthquake cell appears within one poll interval, (3) OSC message fires for the new cell, (4) alert engine fires `/alert/fire` for cells exceeding `enterThreshold`, (5) alert sound triggers in Max within 200ms of OSC receipt.
+- Core message: _"You hear the earthquake before you see the dashboard notification."_
+- **Verification criteria:** (1) `GET /api/streams` shows USGS adapter as `"running"`, (2) new earthquake cell appears within one poll interval, (3) push notification fires for the new cell, (4) alert engine fires `/alert/fire` for cells exceeding `enterThreshold`, (5) alert sound plays in browser within 200ms of threshold crossing.
 
 See §9 "Shortest path" calculations for the engineering effort behind each loop.
 
@@ -1168,7 +1223,7 @@ curl http://localhost:3000/api/sources
 # Expect: worldcover (builtin) + air_quality (imported)
 
 # 5. Open frontend, navigate viewport to data region
-# → Confirm OSC messages appear in Max console
+# → Confirm sound in browser: click ▶ in info panel, verify ambient audio changes as you pan the map
 # → Confirm ambient sound changes reflect imported data
 ```
 

@@ -1,10 +1,42 @@
-# Architecture — Max/MSP Sound Engine
+# Architecture — Sound Engine
 
-This document describes the internal wiring of the Max patch (`sonification/max_wav_osc.maxpat`) and its supporting JS scripts and sub-patches.
+This document describes both the Max/MSP patch internals and the browser-based Web Audio path.
 
-For the overall system architecture (Frontend → Server → Max), see `README.md`.
-For the frontend module structure (6 ES modules: config, landcover, ui, map, websocket, main), see the DEVLOG entry "2026-02-20 — Frontend Module Split".
+For the overall system architecture (Frontend → Server → Max/Browser), see `README.md`.
+For the frontend module structure (7 ES modules: config, landcover, ui, map, websocket, audio-engine, main), see the DEVLOG entry "2026-02-20 — Frontend Module Split" and "2026-02-21 — Web Audio Migration".
 For sound design rationale and task specs, see `sound_design_plan.md`.
+
+---
+
+## Web Audio Path (ENABLE_OSC=false)
+
+When OSC is disabled, the frontend handles audio directly:
+
+```
+Frontend (Mapbox) ──WS──> Server (viewport bounds)
+                           │
+                           ├── spatial.js (aggregate stats)
+                           ├── osc-metrics.js
+                           │     ├── computeBusTargets() — fold 11 LC → 5 buses
+                           │     └── computeOceanLevel() — three-level ocean detection
+                           ├── viewport-processor.js — attach audioParams to stats
+                           │
+                      <──WS──  { type: 'stats', ..., audioParams }
+                           │
+Frontend: audio-engine.js
+  ├── engine.update(audioParams) — EMA smoothing (performance.now() timing)
+  ├── requestAnimationFrame loop — apply smoothed → GainNode.gain
+  ├── AudioBufferSourceNode × 5 — looping ambience WAVs
+  └── visibilitychange — suspend/resume AudioContext
+```
+
+Both paths (OSC and Web Audio) can run simultaneously when `ENABLE_OSC=true`. The server always computes `audioParams`; the frontend only uses them when the user clicks the play button.
+
+---
+
+## Max/MSP Sound Engine
+
+This section describes the internal wiring of the Max patch (`sonification/max_wav_osc.maxpat`) and its supporting JS scripts and sub-patches.
 
 ---
 

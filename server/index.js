@@ -28,6 +28,7 @@ const {
     ALLOWED_ORIGINS,
     BROADCAST_STATS,
     GRID_SIZE,
+    ENABLE_OSC,
 } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
 const { isOscReady, sendToMax, closeOsc } = require('./osc');
@@ -116,6 +117,13 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Serve pre-built vector tiles (PMTiles)
 app.use('/tiles', express.static(path.join(__dirname, '../data/tiles')));
+
+// Serve ambience audio samples for Web Audio frontend.
+// Scoped to ambience/ only — not all of sonification/samples/.
+app.use(
+    '/audio/ambience',
+    express.static(path.join(__dirname, '../sonification/samples/ambience'))
+);
 
 // Health check (used by start.command readiness probe)
 app.get('/health', (req, res) => {
@@ -325,9 +333,8 @@ async function startServer() {
 ======================================
   HTTP API:    http://localhost:${HTTP_PORT}
   WebSocket:   ws://localhost:${WS_PORT}
-  OSC Target:  ${OSC_HOST}:${OSC_PORT}
-
-  Make sure MaxMSP is listening on UDP port ${OSC_PORT}
+  OSC:         ${ENABLE_OSC ? `${OSC_HOST}:${OSC_PORT}` : 'disabled (ENABLE_OSC=false)'}
+${ENABLE_OSC ? `\n  Make sure MaxMSP is listening on UDP port ${OSC_PORT}` : ''}
 ======================================
 `);
     } catch (err) {

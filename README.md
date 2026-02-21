@@ -182,6 +182,30 @@ Additional recommended mappings (optional):
 - `/nightlight` → presence / loudness / brightness
 - `/forest` → smoothness / texture / reverb amount
 
+## Web Audio Playback (Browser-Based Audio)
+
+The sonification system can run entirely in the browser without Max/MSP:
+
+1. Set `ENABLE_OSC=false` in `.env` to disable the UDP/OSC path.
+2. Start the server: `npm start`
+3. Open the frontend in a browser.
+4. Click the play button in the info panel.
+5. Five ambient WAV files (~45MB each, ~225MB total) load progressively. Tree and water load first. Each bus plays silence until its file is ready.
+
+**Requirements:**
+
+- Modern browser with Web Audio API (Chrome 66+, Firefox 76+, Safari 14.1+)
+- Sufficient bandwidth for initial WAV download
+
+**Audio controls:**
+
+- Play/Stop toggle in the info panel
+- Per-bus loading progress indicators
+- Audio automatically suspends when the browser tab is hidden
+- Audio fades to silence after 3 seconds of no server data
+
+Both audio paths (OSC to Max and Web Audio) can run simultaneously when `ENABLE_OSC=true`.
+
 ## Troubleshooting
 
 ### Server won't start / CSV schema mismatch

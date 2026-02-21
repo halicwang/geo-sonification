@@ -83,6 +83,24 @@ function parsePositiveInt(envVar, defaultValue, name) {
     return parsed;
 }
 
+/**
+ * Parse an env var as a boolean, exit on invalid.
+ * Accepts: true/1 (→ true), false/0 (→ false).
+ * @param {string} envVar - Environment variable name
+ * @param {boolean} defaultValue - Fallback value
+ * @param {string} name - Display name for error messages
+ * @returns {boolean}
+ */
+function parseBool(envVar, defaultValue, name) {
+    const value = process.env[envVar];
+    if (value === undefined || value === '') return defaultValue;
+    const lower = value.toLowerCase();
+    if (lower === '1' || lower === 'true') return true;
+    if (lower === '0' || lower === 'false') return false;
+    console.error(`ERROR: Invalid ${name} "${value}". Must be true/1 or false/0.`);
+    process.exit(1);
+}
+
 // ---- Network ports ----
 
 const HTTP_PORT = parsePort('HTTP_PORT', 3000, 'HTTP');
@@ -90,6 +108,10 @@ const WS_PORT = parsePort('WS_PORT', 3001, 'WebSocket');
 const OSC_HOST = process.env.OSC_HOST || '127.0.0.1';
 const OSC_PORT = parsePort('OSC_PORT', 7400, 'OSC');
 const DEBUG_OSC = process.env.DEBUG_OSC === '1' || process.env.DEBUG_OSC === 'true';
+const ENABLE_OSC = parseBool('ENABLE_OSC', true, 'ENABLE_OSC');
+if (!ENABLE_OSC) {
+    console.log('[OSC] Disabled (ENABLE_OSC=false). All send functions are no-ops.');
+}
 
 // ---- Aggregation ----
 // Two modes: "legacy" (simple grid-count average) vs "v2_area_weighted" (land-area weighted).
@@ -280,4 +302,5 @@ module.exports = {
     DISABLE_CACHE,
     FORCE_REBUILD_CACHE,
     BROADCAST_STATS,
+    ENABLE_OSC,
 };

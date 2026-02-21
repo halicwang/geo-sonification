@@ -20,6 +20,7 @@ import { state, getMapboxToken, loadServerConfig, getClientId } from './config.j
 import { showToast, updateUI, updateConnectionStatus } from './ui.js';
 import { initMap, onViewportChange, refreshServerConfig } from './map.js';
 import { connectWebSocket } from './websocket.js';
+import { engine } from './audio-engine.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Cache fixed DOM element references once
@@ -32,6 +33,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         wsStatus: document.getElementById('ws-status'),
         wsText: document.getElementById('ws-text'),
         toast: document.getElementById('toast'),
+        audioToggle: document.getElementById('audio-toggle'),
+        audioIcon: document.getElementById('audio-icon'),
+        audioStatus: document.getElementById('audio-status'),
+        audioLoading: document.getElementById('audio-loading'),
     };
 
     getClientId();
@@ -62,8 +67,84 @@ document.addEventListener('DOMContentLoaded', async () => {
                 onViewportChange();
             }
         },
-        onStats: (data) => updateUI(data),
+        onStats: (data) => {
+            updateUI(data);
+            if (data.audioParams) {
+                engine.update(data.audioParams);
+            }
+        },
         onError: (msg) => showToast(`Error: ${msg}`, 5000),
         onDisconnect: () => updateConnectionStatus(false),
     });
+
+    // ── Audio toggle button ──
+    const BUS_LABELS = ['Tree', 'Crop', 'Urban', 'Bare', 'Water'];
+
+    state.els.audioToggle.addEventListener('click', async () => {
+        if (!state.runtime.audioEnabled) {
+            state.runtime.audioEnabled = true;
+            state.els.audioIcon.textContent = '\u25A0';
+            state.els.audioToggle.classList.add('active');
+            state.els.audioStatus.textContent = 'Loading\u2026';
+            state.els.audioLoading.classList.remove('hidden');
+
+            engine.setOnLoadingUpdate(renderLoadingUI);
+            await engine.start();
+        } else {
+            state.runtime.audioEnabled = false;
+            state.els.audioIcon.textContent = '\u25B6';
+            state.els.audioToggle.classList.remove('active');
+            state.els.audioStatus.textContent = 'Audio off';
+            state.els.audioLoading.classList.add('hidden');
+            await engine.stop();
+        }
+    });
+
+    /**
+     * Render per-bus loading progress bars.
+     * @param {Array<{status: string, progress: number, error: string|null}>} states
+     */
+    function renderLoadingUI(states) {
+        const el = state.els.audioLoading;
+        el.innerHTML = states
+            .map((s, i) => {
+                const statusClass =
+                    s.status === 'error' ? ' error' : s.status === 'ready' ? ' ready' : '';
+                const pct = Math.round(s.progress * 100);
+                let statusText;
+                if (s.status === 'ready') statusText = '\u2713';
+                else if (s.status === 'error') statusText = '\u2717';
+                else if (s.status === 'pending') statusText = '\u2014';
+                else statusText = pct + '%';
+
+                return (
+                    '<div class="audio-load-item' +
+                    statusClass +
+                    '">' +
+                    '<span class="audio-load-name">' +
+                    BUS_LABELS[i] +
+                    '</span>' +
+                    '<div class="audio-load-bar">' +
+                    '<div class="audio-load-fill" style="width:' +
+                    pct +
+                    '%"></div>' +
+                    '</div>' +
+                    '<span class="audio-load-status">' +
+                    statusText +
+                    '</span>' +
+                    '</div>'
+                );
+            })
+            .join('');
+
+        const readyCount = states.filter((s) => s.status === 'ready').length;
+        const errorCount = states.filter((s) => s.status === 'error').length;
+        if (readyCount + errorCount === states.length) {
+            state.els.audioStatus.textContent =
+                errorCount > 0 ? 'Playing (' + errorCount + ' failed)' : 'Playing';
+        } else if (states.some((s) => s.status === 'loading')) {
+            state.els.audioStatus.textContent =
+                'Loading (' + readyCount + '/' + states.length + ')';
+        }
+    }
 });

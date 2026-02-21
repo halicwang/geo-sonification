@@ -575,6 +575,7 @@ Importing arbitrary CSVs with zero feedback is a recipe for silent data corrupti
 | Coordinate system hint | Coordinates that look like projected (UTM, state plane) rather than WGS84 — detected by value magnitude (e.g., lat > 90 suggests non-WGS84) | Error: "Coordinates do not appear to be WGS84. Please convert to WGS84 (EPSG:4326) before importing." |
 | Resolution preview | Shows approximate hex scale for the selected H3 resolution | Human-readable label (see §4.3 scale hints) so the user understands spatial granularity |
 | Row/cell summary | Total rows parsed, unique H3 cells generated, rows per cell (min/mean/max) | Helps user judge whether resolution is appropriate for their data density |
+| Resolution mismatch | Data density vs. selected resolution: if average rows per cell < 1.5 (too sparse) or > 500 (too dense), the data may not match the chosen resolution | Warning: "Data density may not match resolution {res}. Consider resolution {suggestedRes} for better coverage." Computed from row/cell ratio heuristics. Does not block import. |
 
 **Column mapping and unit declaration (optional overrides):**
 
@@ -599,6 +600,13 @@ When `range` is explicitly provided, values are normalized to [0, 1] using the d
 **Preview sampling:** The preview step does NOT parse the entire file. It reads the first `IMPORT_PREVIEW_ROWS` rows (default: 50,000, configurable in `config.js`) and returns `sampledRows` and `totalRowsEstimate` (estimated from file size). The full file is only parsed during the confirm step. This prevents large files (millions of rows) from blocking the preview response.
 
 The import pipeline uses the `csv-parse` streaming API (async counterpart of `csv-parse/sync` already in the dependency tree — no new dependency). The uploaded file is piped through the streaming parser incrementally, preventing OOM on large uploads and enabling early abort when validation fails within the first `IMPORT_PREVIEW_ROWS` rows. The preview phase itself streams — it reads only `IMPORT_PREVIEW_ROWS` rows before closing the stream, so validation failures are detected without reading the entire file.
+
+**Import response hints:** Beyond the preview report, the actual `POST /api/import` response (defined in the migration plan §4.6) includes contextual hints to guide users:
+
+- **`soundMappingHint`**: Present when imported channels have no explicit bus mapping in `audio_mapping.json`. Lists unmapped channels and suggests editing the mapping config. Prevents the common "imported data but no sound change" confusion.
+- **`resolutionMismatchWarning`**: Present when the data density (rows per cell) is unusually low or high for the selected H3 resolution. Suggests an alternative resolution.
+
+These fields are informational — they do not block the import.
 
 ---
 
@@ -856,3 +864,4 @@ Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining
 | Fold-mapper | The server's role in computing bus values from channels; Max receives pre-folded results (Design Goal 5) |
 | Alert Rule | A declarative threshold + hysteresis + cooldown definition that triggers an auditory alert when a channel crosses a boundary (see migration plan §7.5 — Phase 4.5) |
 | Control Plane | REST endpoints for inspecting and managing runtime state (`/api/sources`, `/api/channels`, `/api/streams`) as distinct from data-plane endpoints (`/api/import`, WebSocket viewport) |
+| Compound Rule | A future extension to the alert rule schema supporting AND/OR logic across multiple channels (e.g., fire only when `fire_count > X AND fire_intensity > Y`). See migration plan §8.5. |

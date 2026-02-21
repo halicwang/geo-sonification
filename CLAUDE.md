@@ -2,6 +2,11 @@
 
 geo-sonification is a real-time geographic data sonification system. A Node.js server processes Mapbox viewport data and streams OSC messages to a Max/MSP synthesis engine.
 
+## Language
+
+- All code, comments, commit messages, and documentation must be written in English.
+- Conversation and planning with the user may be in English or Chinese depending on context.
+
 ## Tech Stack & Constraints
 
 - Pure JavaScript — no TypeScript. Use JSDoc type annotations for IDE support.
@@ -50,6 +55,11 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 - **`.maxpat` files** — binary Max patches, not editable as text.
 - **`data/raw/*.csv`** — GEE export results. Changes require re-export via GEE scripts.
 - **`sonification/samples/`** — audio assets. Do not replace or delete.
+
+## Documentation Update Policy
+
+- **Feature changes** (new OSC signals, new modules, architectural adjustments) must update all three files: `DEVLOG.md`, `README.md`, and `ARCHITECTURE.md`.
+- **Bug fixes and internal refactors** only require a `DEVLOG.md` entry; update `README.md` and `ARCHITECTURE.md` as needed.
 
 ## Development Workflow
 

@@ -119,7 +119,12 @@ geo-sonification/
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
-│   ├── app.js                            # Mapbox + WebSocket client (color-coded grid overlay)
+│   ├── main.js                           # Entry point — wires modules, DOMContentLoaded
+│   ├── config.js                         # Shared state, server config loading, client ID
+│   ├── landcover.js                      # Landcover metadata lookups (name, color, XSS escape)
+│   ├── map.js                            # Mapbox init, grid overlay, viewport tracking, HTTP fallback
+│   ├── websocket.js                      # WebSocket connection with exponential-backoff reconnect
+│   ├── ui.js                             # DOM updates: stats panel, connection status, toast
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
 ├── sonification/
 │   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → 5-bus fold-mapping → audio

@@ -3,6 +3,7 @@
 This document describes the internal wiring of the Max patch (`sonification/max_wav_osc.maxpat`) and its supporting JS scripts and sub-patches.
 
 For the overall system architecture (Frontend → Server → Max), see `README.md`.
+For the frontend module structure (6 ES modules: config, landcover, ui, map, websocket, main), see the DEVLOG entry "2026-02-20 — Frontend Module Split".
 For sound design rationale and task specs, see `sound_design_plan.md`.
 
 ---

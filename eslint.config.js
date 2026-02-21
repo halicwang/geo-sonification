@@ -3,7 +3,7 @@ const globals = require('globals');
 const prettierConfig = require('eslint-config-prettier');
 
 module.exports = [
-    // 全局忽略
+    // Global ignores
     {
         ignores: [
             'node_modules/',
@@ -44,12 +44,13 @@ module.exports = [
         },
     },
 
-    // frontend/**/*.js — Browser ES2020
+    // frontend/**/*.js — Browser ES modules
     {
         files: ['frontend/**/*.js'],
+        ignores: ['frontend/config.local.js'],
         languageOptions: {
             ecmaVersion: 2020,
-            sourceType: 'script',
+            sourceType: 'module',
             globals: {
                 ...globals.browser,
                 mapboxgl: 'readonly',
@@ -62,6 +63,19 @@ module.exports = [
         },
     },
 
+    // frontend/config.local.js — classic script (sets window.MAPBOX_TOKEN)
+    {
+        files: ['frontend/config.local.js'],
+        languageOptions: {
+            ecmaVersion: 2020,
+            sourceType: 'script',
+            globals: { ...globals.browser },
+        },
+        rules: {
+            ...js.configs.recommended.rules,
+        },
+    },
+
     // sonification/**/*.js — ES5 only
     {
         files: ['sonification/**/*.js'],
@@ -69,7 +83,7 @@ module.exports = [
             ecmaVersion: 5,
             sourceType: 'script',
             globals: {
-                // Max/MSP 全局对象
+                // Max/MSP global objects
                 post: 'readonly',
                 outlet: 'readonly',
                 inlet: 'readonly',
@@ -92,8 +106,8 @@ module.exports = [
         },
         rules: {
             ...js.configs.recommended.rules,
-            // Max/MSP 通过函数名调用消息处理器 (bang, msg_float, anything 等)，
-            // 这些函数在文件内"未使用"但实际是外部入口点
+            // Max/MSP invokes message handlers by name (bang, msg_float, anything, etc.);
+            // these functions appear "unused" in-file but are external entry points
             'no-unused-vars': 'off',
         },
     },
@@ -111,6 +125,6 @@ module.exports = [
         },
     },
 
-    // Prettier 冲突规则关闭（放最后）
+    // Disable Prettier-conflicting rules (must be last)
     prettierConfig,
 ];

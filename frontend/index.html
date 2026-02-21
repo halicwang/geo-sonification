@@ -59,8 +59,9 @@
         <!-- Toast: temporary notifications (e.g. connection errors) -->
         <div id="toast" class="toast hidden"></div>
 
-        <!-- config.local.js sets window.MAPBOX_TOKEN; must load before app.js -->
+        <!-- config.local.js sets window.MAPBOX_TOKEN; must load before modules -->
         <script src="config.local.js"></script>
-        <script src="app.js"></script>
+        <!-- Entry point module; imports pull in config, landcover, ui, map, websocket -->
+        <script type="module" src="main.js"></script>
     </body>
 </html>

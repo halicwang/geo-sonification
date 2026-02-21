@@ -82,9 +82,11 @@ geo-sonification/
 │   ├── raw/                              # GEE-exported CSVs (source data, do not delete)
 │   │   ├── SCHEMA.md                     # Data contract (fields, types, ranges)
 │   │   └── <continent>_grid.csv          # One CSV per continent (exported from GEE)
-│   └── cache/                            # Derived data (safe to delete, auto-rebuilt)
-│       ├── all_grids.json
-│       └── normalize.json
+│   ├── cache/                            # Derived data (safe to delete, auto-rebuilt)
+│   │   ├── all_grids.json
+│   │   └── normalize.json
+│   └── tiles/                            # PMTiles (built by scripts/build-tiles.js)
+│       └── grids.pmtiles
 ├── docs/                                 # Dev notes and milestone proposals
 ├── gee/
 │   ├── README_EXPORT.md                  # GEE export instructions

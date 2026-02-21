@@ -315,42 +315,181 @@ frontend/
 
 ---
 
-## 7. Phase 4: Second Data Source Integration (Plugin System Validation)
+## 7. Phase 4: Real-time Data Stream Pipeline + USGS Earthquake Integration
 
-**Goal:** Integrate a non-WorldCover data source to prove the plugin system works end-to-end.
+**Goal:** Build real-time data stream infrastructure and use USGS Earthquake as the first live data source, validating both the adapter plugin system and the streaming pipeline.
 
-### 7.1 Candidate Data Sources (Choose One)
+### 7.1 Why Combine "Second Data Source" and "Real-time Streaming"
 
-| Data Source | Format | temporalType | Integration Complexity |
-| ----------- | ------ | ------------ | ---------------------- |
-| PurpleAir (air quality) | JSON API | stream | Medium (requires API key, rate limiting) |
-| USGS Earthquake | GeoJSON feed | stream | Low (public, no auth required) |
-| User-uploaded CSV | CSV | static | Lowest (Phase 1 already has csv-generic) |
-| OpenSky (flights) | REST API | stream | Medium (public but rate-limited) |
+The original plan treated USGS Earthquake as a static GeoJSON one-time import to validate the plugin system. But USGS Earthquake is inherently a continuously updating event stream (new earthquakes every minute) — making it static is an artificial downgrade. Building the stream pipeline and the second data source together validates two things in one pass: whether the adapter interface is truly generic, and whether the real-time pipeline is reliable.
 
-**Recommendation: start with USGS Earthquake** — public GeoJSON feed, no authentication required, simple data structure (lat, lon, magnitude, depth, time), naturally a `stream` type, and validates time-window aggregation.
-
-### 7.2 New Files
+### 7.2 Real-time Stream Architecture
 
 ```
-server/adapters/usgs-earthquake.js           # USGS adapter
-server/adapters/__tests__/usgs-earthquake.test.js
+┌─────────────────────────────┐
+│    stream-scheduler.js      │  Manages poll cycles for all stream adapters
+│    ┌──────────────────┐     │
+│    │ USGS Adapter      │ ←── Poll every 60 seconds
+│    │ (future: FIRMS,   │     │
+│    │  OpenSky, ...)    │     │
+│    └────────┬─────────┘     │
+└─────────────┼───────────────┘
+              ▼
+┌─────────────────────────────┐
+│    time-window.js           │  Maintains sliding time windows per cellId
+│                             │  Aggregates events within window → current value
+│    Window width: configurable│  Expired events auto-cleaned
+│    Aggregation: count/mean/max│
+└─────────────┬───────────────┘
+              ▼
+    Spatial index append/update (reuses Phase 1.5's addCells)
+              ▼
+    ┌─────────┴──────────┐
+    ▼                    ▼
+  OSC push             WebSocket notify frontend
+  (data-change driven) (cell data update event)
 ```
 
-### 7.3 Max Integration Gap
+### 7.3 Two OSC Push Trigger Sources
 
-Phase 4 can proceed before Phase 3, but there is a dependency to be aware of: if a second data source adds new channels, Max's `crossfade_controller.js` still has a hardcoded 12-inlet configuration and cannot consume them. Two options:
+Before Phase 4, OSC push only fires when the user drags the map. Phase 4 adds a second trigger source:
 
-1. **Scope Phase 4 validation to the server side only** — verify that the new adapter ingests data, registers channels, and produces correct OSC `/ch/*` messages, without requiring Max to render them audibly.
-2. **Pull the minimal Max-side change forward** — make `crossfade_controller.js` read its inlet count from a configuration message (`/ch/count N`) before Phase 3 delivers the full web console.
+| Trigger Source | When | Behavior |
+| -------------- | ---- | -------- |
+| User interaction (existing) | Frontend sends viewport update | Query all data in current viewport, push to Max |
+| Data change (new) | Stream adapter fetches new data | Check if new data falls within current viewport; if so, push incremental update to Max |
 
-Option 1 is recommended to keep Phase 4 lightweight.
+Data-change-triggered pushes only send affected channel values (incremental), avoiding full viewport re-push. This prevents OSC flooding from high-frequency data sources.
 
-### 7.4 Effort Estimate
+### 7.4 Stream Adapter Interface (extends Phase 1's DataAdapter)
 
-- Adapter implementation: ~100 lines
-- Tests: ~60 lines
-- **Total: ~160 lines**
+```js
+/**
+ * @typedef {Object} StreamAdapter
+ * @extends DataAdapter
+ * @property {string} temporalType - Fixed to "stream"
+ * @property {number} pollIntervalMs - Poll interval (milliseconds)
+ * @property {number} windowMs - Time window width (milliseconds)
+ * @property {string} windowAggregate - Window aggregation operator: "count" | "mean" | "max" | "last"
+ * @property {(encoder: CellEncoder, precision: number) => Promise<DataRecord[]>} fetch
+ *   Fetch latest data and return DataRecord array (replaces static adapter's ingest)
+ */
+```
+
+### 7.5 USGS Earthquake Adapter
+
+```js
+// server/adapters/usgs-earthquake.js
+module.exports = {
+    id: 'usgs-earthquake',
+    name: 'USGS Real-time Earthquakes',
+    temporalType: 'stream',
+    pollIntervalMs: 60_000,        // Poll every 60 seconds
+    windowMs: 24 * 60 * 60_000,   // Retain last 24 hours of earthquakes
+    windowAggregate: 'max',        // Within same cell, take max magnitude
+    channels: [
+        { name: 'quake_mag',   label: 'Earthquake Magnitude', range: [0, 10], unit: 'Mw',    normalization: 'linear' },
+        { name: 'quake_depth', label: 'Earthquake Depth',     range: [0, 700], unit: 'km',   normalization: 'log' },
+        { name: 'quake_count', label: 'Earthquake Count',     range: [0, 50], unit: 'count', normalization: 'linear' },
+    ],
+    async fetch(encoder, precision) {
+        // GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson
+        // Parse features → encode each feature to H3 cellId → return DataRecord[]
+    },
+};
+```
+
+USGS provides multiple feed granularities: `all_hour` (last 1 hour), `all_day` (last 24 hours), `significant_month` (last 30 days significant earthquakes). The adapter can select based on configuration.
+
+### 7.6 Sliding Time Window Design
+
+```js
+// time-window.js core data structure
+// Each cellId maintains an event array, sorted by time
+
+{
+  "85283473fffffff": {
+    events: [
+      { timestamp: 1708500000000, channels: { quake_mag: 0.45, quake_depth: 0.12 } },
+      { timestamp: 1708503600000, channels: { quake_mag: 0.72, quake_depth: 0.35 } },
+    ],
+    aggregated: { quake_mag: 0.72, quake_depth: 0.35, quake_count: 0.04 }
+    //           ↑ max               ↑ max               ↑ count/range
+  }
+}
+
+// On each new event arrival or window slide:
+// 1. Delete expired events where timestamp < now - windowMs
+// 2. Recompute aggregated values
+// 3. If aggregated change > threshold, trigger incremental OSC push
+```
+
+### 7.7 New Files
+
+```
+server/
+├── stream-scheduler.js              # Poll scheduler: manages lifecycle of multiple stream adapters
+├── time-window.js                   # Sliding time window: event storage, expiry cleanup, aggregation
+├── adapters/
+│   └── usgs-earthquake.js           # USGS earthquake stream adapter
+├── __tests__/
+│   ├── stream-scheduler.test.js
+│   ├── time-window.test.js
+│   └── usgs-earthquake.test.js
+```
+
+### 7.8 Modified Files
+
+| File | Change | Notes |
+| ---- | ------ | ----- |
+| `server/index.js` | Initialize `stream-scheduler` at startup; register stream adapters; add `GET /api/streams` status endpoint | New startup logic |
+| `server/spatial.js` | `queryByH3()` results merge static data with time-window aggregated data | Query logic extension |
+| `server/osc.js` | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push | New push path |
+| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD` configuration | New config entries |
+
+### 7.9 New API Endpoints
+
+```
+GET /api/streams
+Response:
+{
+  "streams": [
+    {
+      "id": "usgs-earthquake",
+      "name": "USGS Real-time Earthquakes",
+      "status": "running",           // "running" | "paused" | "error"
+      "pollIntervalMs": 60000,
+      "lastFetch": "2026-02-21T15:30:00Z",
+      "lastFetchCount": 12,          // Events fetched in last poll
+      "windowMs": 86400000,
+      "activeCells": 847             // Cells with data in current window
+    }
+  ]
+}
+
+POST /api/streams/:id/pause     # Pause polling
+POST /api/streams/:id/resume    # Resume polling
+```
+
+### 7.10 Sound Mapping Suggestions (USGS Earthquake → Max)
+
+| Channel | Suggested Mapping | Sound Effect |
+| ------- | ----------------- | ------------ |
+| `quake_mag` | Icon trigger intensity + probability | Higher magnitude → more frequent triggers, louder sound |
+| `quake_depth` | Pitch / low-pass filter cutoff frequency | Shallow quake = high-pitched sharp, deep quake = muffled low-frequency |
+| `quake_count` | Background texture density | Dense earthquake clusters = sustained granular texture |
+
+These mappings can be freely adjusted by the user once Phase 3 (audio config console) is complete. During Phase 4, a hardwired demo in the Max patch is sufficient.
+
+### 7.11 Effort Estimate
+
+- `stream-scheduler.js` (scheduler + lifecycle management): ~150 lines
+- `time-window.js` (sliding window + aggregation + expiry): ~180 lines
+- `usgs-earthquake.js` (adapter + HTTP fetch + parsing): ~120 lines
+- `osc.js` incremental push: ~80 lines
+- Tests (three modules): ~250 lines
+- Existing file modifications: ~100 lines
+- **Total: ~880 lines, of which ~780 new and ~100 modified**
 
 ---
 
@@ -363,11 +502,17 @@ Option 1 is recommended to keep Phase 4 lightweight.
 | 1.5: Runtime Import | ~420 lines | ~90 lines | Medium (runtime state mutation) | Phase 1 |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1 |
 | 3: Config + Console | ~650 lines | ~100 lines | Low (new feature) | Phase 1 |
-| 4: Second Data Source | ~160 lines | 0 | Very low (validation) | Phase 1 |
+| 4: Real-time Stream + USGS Earthquake | ~780 lines | ~100 lines | Medium (real-time state + external dependency) | Phase 1 + Phase 1.5 |
 
-Phases 1.5, 2, 3, and 4 can be worked on in parallel or in any order. **Phase 0 + Phase 1 is the critical path.**
+**Total: ~3420 lines of new code, ~720 lines modified.**
 
-**Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → Phase 1 → Phase 1.5 → Phase 2. Once all four phases are complete, a vendor can upload a CSV via `POST /api/import` and the frontend immediately displays new H3 hexagonal grids for the imported data.
+Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depends on Phase 1.5 (runtime spatial index append capability). **Phase 0 + Phase 1 is the critical path.**
+
+**Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~2500 lines).
+
+**Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3100 lines; frontend still uses old rendering, but OSC/sound updates in real time).
+
+**All phases complete:** ~3420 lines new + ~720 lines modified.
 
 ---
 
@@ -375,7 +520,9 @@ Phases 1.5, 2, 3, and 4 can be worked on in parallel or in any order. **Phase 0 
 
 - **This week:** Phase 0 — pure addition, does not touch existing code, safe to run in parallel with the milestone demo.
 - **After the next milestone:** Phase 1 — the largest refactor, requires comprehensive testing.
-- **Immediately after Phase 1:** Phase 1.5 — runtime import pipeline, opens the data path for Phase 2's frontend rendering.
-- **Before end of course:** Phase 2 — frontend hexagonal rendering; at this point the full "vendor uploads CSV → frontend renders immediately" pipeline is operational.
-- **Before end of course (if time permits):** Phase 4 — integrate USGS Earthquake to validate the stream data type.
+- **Immediately after Phase 1:** Phase 1.5 — runtime import pipeline, opens the data path for all subsequent phases.
+- **Before end of course:** Phase 2 or Phase 4, depending on desired showcase:
+  - **Choose Phase 2** → Showcase "hexagonal map + multi-source data visualization" (strong visual impact)
+  - **Choose Phase 4** → Showcase "real-time earthquake data driving sound changes" (strong auditory impact)
+  - If time permits, do both.
 - **After the course ends:** Phase 3 — the console is a nice-to-have that does not affect core functionality.

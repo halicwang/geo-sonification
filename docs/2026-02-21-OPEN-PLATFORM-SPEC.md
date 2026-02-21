@@ -60,7 +60,7 @@ All data within the system is unified into the following structure (JSON represe
 | `stream` | Real-time updates (seconds to hours) | Sliding time-window aggregation | Flight tracks, real-time air quality |
 | `timeseries` | Historical time series | Time-slice playback | Annual forest loss |
 
-Phase 1 implements `static` only. `stream` and `timeseries` are reserved for future extension.
+Phase 1 implements `static`. Phase 4 implements `stream` (poll scheduler + sliding time window). `timeseries` is reserved for future extension.
 
 ### 3.3 Internal Exchange Format
 
@@ -214,25 +214,47 @@ Each data adapter is responsible for:
 
 ### 5.3 Adapter Lifecycle (Stream / Timeseries Types)
 
-For `static` adapters, the `ingest()` method is called once at startup. For `stream` and `timeseries` adapters (Phase 4+), additional lifecycle methods are needed:
+For `static` adapters, the `ingest()` method is called once at startup. For `stream` adapters (Phase 4), the adapter extends `DataAdapter` with streaming-specific properties and a `fetch()` method that replaces `ingest()`:
 
 ```javascript
 /**
- * @typedef {Object} StreamAdapterExtension
+ * @typedef {Object} StreamAdapter
+ * @extends DataAdapter
+ * @property {string} temporalType - Fixed to "stream"
+ * @property {number} pollIntervalMs - Poll interval (milliseconds)
+ * @property {number} windowMs - Time window width (milliseconds)
+ * @property {string} windowAggregate - Window aggregation operator: "count" | "mean" | "max" | "last"
+ * @property {(encoder: CellEncoder, precision: number) => Promise<DataRecord[]>} fetch
+ *   Fetch latest data and return DataRecord array (replaces static adapter's ingest)
+ */
+```
+
+The `stream-scheduler` manages the lifecycle of all stream adapters:
+
+```javascript
+/**
+ * @typedef {Object} StreamLifecycle
  * @property {() => Promise<void>} start - Begin polling / open connection
  * @property {() => Promise<void>} stop - Gracefully shut down
+ * @property {() => Promise<void>} pause - Temporarily suspend polling
+ * @property {() => Promise<void>} resume - Resume polling after pause
  * @property {(error: Error) => void} onError - Error callback (log, retry, or degrade)
- * @property {number} pollIntervalMs - Polling interval in milliseconds (for HTTP poll adapters)
  * @property {number} maxRetries - Maximum consecutive failures before giving up
  */
 ```
 
-Error handling strategy:
+**Sliding time window:** Each stream adapter declares a `windowMs` (e.g., 24 hours for earthquakes). The `time-window` module maintains per-cell event arrays sorted by time. On each new event arrival or window tick:
+
+1. Delete expired events where `timestamp < now - windowMs`
+2. Recompute aggregated values using the adapter's `windowAggregate` operator
+3. If aggregated change exceeds `STREAM_CHANGE_THRESHOLD`, trigger incremental OSC push
+
+**Error handling strategy:**
 - On transient failure (network timeout, 5xx): retry with exponential backoff up to `maxRetries`.
 - On permanent failure (4xx, malformed data): log the error, emit an OSC `/adapter/error` message, and continue operating with stale data.
 - On adapter crash: the channel registry keeps the last known values; the adapter can be restarted without affecting other adapters.
 
-Phase 1 only implements `static` adapters; these lifecycle methods are reserved but not required until `stream` adapters are introduced.
+Phase 1 only implements `static` adapters. Phase 4 introduces `stream` adapters with full lifecycle management. `timeseries` adapters are reserved for future extension.
 
 ### 5.4 WorldCover Adapter (Existing System Refactor)
 
@@ -404,7 +426,7 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 | GeoJSON | P0 | 1 | Internal canonical format, direct consumption |
 | KML | P1 | 2 | Integration with Fog of World / Google Earth ecosystem |
 | GPX | P1 | 2 | Integration with track-based apps (FR24, etc.) |
-| API adapter (HTTP poll / WebSocket) | P2 | 3 | Integration with real-time data sources (air quality, flights, etc.) |
+| API adapter (HTTP poll / WebSocket) | P2 | 4 | Integration with real-time data sources (earthquakes, air quality, flights, etc.) |
 
 ---
 

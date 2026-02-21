@@ -8,6 +8,22 @@ This document defines the technical specification for evolving Geo-Sonification 
 
 ---
 
+## Motivation and Use Cases
+
+Geo-Sonification is an **auditory monitoring layer for geographic situational awareness**. It converts continuous, multi-source spatial data into low-attention ambient sound cues that a human operator can absorb without diverting visual focus from other tasks.
+
+**Primary scenario — Air quality monitoring:** An operations center monitors regional PM2.5 levels from a network of sensors (e.g., PurpleAir). Each sensor reading is encoded to an H3 cell and fed into the platform via the adapter pipeline. As the operator pans the map, ambient tonal shifts reflect the spatial gradient of pollution levels across the viewport. When any cell crosses an AQI threshold, an auditory icon fires immediately — no dashboard tab-switching or visual scanning required. Land cover data provides a semantic context layer (urban, forest, water) so the operator hears both the environmental baseline and the anomaly.
+
+**Additional use cases:**
+- **Wildfire event alerting** — real-time hotspot streams trigger earcon alerts as fire fronts advance into the viewport; ambient intensity tracks active fire density.
+- **Maritime patrol** — AIS vessel density sonified as continuous texture; anomalous clustering or route deviation triggers alerts.
+- **Power grid outage monitoring** — outage event feeds mapped to H3 cells; auditory cues track affected area expansion and restoration.
+- **Accessibility** — non-visual exploration of geographic data for visually impaired users.
+
+**Platform value proposition:** Data sources are pluggable (adapters), audio outputs are pluggable (OSC to any synthesis engine), channel-to-sound mappings are user-configurable, and the system natively supports both real-time streams and static/offline batches. This spec defines the data model and extension points that make these use cases possible.
+
+---
+
 ## 1. Design Goals
 
 1. **Data-source agnostic:** Any data source that can provide `(lat, lon, value)` tuples can be integrated — not limited to ESA WorldCover.
@@ -39,11 +55,11 @@ All data within the system is unified into the following structure (JSON represe
 {
   "cellId": "85283473fffffff", // H3 hexagonal Cell ID (see §4)
   "source": "worldcover",      // Data source identifier
-  "channels": {                // Key-value pairs: channel name → normalized value (0–1)
-    "tree": 0.42,
-    "urban": 0.15,
-    "bare": 0.03
-    // ... each data source defines its own channel set
+  "channels": {                // Key-value pairs: namespaced channel key → normalized value (0–1)
+    "worldcover.tree": 0.42,
+    "worldcover.urban": 0.15,
+    "worldcover.bare": 0.03
+    // ... each data source defines its own channel set; keys are sourceId.channelName (see §6.2)
   },
   "timestamp": null,           // ISO 8601 or null (static data)
   "temporalType": "static",   // "static" | "stream" | "timeseries"
@@ -202,10 +218,17 @@ Each data adapter is responsible for:
  * @property {string} name - Display name
  * @property {ChannelManifest[]} channels - Channel manifest for this adapter
  * @property {string} temporalType - "static" | "stream" | "timeseries"
+ * @property {string} [version] - Semantic version of this adapter (e.g., "1.0.0")
+ * @property {Object} [requiredConfig] - Configuration keys this adapter needs at registration
+ *   (e.g., { apiKey: "string", region: "string" }). Validated by the adapter framework at startup.
  * @property {(rawData: any, encoder: CellEncoder, precision: number) => DataRecord[]} ingest
  * @property {Object} [importFormats] - Supported import formats and their parsers
  */
 // For `stream` type adapters, see the extended StreamAdapter interface in §5.3.
+//
+// The fields `id`, `version`, `channels`, `temporalType`, and `requiredConfig` together form
+// the **adapter manifest** — the minimum metadata needed for a registry or marketplace to list,
+// validate, and instantiate an adapter without running it.
 
 /**
  * @typedef {Object} ChannelManifest
@@ -329,45 +352,60 @@ Replaces the existing hardcoded 11 ESA classes. At startup, each loaded adapter 
 // Registry internal structure
 {
   channels: [
-    { index: 0, name: 'tree',       source: 'worldcover', ... },
-    { index: 1, name: 'shrub',      source: 'worldcover', ... },
+    { index: 0,  key: 'worldcover.tree',              source: 'worldcover',    name: 'tree',            ... },
+    { index: 1,  key: 'worldcover.shrub',              source: 'worldcover',    name: 'shrub',           ... },
     // ...
-    { index: 11, name: 'nightlight', source: 'worldcover', ... },
-    { index: 14, name: 'pm25',       source: 'purpleair', ... },
-    { index: 15, name: 'flight_density', source: 'flightradar24', ... },
+    { index: 11, key: 'worldcover.nightlight',         source: 'worldcover',    name: 'nightlight',      ... },
+    { index: 14, key: 'purpleair.pm25',                source: 'purpleair',     name: 'pm25',            ... },
+    { index: 15, key: 'flightradar24.flight_density',  source: 'flightradar24', name: 'flight_density',  ... },
   ],
   busMapping: {
-    // Channel → audio bus mapping (user-configurable)
-    'tree_bus':  ['tree', 'shrub', 'grass', 'wetland', 'mangrove', 'moss'],
-    'crop_bus':  ['crop'],
-    'urban_bus': ['urban'],
-    'bare_bus':  ['bare'],
-    'water_bus': ['snow', 'water'],
+    // Bus mapping uses namespaced keys
+    'nature_bus': ['worldcover.tree', 'worldcover.shrub', 'worldcover.grass', 'worldcover.wetland', 'worldcover.mangrove', 'worldcover.moss'],
+    'crop_bus':   ['worldcover.crop'],
+    'urban_bus':  ['worldcover.urban'],
+    'bare_bus':   ['worldcover.bare'],
+    'water_bus':  ['worldcover.snow', 'worldcover.water'],
   }
 }
 ```
 
-### 6.2 Relationship with the OSC Protocol
+### 6.2 Channel Namespace Strategy
+
+When multiple adapters coexist, bare channel names (e.g., `tree`, `temperature`) will inevitably collide. The registry uses **namespaced keys** to eliminate collisions structurally.
+
+**Internal key format:** `sourceId.channelName` (dot-separated). The `sourceId` is the adapter's `id` property; `channelName` is the channel's `name` from its manifest. Examples: `worldcover.tree`, `purpleair.pm25`, `usgs_earthquake.quake_mag`.
+
+This namespaced key is the canonical identifier used in:
+- The channel registry (the `key` field above)
+- The `DataRecord.channels` object (see §3.1)
+- Bus mapping configuration (see §7.1)
+
+**Display aliases:** The Phase 3 web console allows users to assign short aliases for frequently used channels (e.g., display `purpleair.pm25` as `pm25`). Aliases are cosmetic — they appear in the console UI only and do not affect OSC output, bus mapping keys, or internal data. Alias mappings are stored in `audio_mapping.json` under a `channelAliases` key.
+
+**Backward compatibility:** The WorldCover adapter uses `id: 'worldcover'`, so its channels become `worldcover.tree`, `worldcover.shrub`, etc. internally. For backward-compatible OSC output (`/lc/*` addresses), the mapping in `osc_schema.js` strips the namespace prefix — no Max patch changes required.
+
+### 6.3 Relationship with the OSC Protocol
 
 **Phase 1 (backward-compatible):** When only the WorldCover adapter is loaded, OSC output is fully identical to the current format — `/lc/10` through `/lc/100`, plus `/nightlight`, `/population`, and `/forest`. The Max patch requires no changes.
 
 **Phase 2 (generic mode):** When multiple adapters are loaded, generic channel addresses are used:
 
 ```
-/ch/0   0.42    (tree)
-/ch/1   0.08    (shrub)
+/ch/0   0.42    (worldcover.tree)
+/ch/1   0.08    (worldcover.shrub)
 ...
-/ch/14  0.65    (pm25)
-/ch/15  0.12    (flight_density)
+/ch/14  0.65    (purpleair.pm25)
+/ch/15  0.12    (flightradar24.flight_density)
 ```
 
 A one-time channel registration message is sent at startup so Max knows what each index represents:
 
 ```
-/ch/register  0 "tree" "worldcover" "distribution"
-/ch/register  1 "shrub" "worldcover" "distribution"
+/ch/register  0 "worldcover.tree" "worldcover" "distribution"
+/ch/register  1 "worldcover.shrub" "worldcover" "distribution"
 ...
-/ch/register  14 "pm25" "purpleair" "metric"
+/ch/register  14 "purpleair.pm25" "purpleair" "metric"
 ```
 
 The fourth argument (`group`) is optional — omitting it defaults to `"metric"`. This allows downstream consumers (Max patch, web console) to distinguish distribution channels (values sum to ~1) from independent metric channels.
@@ -387,14 +425,14 @@ Users define channel-to-audio mapping via a JSON configuration file:
   "buses": [
     {
       "name": "nature",
-      "channels": ["tree", "shrub", "grass", "wetland", "mangrove", "moss"],
+      "channels": ["worldcover.tree", "worldcover.shrub", "worldcover.grass", "worldcover.wetland", "worldcover.mangrove", "worldcover.moss"],
       "foldMethod": "sum",           // "sum" | "max" | "weighted"
       "sample": "samples/ambience/tree.wav",
       "volume": { "min": 0.0, "max": 1.0 }
     },
     {
       "name": "city",
-      "channels": ["urban", "nightlight"],
+      "channels": ["worldcover.urban", "worldcover.nightlight"],
       "foldMethod": "max",
       "sample": "samples/ambience/urban.wav",
       "volume": { "min": 0.0, "max": 1.0 }
@@ -403,7 +441,7 @@ Users define channel-to-audio mapping via a JSON configuration file:
   ],
   "icons": [
     {
-      "triggerChannel": "tree",
+      "triggerChannel": "worldcover.tree",
       "threshold": 0.3,
       "cooldownMs": 3000,
       "samples": ["samples/icons/tree/bird1.wav", "samples/icons/tree/bird2.wav"]
@@ -444,9 +482,49 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 
 ---
 
-## 9. Compatibility and Migration Strategy
+## 9. Non-Functional Requirements Roadmap
 
-### 9.1 Existing grid_id to H3 Mapping
+Phases 0–4 focus on functional capabilities. The items below are not in scope for the current migration plan but are documented here as a roadmap for production and enterprise deployment.
+
+### 9.1 Authentication and Isolation
+
+Current phases assume a single-user, local-network deployment. For multi-tenant or public-facing deployment, the following endpoints require authentication and authorization:
+
+- `POST /api/import` — data ingestion
+- `POST /api/streams/:id/pause|resume` — stream lifecycle control
+- `GET /console` — audio mapping configuration UI
+
+Roadmap items: API key or JWT bearer token validation middleware; per-tenant adapter isolation (each tenant sees only their own imported data and stream adapters); audit log for data imports and configuration changes.
+
+### 9.2 Resource Governance
+
+- **Upload limits** for `POST /api/import`: maximum file size (default 50 MB), maximum row count (default 500,000), maximum column count (default 100). Enforced before parsing begins.
+- **Stream adapter caps:** `MAX_EVENTS_PER_CELL` and `MAX_STREAM_CELLS` (defined in §5.3). Additionally: per-adapter memory high-water mark monitoring.
+- **Per-source rate limiting:** limit `POST /api/import` to N requests per minute per source IP. For stream adapters, enforce a minimum `pollIntervalMs` floor (e.g., 10 seconds) to prevent upstream API abuse.
+
+### 9.3 Frontend Dependency Supply Chain
+
+Phase 2 considers loading `h3-js` (~1.2 MB WASM) in the frontend via CDN (`unpkg.com`). Enterprise environments may reject external CDN links due to CSP policies, air-gapped networks, or supply chain audit requirements.
+
+**Recommendation:** Prefer the server-computed approach (`/api/h3` returning pre-computed GeoJSON) as the default. If client-side h3-js is needed, vendor the file to `frontend/vendor/h3-js.min.js` and serve from the same origin rather than fetching from a third-party CDN at runtime.
+
+### 9.4 Observability
+
+For a platform targeting monitoring and situational awareness use cases, the system itself must be observable. Key metrics to expose via `GET /api/metrics` or structured log output:
+
+- **Viewport pipeline latency:** time from WebSocket viewport message receipt to OSC send completion (p50, p95, p99).
+- **Active cells:** number of H3 cells in the spatial index, broken down by source adapter.
+- **OSC send rate:** messages per second to Max, broken down by address prefix (`/lc/*`, `/ch/*`, `/adapter/*`).
+- **Per-adapter health:** for each stream adapter — last successful fetch time, fetch latency (p50, p95), error count, current status (running / paused / failed).
+- **Import throughput:** for `POST /api/import` — parse time, encode time, total cells ingested.
+
+Implementation: lightweight in-process metrics accumulator (no external dependency such as Prometheus required at this stage). JSON endpoint for programmatic access; structured logs for integration with external monitoring systems.
+
+---
+
+## 10. Compatibility and Migration Strategy
+
+### 10.1 Existing grid_id to H3 Mapping
 
 The existing `grid_id` format is `"lon_-55.0_lat_-10.0"` — each ID corresponds to a 0.5-degree x 0.5-degree grid cell.
 
@@ -460,13 +538,13 @@ Note: 0.5-degree squares and H3 hexagons have different geometries, so no exact 
 
 During the transition period, the `GridCell` type retains both `grid_id` (legacy) and `cellId` (new), with downstream consumers migrating incrementally.
 
-### 9.2 OSC Backward Compatibility
+### 10.2 OSC Backward Compatibility
 
 Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining all existing `/lc/*` addresses. When only the WorldCover adapter is loaded, both address sets are sent simultaneously. The Max patch requires no immediate changes.
 
 ---
 
-## 10. Glossary
+## 11. Glossary
 
 | Term | Definition |
 | ---- | ---------- |
@@ -477,3 +555,6 @@ Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining
 | Adapter | A module that converts an external data source into DataRecords |
 | Fold | The operation of combining multiple channel values into a single bus volume |
 | Canonical | The unified internal data representation format |
+| Namespace | Dot-separated prefix (`sourceId.channelName`) that uniquely identifies a channel across adapters |
+| Alias | A user-facing display name mapped to a namespaced channel key |
+| Adapter Manifest | The combination of `id`, `version`, `channels`, `temporalType`, and `requiredConfig` that describes an adapter to the registry |

@@ -3,6 +3,7 @@
 **Author:** Zixiao Wang (Halic)
 **Date:** February 21, 2026
 **Based on:** OPEN-PLATFORM-SPEC.md — file-level change list and phase breakdown. Each phase preserves existing demo functionality on completion.
+**Product motivation:** See OPEN-PLATFORM-SPEC.md "Motivation and Use Cases" for target scenarios (air quality monitoring, wildfire alerting, etc.) and platform value proposition.
 
 ---
 
@@ -87,7 +88,7 @@ server/
 │   ├── adapter-interface.js    # Adapter interface JSDoc + validation utilities
 │   ├── worldcover.js           # WorldCover adapter (refactored from data-loader + landcover)
 │   └── csv-generic.js          # Generic CSV adapter (lat/lon + arbitrary columns)
-├── channel-registry.js         # Channel registry: dynamic registration, index assignment, bus mapping
+├── channel-registry.js         # Channel registry: namespaced keys (sourceId.channelName), index assignment, bus mapping
 ├── __tests__/
 │   ├── worldcover-adapter.test.js
 │   ├── csv-generic-adapter.test.js
@@ -124,11 +125,20 @@ scripts/
 3. During the transition period, `GridCell` retains both `grid_id` (legacy) and `cellId` (H3) so downstream consumers can migrate incrementally.
 4. A one-time validation script compares old spatial query results against new H3 query results to confirm data integrity.
 
-### 3.5 Effort Estimate
+### 3.5 Non-Functional Requirements (Phase 1 Scope)
+
+Phase 1 introduces the adapter framework, and Phase 1.5 adds `POST /api/import`. Resource governance hooks should be wired in from the start:
+
+- **`import-manager.js`:** Enforce file size, row count, and column count limits (configurable in `config.js`) before parsing begins.
+- **`channel-registry.js`:** Enforce a maximum channel count per adapter and globally, preventing a single malformed CSV from registering hundreds of channels.
+
+Authentication, observability, and supply chain concerns are out of scope for Phase 1. See OPEN-PLATFORM-SPEC.md §9 for the full non-functional requirements roadmap.
+
+### 3.6 Effort Estimate
 
 - Adapter framework + WorldCover adapter: ~300 lines
 - csv-generic adapter: ~150 lines
-- Channel registry: ~200 lines
+- Channel registry: ~200 lines (includes namespace key generation and bare-name reverse lookup for backward-compat OSC)
 - Tests: ~250 lines
 - Existing file modifications: ~200 lines (primarily splitting and thin wrappers)
 - H3 migration validation script (`scripts/validate-h3-migration.js`): ~60 lines
@@ -160,14 +170,14 @@ Vendor uploads CSV ──→ POST /api/import ──→ csv-generic adapter pars
   "cellId": "85283473fffffff",
   "channels": {
     // From worldcover adapter
-    "tree": 0.42, "urban": 0.15, "bare": 0.03,
+    "worldcover.tree": 0.42, "worldcover.urban": 0.15, "worldcover.bare": 0.03,
     // From vendor-uploaded air_quality.csv
-    "pm25": 0.65, "temperature": 0.38
+    "air_quality.pm25": 0.65, "air_quality.temperature": 0.38
   }
 }
 ```
 
-If two data sources declare a same-named channel (conflict), the import is **rejected** with a 400 error requiring the user to rename conflicting columns. The error response lists the conflicting channel names and their existing sources. This prevents silent data corruption of active pipelines (e.g., a vendor CSV with a `tree` column accidentally overwriting WorldCover's `tree` channel).
+Channel names are automatically namespaced by source: the internal key is `sourceId.channelName` (see OPEN-PLATFORM-SPEC.md §6.2). When a user uploads `air_quality.csv`, its columns become `air_quality.pm25`, `air_quality.temperature`, etc. This eliminates same-name collisions structurally — no reject-and-rename workflow needed. The only remaining conflict case is uploading a file with the **same source ID** as an existing import (e.g., re-uploading `air_quality.csv`), which **replaces** the previous import for that source (with a confirmation warning in the API response).
 
 **Data persistence:** Uploaded CSVs are saved to the `data/imports/` directory, with metadata recorded in `data/imports/manifest.json` (filename, adapter ID, import timestamp, resolution). On server restart, all previously imported data is automatically reloaded.
 
@@ -214,7 +224,7 @@ Response (200):
 {
   "status": "ok",
   "source": "air_quality",           // Derived from filename
-  "channels": ["pm25", "temperature", "humidity"],
+  "channels": ["air_quality.pm25", "air_quality.temperature", "air_quality.humidity"],
   "cellCount": 1247,
   "resolution": 4,
   "warnings": []                     // Non-fatal warnings (e.g., column type coercion, empty rows skipped)

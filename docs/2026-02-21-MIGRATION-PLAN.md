@@ -61,7 +61,7 @@ Requires approval per CLAUDE.md ("Do not introduce new npm dependencies without 
 
 | File | Change | Notes |
 | ---- | ------ | ----- |
-| `server/config.js` | Add `DEFAULT_H3_RESOLUTION = 3` | Coexists with existing `GRID_SIZE` |
+| `server/config.js` | Add `DEFAULT_H3_RESOLUTION = 4` | Coexists with existing `GRID_SIZE` |
 | `server/types.js` | Add `DataRecord`, `ChannelManifest`, `CellEncoder` typedefs | No impact on existing types |
 | `server/package.json` | Add `h3-js` dependency | — |
 
@@ -69,7 +69,7 @@ Requires approval per CLAUDE.md ("Do not introduce new npm dependencies without 
 
 - `h3-encoder.js`: ~100 lines (encode/decode/parent/neighbors/enumerateBounds, mostly delegated to h3-js)
 - `cell-encoder.js`: ~40 lines (interface documentation + factory function)
-- Tests: ~120 lines (encode round-trip, viewport enumeration, neighbors, cross-resolution)
+- Tests: ~120 lines (encode round-trip, viewport enumeration, neighbors, cross-resolution, coordinate order regression — verify `polygonToCells()` uses `[lon, lat]` and `latLngToCell()` uses `(lat, lon)` to catch h3-js version-specific convention changes)
 - config/types changes: ~30 lines
 - **Total: ~290 lines of new code, 0 lines of existing code modified**
 
@@ -108,7 +108,7 @@ server/
 
 ### 3.3 Key Design Constraints
 
-- **The WorldCover adapter must produce OSC data identical to the current output** — enforced by regression tests.
+- **The WorldCover adapter must produce OSC data identical to the current output** — including `/lc/10`–`/lc/100`, `/nightlight`, `/population`, and `/forest` — enforced by regression tests.
 - The generic CSV adapter at this stage only needs to import data and expose channels; full audio mapping is not required.
 - When only WorldCover is loaded, the channel registry behaves identically to the hardcoded 11-class system.
 
@@ -164,11 +164,15 @@ Vendor uploads CSV ──→ POST /api/import ──→ csv-generic adapter pars
 }
 ```
 
-If two data sources declare a same-named channel (conflict), a "last-write-wins" strategy is used, and a warning is returned in the response.
+If two data sources declare a same-named channel (conflict), the import is **rejected** with a 400 error requiring the user to rename conflicting columns. The error response lists the conflicting channel names and their existing sources. This prevents silent data corruption of active pipelines (e.g., a vendor CSV with a `tree` column accidentally overwriting WorldCover's `tree` channel).
 
 **Data persistence:** Uploaded CSVs are saved to the `data/imports/` directory, with metadata recorded in `data/imports/manifest.json` (filename, adapter ID, import timestamp, resolution). On server restart, all previously imported data is automatically reloaded.
 
-### 4.3 New Files
+### 4.3 New Dependency
+
+`multer` or `busboy` (multipart/form-data parsing). Express does not natively handle `multipart/form-data`. Requires approval per CLAUDE.md. Recommended: `multer` (~50 KB, widely used, Express-native middleware).
+
+### 4.4 New Files
 
 ```
 server/
@@ -180,7 +184,7 @@ data/
 │   └── manifest.json                # Import metadata record
 ```
 
-### 4.4 Modified Files
+### 4.5 Modified Files
 
 | File | Change | Notes |
 | ---- | ------ | ----- |
@@ -189,7 +193,7 @@ data/
 | `server/channel-registry.js` | Add `registerRuntime(adapter)` method to support runtime channel addition; trigger WebSocket notification | Extends Phase 1 registry |
 | `server/osc_schema.js` | Add `/ch/reload` message address (notifies Max that the channel list has changed) | Backward-compatible |
 
-### 4.5 API Design
+### 4.6 API Design
 
 ```
 POST /api/import
@@ -207,7 +211,7 @@ Response (200):
   "source": "air_quality",           // Derived from filename
   "channels": ["pm25", "temperature", "humidity"],
   "cellCount": 1247,
-  "resolution": 3,
+  "resolution": 4,
   "warnings": []                     // Channel name conflicts reported here
 }
 
@@ -218,7 +222,7 @@ Response (400):
 }
 ```
 
-### 4.6 Complete Import Flow
+### 4.7 Complete Import Flow
 
 1. Vendor uploads CSV via `POST /api/import`
 2. Server parses with `csv-generic` adapter (identifies `lat`/`lon` columns; remaining numeric columns auto-register as channels)
@@ -231,7 +235,7 @@ Response (400):
 9. `/ch/register` and `/ch/reload` are sent to Max via OSC
 10. Frontend receives notification, re-requests `/api/config` for the latest channel list, and refreshes rendering
 
-### 4.7 Effort Estimate
+### 4.8 Effort Estimate
 
 - `import-manager.js` (import pipeline + persistence + reload): ~200 lines
 - `POST /api/import` endpoint + multipart handling: ~80 lines
@@ -361,6 +365,8 @@ Before Phase 4, OSC push only fires when the user drags the map. Phase 4 adds a 
 
 Data-change-triggered pushes only send affected channel values (incremental), avoiding full viewport re-push. This prevents OSC flooding from high-frequency data sources.
 
+**Per-client viewport caching:** To support data-change push, the server must cache each WebSocket client's current viewport (`lastViewport`). When new stream data arrives, each client's `lastViewport` is checked to determine whether an incremental push is needed. This is a new per-connection state requirement — add a `lastViewport` field to the existing per-client state (alongside `createDeltaState()` etc.).
+
 ### 7.4 Stream Adapter Interface (extends Phase 1's DataAdapter)
 
 ```js
@@ -424,6 +430,8 @@ USGS provides multiple feed granularities: `all_hour` (last 1 hour), `all_day` (
 // 3. If aggregated change > threshold, trigger incremental OSC push
 ```
 
+**Memory safeguards:** Add `MAX_EVENTS_PER_CELL` (default: 1000) and `MAX_STREAM_CELLS` (default: 50000) configuration in `config.js`. When a cell exceeds `MAX_EVENTS_PER_CELL`, the oldest events are evicted regardless of window expiry. When total active cells exceed `MAX_STREAM_CELLS`, the least-recently-updated cells are evicted. These limits prevent unbounded memory growth from high-frequency or wide-window data sources.
+
 ### 7.7 New Files
 
 ```
@@ -442,10 +450,10 @@ server/
 
 | File | Change | Notes |
 | ---- | ------ | ----- |
-| `server/index.js` | Initialize `stream-scheduler` at startup; register stream adapters; add `GET /api/streams` status endpoint | New startup logic |
+| `server/index.js` | Initialize `stream-scheduler` at startup; register stream adapters; add `GET /api/streams` status endpoint; store `lastViewport` per WebSocket connection (update on each viewport message) for data-change-driven incremental push | New startup logic + per-client state |
 | `server/spatial.js` | `queryByH3()` results merge static data with time-window aggregated data | Query logic extension |
 | `server/osc.js` | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push | New push path |
-| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD` configuration | New config entries |
+| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS` | New config entries |
 
 ### 7.9 New API Endpoints
 
@@ -471,7 +479,15 @@ POST /api/streams/:id/pause     # Pause polling
 POST /api/streams/:id/resume    # Resume polling
 ```
 
-### 7.10 Sound Mapping Suggestions (USGS Earthquake → Max)
+### 7.10 Stream Scheduler Error Recovery
+
+- **Transient failure** (network timeout, 5xx): exponential backoff starting at `pollIntervalMs`, capped at 5 minutes, up to `maxRetries` (default: 10) consecutive failures.
+- **`maxRetries` exceeded:** adapter status transitions to `"error"`, polling stops, error is reported via `GET /api/streams` and logged. Manual `POST /api/streams/:id/resume` required to restart.
+- **Permanent failure** (4xx, malformed response): log, set status `"error"`, stop polling.
+- **Server startup with unreachable network:** stream adapters start in `"error"` status and retry on manual resume.
+- All error states are visible via `GET /api/streams` (the `"error"` status already defined in §7.9).
+
+### 7.11 Sound Mapping Suggestions (USGS Earthquake → Max)
 
 | Channel | Suggested Mapping | Sound Effect |
 | ------- | ----------------- | ------------ |
@@ -481,7 +497,7 @@ POST /api/streams/:id/resume    # Resume polling
 
 These mappings can be freely adjusted by the user once Phase 3 (audio config console) is complete. During Phase 4, a hardwired demo in the Max patch is sufficient.
 
-### 7.11 Effort Estimate
+### 7.12 Effort Estimate
 
 - `stream-scheduler.js` (scheduler + lifecycle management): ~150 lines
 - `time-window.js` (sliding window + aggregation + expiry): ~180 lines
@@ -507,6 +523,8 @@ These mappings can be freely adjusted by the user once Phase 3 (audio config con
 **Total: ~3420 lines of new code, ~720 lines modified.**
 
 Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depends on Phase 1.5 (runtime spatial index append capability). **Phase 0 + Phase 1 is the critical path.**
+
+**`spatial.js` modification ordering:** Phases 1, 1.5, and 4 all modify `spatial.js`. To avoid merge conflicts, apply changes in order: Phase 1 adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does *not* modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
 
 **Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~2500 lines).
 

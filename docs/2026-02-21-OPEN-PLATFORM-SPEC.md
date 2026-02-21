@@ -25,6 +25,8 @@ This document defines the technical specification for evolving Geo-Sonification 
 - Elevation is optional, stored as a third dimension: `[lon, lat, alt]`.
 - All import adapters must perform coordinate conversion at the entry point.
 
+> **Note on parameter vs. storage order:** The `[lon, lat]` convention applies to coordinate *arrays* and GeoJSON output. Function call signatures (h3-js `latLngToCell()`, `CellEncoder.encode()`) use the geographic convention `(lat, lon)`. Callers must be aware of the difference — arrays are `[lon, lat]`, function parameters are `(lat, lon)`.
+
 ---
 
 ## 3. Canonical Internal Representation
@@ -66,7 +68,7 @@ Phase 1 implements `static`. Phase 4 implements `stream` (poll scheduler + slidi
 
 **Internal (in-process):** Modules within the same Node.js process pass data as plain `DataRecord[]` arrays (see §3.1). This avoids the overhead of wrapping every record in GeoJSON `Feature` / `FeatureCollection` envelopes for purely in-memory communication.
 
-**External (API boundary):** When data leaves the server — via REST endpoints, WebSocket messages, or file export — it is serialized as GeoJSON FeatureCollection (RFC 7946):
+**External (API boundary / future export):** When data is exported to external GIS tools or explicitly requested via a future `/api/export` endpoint, it is serialized as GeoJSON FeatureCollection (RFC 7946). Note: the current migration plan (Phases 0–4) does not implement GeoJSON export endpoints — internal REST APIs (`/api/config`, `/api/streams`, `/api/import`) use plain JSON. The GeoJSON format is defined here for future interoperability; a `toGeoJSON(records)` utility will be implemented when the first GeoJSON-consuming endpoint is added. Format example:
 
 ```jsonc
 {
@@ -86,7 +88,7 @@ Phase 1 implements `static`. Phase 4 implements `stream` (poll scheduler + slidi
 }
 ```
 
-This guarantees interoperability with external GIS tools — any tool that reads GeoJSON can directly consume the API output. A lightweight `toGeoJSON(records)` utility handles the conversion at the API boundary.
+This guarantees interoperability with external GIS tools — any tool that reads GeoJSON can directly consume the export output.
 
 ---
 
@@ -113,8 +115,8 @@ H3 divides the Earth's surface into hexagonal grids (plus a small number of pent
 Core API (`h3-js` npm package):
 
 ```javascript
-import { latLngToCell, cellToBoundary, cellToParent,
-         gridDisk, polygonToCells, getResolution } from 'h3-js';
+const { latLngToCell, cellToBoundary, cellToParent,
+        gridDisk, polygonToCells, getResolution } = require('h3-js');
 
 // Lat/lon → H3 cell ID
 const cellId = latLngToCell(37.7749, -122.4194, 5);
@@ -137,20 +139,22 @@ const cells = polygonToCells(
 );
 ```
 
+> **Coordinate order caution:** `latLngToCell()` and other h3-js functions take `(lat, lon)` parameter order — opposite of GeoJSON `[lon, lat]` array order. When converting from GeoJSON coordinates, swap indices: `latLngToCell(coord[1], coord[0], res)`. `polygonToCells()` accepts GeoJSON-style `[lon, lat]` arrays. Verify the version-specific coordinate convention in h3-js v4 docs.
+
 ### 4.3 Resolution and Existing System Comparison
 
 | Resolution | Hex Edge Length | Hex Area | Use Case | Relation to Existing System |
 | ---------- | --------------- | -------- | -------- | --------------------------- |
 | 1 | ~418 km | ~607,221 km² | Continental | — |
 | 2 | ~158 km | ~86,746 km² | Large regions | — |
-| 3 | ~60 km | ~12,393 km² | Country/province level | Closest to existing 0.5-degree grid (~55 km x 55 km at mid-latitudes) |
-| 4 | ~23 km | ~1,770 km² | Metropolitan areas | — |
+| 3 | ~60 km | ~12,393 km² | Country/province level | ~4× larger than 0.5° grid — too coarse for migration |
+| 4 | ~23 km | ~1,770 km² | Metropolitan areas | **Closest to existing 0.5° grid (~3,080 km² at equator); same order of magnitude** |
 | 5 | ~8 km | ~253 km² | City level | Per-grid mode trigger range |
 | 7 | ~1.2 km | ~5.16 km² | Neighborhood level | Future fine-grained soundscapes |
 
-**Default operating level:** Resolution 3 (closest to the existing 0.5-degree grid; approximately 60 km edge length at the equator).
+**Default operating level:** Resolution 4 (closest to the existing 0.5° grid; hex area ~1,770 km² vs. grid cell ~3,080 km² at equator).
 **Configurable:** Via `DEFAULT_H3_RESOLUTION` in `config.js`.
-**Dynamic adjustment:** Resolution can be auto-selected based on map zoom level — zoom 3–5 uses res 2, zoom 6–8 uses res 3, zoom 9–11 uses res 4, and so on.
+**Dynamic adjustment:** Resolution can be auto-selected based on map zoom level — zoom 3–5 uses res 3, zoom 6–8 uses res 4, zoom 9–11 uses res 5, and so on.
 
 ### 4.4 CellEncoder Abstract Interface
 
@@ -200,6 +204,7 @@ Each data adapter is responsible for:
  * @property {(rawData: any, encoder: CellEncoder, precision: number) => DataRecord[]} ingest
  * @property {Object} [importFormats] - Supported import formats and their parsers
  */
+// For `stream` type adapters, see the extended StreamAdapter interface in §5.3.
 
 /**
  * @typedef {Object} ChannelManifest
@@ -248,6 +253,8 @@ The `stream-scheduler` manages the lifecycle of all stream adapters:
 1. Delete expired events where `timestamp < now - windowMs`
 2. Recompute aggregated values using the adapter's `windowAggregate` operator
 3. If aggregated change exceeds `STREAM_CHANGE_THRESHOLD`, trigger incremental OSC push
+
+**Memory safeguards:** Configure `MAX_EVENTS_PER_CELL` (default: 1000) and `MAX_STREAM_CELLS` (default: 50000). When a cell exceeds the per-cell limit, oldest events are evicted regardless of window expiry. When total active cells exceed the global limit, least-recently-updated cells are evicted. These limits prevent unbounded memory growth from high-frequency or wide-window data sources.
 
 **Error handling strategy:**
 - On transient failure (network timeout, 5xx): retry with exponential backoff up to `maxRetries`.
@@ -339,7 +346,7 @@ Replaces the existing hardcoded 11 ESA classes. At startup, each loaded adapter 
 
 ### 6.2 Relationship with the OSC Protocol
 
-**Phase 1 (backward-compatible):** When only the WorldCover adapter is loaded, OSC output is fully identical to the current format — `/lc/10` through `/lc/100`. The Max patch requires no changes.
+**Phase 1 (backward-compatible):** When only the WorldCover adapter is loaded, OSC output is fully identical to the current format — `/lc/10` through `/lc/100`, plus `/nightlight`, `/population`, and `/forest`. The Max patch requires no changes.
 
 **Phase 2 (generic mode):** When multiple adapters are loaded, generic channel addresses are used:
 
@@ -424,9 +431,11 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 | ------ | -------- | ----- | ----- |
 | CSV (lat/lon + arbitrary numeric columns) | P0 | 1 | Lowest barrier, immediate support |
 | GeoJSON | P0 | 1 | Internal canonical format, direct consumption |
-| KML | P1 | 2 | Integration with Fog of World / Google Earth ecosystem |
-| GPX | P1 | 2 | Integration with track-based apps (FR24, etc.) |
+| KML | P1 | Post-1 | Integration with Fog of World / Google Earth ecosystem (not in current migration plan) |
+| GPX | P1 | Post-1 | Integration with track-based apps (FR24, etc.) (not in current migration plan) |
 | API adapter (HTTP poll / WebSocket) | P2 | 4 | Integration with real-time data sources (earthquakes, air quality, flights, etc.) |
+
+> **Note:** The "Phase" column indicates the *earliest migration phase after which* the format could be added. KML/GPX are not included in the current migration plan (Phases 0–4) but can be implemented as additional adapters once the Phase 1 adapter framework is in place.
 
 ---
 
@@ -442,7 +451,7 @@ Migration path:
 2. Call `latLngToCell(centerLat, centerLon, DEFAULT_H3_RESOLUTION)`
 3. Obtain the H3 Cell ID (e.g., `"832a34fffffffff"`)
 
-Note: 0.5-degree squares and H3 hexagons have different geometries, so no exact 1:1 mapping exists. One old square may correspond to multiple H3 cells, and vice versa. The migration strategy assigns all data from an old square to the H3 cell containing its center point. Precision loss at resolution 3 is acceptable (hexagon edge length ~60 km vs. square edge length ~55 km).
+Note: 0.5-degree squares and H3 hexagons have different geometries, so no exact 1:1 mapping exists. At resolution 4, each H3 hexagon (~1,770 km²) is smaller than the existing 0.5° grid cell (~3,080 km² at equator). One old grid cell may overlap 1–3 H3 cells, but only the cell containing the center point receives data. This means some H3 cells will have no data (sparser coverage), but no information is lost through aggregation. If denser coverage is needed, a spatial interpolation step can be added later.
 
 During the transition period, the `GridCell` type retains both `grid_id` (legacy) and `cellId` (new), with downstream consumers migrating incrementally.
 

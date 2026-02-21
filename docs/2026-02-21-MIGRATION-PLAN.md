@@ -133,11 +133,120 @@ server/
 
 ---
 
-## 4. Phase 2: Frontend Decoupling and H3 Hexagonal Grid Display
+## 4. Phase 1.5: Runtime Data Import (Upload CSV, Render Immediately)
+
+**Goal:** Allow third-party data to be imported without restarting the server — uploading a CSV immediately ingests it into the spatial index, and the frontend (once Phase 2 is complete) renders new hexagonal grids in real time.
+
+### 4.1 Why This Phase Is Needed
+
+Phase 1's `csv-generic` adapter only solves "how to parse arbitrary CSVs," but assumes data already exists in the `data/raw/` directory at startup. For the "vendor imports their own CSV" use case, a runtime import pipeline is required:
+
+```
+Vendor uploads CSV ──→ POST /api/import ──→ csv-generic adapter parses
+    ──→ H3 encoding ──→ spatial index append ──→ channel registry update
+    ──→ WebSocket notifies frontend to refresh ──→ frontend renders new hexagons
+```
+
+### 4.2 Key Design Decisions
+
+**Multi-source channel merge strategy:** The same H3 cell may simultaneously contain WorldCover data and vendor CSV data. The two channel sets remain independent and do not overwrite each other. For example:
+
+```js
+// Merged result for cell "85283473fffffff"
+{
+  "cellId": "85283473fffffff",
+  "channels": {
+    // From worldcover adapter
+    "tree": 0.42, "urban": 0.15, "bare": 0.03,
+    // From vendor-uploaded air_quality.csv
+    "pm25": 0.65, "temperature": 0.38
+  }
+}
+```
+
+If two data sources declare a same-named channel (conflict), a "last-write-wins" strategy is used, and a warning is returned in the response.
+
+**Data persistence:** Uploaded CSVs are saved to the `data/imports/` directory, with metadata recorded in `data/imports/manifest.json` (filename, adapter ID, import timestamp, resolution). On server restart, all previously imported data is automatically reloaded.
+
+### 4.3 New Files
+
+```
+server/
+├── import-manager.js               # Runtime import pipeline: validate, parse, encode, inject, notify
+├── __tests__/
+│   └── import-manager.test.js
+data/
+├── imports/                         # Uploaded data file storage directory
+│   └── manifest.json                # Import metadata record
+```
+
+### 4.4 Modified Files
+
+| File | Change | Notes |
+| ---- | ------ | ----- |
+| `server/index.js` | Add `POST /api/import` endpoint (multipart file upload); scan `data/imports/manifest.json` on startup to reload | New route |
+| `server/spatial.js` | Add `addCells(records)` method to support runtime data append to spatial index | Existing `Map` structure naturally supports append; primarily interface wrapping |
+| `server/channel-registry.js` | Add `registerRuntime(adapter)` method to support runtime channel addition; trigger WebSocket notification | Extends Phase 1 registry |
+| `server/osc_schema.js` | Add `/ch/reload` message address (notifies Max that the channel list has changed) | Backward-compatible |
+
+### 4.5 API Design
+
+```
+POST /api/import
+Content-Type: multipart/form-data
+
+Parameters:
+  file:        CSV file (required)
+  adapter:     Adapter ID, default "csv-generic" (optional)
+  resolution:  H3 resolution, defaults to DEFAULT_H3_RESOLUTION (optional)
+  aggregate:   Aggregation operator "mean" | "sum" | "max" | "last", default "mean" (optional)
+
+Response (200):
+{
+  "status": "ok",
+  "source": "air_quality",           // Derived from filename
+  "channels": ["pm25", "temperature", "humidity"],
+  "cellCount": 1247,
+  "resolution": 3,
+  "warnings": []                     // Channel name conflicts reported here
+}
+
+Response (400):
+{
+  "status": "error",
+  "message": "CSV must contain 'lat' and 'lon' columns"
+}
+```
+
+### 4.6 Complete Import Flow
+
+1. Vendor uploads CSV via `POST /api/import`
+2. Server parses with `csv-generic` adapter (identifies `lat`/`lon` columns; remaining numeric columns auto-register as channels)
+3. Each row's `(lat, lon)` is encoded to a `cellId` via `H3Encoder`
+4. Multiple rows within the same `cellId` are merged using the aggregation operator
+5. Generated `DataRecord`s are appended to the spatial index
+6. New channels are registered in the channel registry
+7. CSV file is saved to `data/imports/`; metadata written to `manifest.json`
+8. A `channel_update` event is sent to all connected frontends via WebSocket
+9. `/ch/register` and `/ch/reload` are sent to Max via OSC
+10. Frontend receives notification, re-requests `/api/config` for the latest channel list, and refreshes rendering
+
+### 4.7 Effort Estimate
+
+- `import-manager.js` (import pipeline + persistence + reload): ~200 lines
+- `POST /api/import` endpoint + multipart handling: ~80 lines
+- `spatial.js` runtime append method: ~60 lines
+- `channel-registry.js` runtime update + notification: ~50 lines
+- Tests: ~120 lines
+- **Total: ~510 lines, of which ~420 new and ~90 modified**
+
+---
+
+## 5. Phase 2: Frontend Decoupling and H3 Hexagonal Grid Display
 
 **Goal:** Switch the frontend from hardcoded 0.5-degree grid rendering to H3 hexagonal display, with channel metadata fetched dynamically from the server.
 
-### 4.1 Modified Files
+### 5.1 Modified Files
 
 | File | Change | Notes |
 | ---- | ------ | ----- |
@@ -147,7 +256,7 @@ server/
 | `frontend/ui.js` | Panel display changes from "landcover breakdown" to "channel breakdown" | Data-driven |
 | `server/index.js` | `/api/config` response adds a `channels` field | Additive change |
 
-### 4.2 New Files
+### 5.2 New Files
 
 ```
 frontend/
@@ -155,7 +264,7 @@ frontend/
 ├── h3-utils.js        # Frontend H3 utilities (viewport → hex enumeration, boundary → GeoJSON polygon)
 ```
 
-### 4.3 New Frontend Dependency
+### 5.3 New Frontend Dependency
 
 `h3-js` also needs to be loaded in the frontend. Two approaches:
 
@@ -164,7 +273,7 @@ frontend/
 
 The CDN approach is simpler to implement. However, `h3-js` is approximately 1.2 MB (WASM), which has a non-trivial impact on initial page load. The server-computed approach adds zero frontend dependencies and is more consistent with the project's "no build tools" frontend philosophy. **Recommendation:** benchmark both approaches before committing. If the map client is typically used on fast connections (campus/studio), CDN is acceptable; otherwise, prefer server-computed.
 
-### 4.4 Effort Estimate
+### 5.4 Effort Estimate
 
 - `map.js` grid rewrite: ~250 lines of changes (hexagonal polygon rendering is slightly more involved than rectangles)
 - `channels.js`: ~80 lines
@@ -174,11 +283,11 @@ The CDN approach is simpler to implement. However, `h3-js` is approximately 1.2 
 
 ---
 
-## 5. Phase 3: Configurable Audio Mapping and Web Console
+## 6. Phase 3: Configurable Audio Mapping and Web Console
 
 **Goal:** Move audio mapping from hardcoded Max patch wiring to a configuration file, and provide a web console for real-time adjustment.
 
-### 5.1 New Files
+### 6.1 New Files
 
 ```
 server/
@@ -189,7 +298,7 @@ frontend/
 ├── console.js                  # Console logic
 ```
 
-### 5.2 Modified Files
+### 6.2 Modified Files
 
 | File | Change |
 | ---- | ------ |
@@ -197,7 +306,7 @@ frontend/
 | `server/index.js` | Add `/console` route and WebSocket config push |
 | `sonification/crossfade_controller.js` | Accept dynamic channel count (configurable inlet count) |
 
-### 5.3 Effort Estimate
+### 6.3 Effort Estimate
 
 - Config loading + validation: ~150 lines
 - Console frontend: ~400 lines
@@ -206,11 +315,11 @@ frontend/
 
 ---
 
-## 6. Phase 4: Second Data Source Integration (Plugin System Validation)
+## 7. Phase 4: Second Data Source Integration (Plugin System Validation)
 
 **Goal:** Integrate a non-WorldCover data source to prove the plugin system works end-to-end.
 
-### 6.1 Candidate Data Sources (Choose One)
+### 7.1 Candidate Data Sources (Choose One)
 
 | Data Source | Format | temporalType | Integration Complexity |
 | ----------- | ------ | ------------ | ---------------------- |
@@ -221,14 +330,14 @@ frontend/
 
 **Recommendation: start with USGS Earthquake** — public GeoJSON feed, no authentication required, simple data structure (lat, lon, magnitude, depth, time), naturally a `stream` type, and validates time-window aggregation.
 
-### 6.2 New Files
+### 7.2 New Files
 
 ```
 server/adapters/usgs-earthquake.js           # USGS adapter
 server/adapters/__tests__/usgs-earthquake.test.js
 ```
 
-### 6.3 Max Integration Gap
+### 7.3 Max Integration Gap
 
 Phase 4 can proceed before Phase 3, but there is a dependency to be aware of: if a second data source adds new channels, Max's `crossfade_controller.js` still has a hardcoded 12-inlet configuration and cannot consume them. Two options:
 
@@ -237,7 +346,7 @@ Phase 4 can proceed before Phase 3, but there is a dependency to be aware of: if
 
 Option 1 is recommended to keep Phase 4 lightweight.
 
-### 6.4 Effort Estimate
+### 7.4 Effort Estimate
 
 - Adapter implementation: ~100 lines
 - Tests: ~60 lines
@@ -245,23 +354,28 @@ Option 1 is recommended to keep Phase 4 lightweight.
 
 ---
 
-## 7. Total Engineering Effort Summary
+## 8. Total Engineering Effort Summary
 
 | Phase | New Code | Modified Code | Risk | Prerequisites |
 | ----- | -------- | ------------- | ---- | ------------- |
 | 0: H3 Encoding Layer | ~290 lines | ~30 lines | Very low (pure addition) | None (requires `h3-js` dependency approval) |
 | 1: Adapters + Registry | ~900 lines | ~200 lines | Medium (refactors core data flow) | Phase 0 |
+| 1.5: Runtime Import | ~420 lines | ~90 lines | Medium (runtime state mutation) | Phase 1 |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1 |
 | 3: Config + Console | ~650 lines | ~100 lines | Low (new feature) | Phase 1 |
 | 4: Second Data Source | ~160 lines | 0 | Very low (validation) | Phase 1 |
 
-Phases 2, 3, and 4 can be worked on in parallel or in any order. **Phase 0 + Phase 1 is the critical path.**
+Phases 1.5, 2, 3, and 4 can be worked on in parallel or in any order. **Phase 0 + Phase 1 is the critical path.**
+
+**Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → Phase 1 → Phase 1.5 → Phase 2. Once all four phases are complete, a vendor can upload a CSV via `POST /api/import` and the frontend immediately displays new H3 hexagonal grids for the imported data.
 
 ---
 
-## 8. Suggested Timeline (Aligned with Course Schedule)
+## 9. Suggested Timeline (Aligned with Course Schedule)
 
 - **This week:** Phase 0 — pure addition, does not touch existing code, safe to run in parallel with the milestone demo.
 - **After the next milestone:** Phase 1 — the largest refactor, requires comprehensive testing.
-- **Before end of course:** Phase 2 or Phase 4 — pick one for the final presentation.
+- **Immediately after Phase 1:** Phase 1.5 — runtime import pipeline, opens the data path for Phase 2's frontend rendering.
+- **Before end of course:** Phase 2 — frontend hexagonal rendering; at this point the full "vendor uploads CSV → frontend renders immediately" pipeline is operational.
+- **Before end of course (if time permits):** Phase 4 — integrate USGS Earthquake to validate the stream data type.
 - **After the course ends:** Phase 3 — the console is a nice-to-have that does not affect core functionality.

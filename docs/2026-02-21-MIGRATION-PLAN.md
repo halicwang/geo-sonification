@@ -125,6 +125,11 @@ scripts/
 3. During the transition period, `GridCell` retains both `grid_id` (legacy) and `cellId` (H3) so downstream consumers can migrate incrementally.
 4. A one-time validation script compares old spatial query results against new H3 query results to confirm data integrity.
 
+**Dual-value DataRecord (`channelsRaw` + `channels`).** Per OPEN-PLATFORM-SPEC.md §3.1, each DataRecord stores both raw source values (`channelsRaw`) and normalized 0–1 values (`channels`). Adapters must populate both fields at ingest time:
+- **WorldCover adapter:** raw values are already 0–1 fractions, so `channelsRaw === channels` — zero overhead.
+- **csv-generic adapter:** `channelsRaw` stores the original CSV values; `channels` is computed using the ChannelManifest's normalization method and range (inferred from data or declared by user in the import wizard).
+- **Resolution field:** Each DataRecord includes a `resolution` field recording the H3 resolution at which it was encoded. This enables cross-resolution queries (see OPEN-PLATFORM-SPEC.md §4.3).
+
 ### 3.5 Non-Functional Requirements (Phase 1 Scope)
 
 Phase 1 introduces the adapter framework, and Phase 1.5 adds `POST /api/import`. Resource governance hooks should be wired in from the start:
@@ -246,7 +251,8 @@ Response (200):
   "rowsPerCell": { "min": 1, "mean": 4.3, "max": 38 },
   "warnings": [                       // Non-fatal issues
     { "type": "missing_values", "column": "pm25", "count": 12, "action": "excluded from aggregation" },
-    { "type": "empty_rows", "count": 3, "action": "skipped" }
+    { "type": "empty_rows", "count": 3, "action": "skipped" },
+    { "type": "resolution_mismatch", "message": "Existing data sources use res 4; importing at res 5 will require cross-resolution queries (see spec §4.3)" }
   ],
   "errors": []                        // Fatal issues — if non-empty, Step 2 will reject
 }
@@ -349,14 +355,16 @@ frontend/
 ├── h3-utils.js        # Frontend H3 utilities (viewport → hex enumeration, boundary → GeoJSON polygon)
 ```
 
-### 5.3 New Frontend Dependency
+### 5.3 Frontend H3 Strategy
 
-`h3-js` also needs to be loaded in the frontend. Two approaches:
+**Default approach: server-computed.** The server exposes a `/api/h3` endpoint that returns pre-computed hexagonal boundaries as GeoJSON polygons. The frontend receives ready-to-render geometry with zero additional dependencies. This is the recommended path because:
 
-- **CDN**: `<script src="https://unpkg.com/h3-js"></script>` (consistent with the existing no-build-tool frontend)
-- **Server-computed**: `/api/h3` endpoint returns pre-computed hexagonal GeoJSON (zero frontend dependency, but increases server load)
+- Zero frontend dependency — no 1.2 MB WASM download, no CDN reliance
+- Compatible with enterprise/air-gapped networks that block external CDN links (see OPEN-PLATFORM-SPEC.md §9.3)
+- Consistent with the project's "no build tools" frontend philosophy
+- H3 computation is fast (~ms for typical viewport cell counts) and already runs server-side
 
-The CDN approach is simpler to implement. However, `h3-js` is approximately 1.2 MB (WASM), which has a non-trivial impact on initial page load. The server-computed approach adds zero frontend dependencies and is more consistent with the project's "no build tools" frontend philosophy. **Recommendation:** benchmark both approaches before committing. If the map client is typically used on fast connections (campus/studio), CDN is acceptable; otherwise, prefer server-computed.
+**Dev-mode alternative:** For local development where minimizing server round-trips is useful, `h3-js` can be vendored to `frontend/vendor/h3-js.min.js` and served from the same origin. External CDN (`unpkg.com`) is not used in any deployment configuration.
 
 ### 5.4 Effort Estimate
 
@@ -365,6 +373,51 @@ The CDN approach is simpler to implement. However, `h3-js` is approximately 1.2 
 - `h3-utils.js`: ~50 lines
 - Other frontend modifications: ~100 lines
 - **Total: ~480 lines**
+
+---
+
+## 5b. Phase 2.5: KML/GPX Import Adapters
+
+**Goal:** Add KML and GPX import support via the adapter framework, enabling interoperability with Fog of World, Google Earth, Strava, and other track-based ecosystems. This is critical for the "open platform" narrative — KML/GPX are the most common geospatial exchange formats outside of CSV.
+
+### 5b.1 Scope and Constraints
+
+- **KML:** Extract coordinates from `<Point>`, `<LineString>`, and `<Polygon>` elements. KML stores coordinates as `lon,lat,alt` tuples (WGS84 natively — no CRS conversion needed). Style elements (`<Style>`, `<IconStyle>`) are ignored. Only `<Placemark>` features with geometry are processed.
+- **GPX:** Extract coordinates from `<wpt>` (waypoint), `<trkpt>` (track point), and `<rtept>` (route point) elements. GPX uses `lat`/`lon` attributes (WGS84 natively).
+- Both formats produce `DataRecord[]` with H3-encoded cells, feeding into the same spatial index and channel registry as CSV imports.
+- KML `<ExtendedData>` and GPX `<extensions>` fields with numeric values are auto-registered as channels (same logic as CSV's "remaining numeric columns" rule).
+
+### 5b.2 New Dependency
+
+A lightweight XML parser is needed. Recommended: `fast-xml-parser` (~40 KB, zero dependencies, widely used). Requires approval per CLAUDE.md.
+
+### 5b.3 New Files
+
+```
+server/
+├── adapters/
+│   ├── kml.js                  # KML adapter: parse XML → extract coordinates + data → DataRecord[]
+│   └── gpx.js                  # GPX adapter: parse XML → extract coordinates + data → DataRecord[]
+├── __tests__/
+│   ├── kml-adapter.test.js
+│   └── gpx-adapter.test.js
+```
+
+### 5b.4 Modified Files
+
+| File | Change | Notes |
+| ---- | ------ | ----- |
+| `server/import-manager.js` | Accept `.kml` and `.gpx` file extensions; route to appropriate adapter | Extends Phase 1.5 import pipeline |
+| `server/index.js` | Register KML and GPX adapters at startup | Additive |
+| `server/package.json` | Add `fast-xml-parser` dependency | — |
+
+### 5b.5 Effort Estimate
+
+- `kml.js` (XML parse + coordinate extraction + data mapping): ~120 lines
+- `gpx.js` (XML parse + coordinate extraction + data mapping): ~100 lines
+- Tests: ~120 lines
+- Existing file modifications: ~40 lines
+- **Total: ~380 lines, of which ~340 new and ~40 modified**
 
 ---
 
@@ -655,20 +708,23 @@ The fire adapter's channels are designed to drive both ambient background tensio
 | 1: Adapters + Registry | ~960 lines | ~200 lines | Medium (refactors core data flow) | Phase 0 |
 | 1.5: Runtime Import + Import Wizard | ~920 lines | ~140 lines | Medium (runtime state mutation + validation logic) | Phase 1 |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1 |
+| 2.5: KML/GPX Import Adapters | ~340 lines | ~40 lines | Low (new adapters on existing framework) | Phase 1.5 (requires `fast-xml-parser` approval) |
 | 3: Config + Console | ~650 lines | ~100 lines | Low (new feature) | Phase 1 |
 | 4: Real-time Stream + USGS Earthquake + FIRMS Fire | ~1120 lines | ~120 lines | Medium (real-time state + external dependency + AOI management) | Phase 1 + Phase 1.5 |
 
-**Total: ~4320 lines of new code, ~790 lines modified.**
+**Total: ~4660 lines of new code, ~830 lines modified.**
 
-Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depends on Phase 1.5 (runtime spatial index append capability). **Phase 0 + Phase 1 is the critical path.**
+Phases 1.5, 2, 2.5, and 3 can be worked on in parallel or in any order after their prerequisites. Phase 4 depends on Phase 1.5 (runtime spatial index append capability). Phase 2.5 depends on Phase 1.5 (import pipeline). **Phase 0 + Phase 1 is the critical path.**
 
 **`spatial.js` modification ordering:** Phases 1, 1.5, and 4 all modify `spatial.js`. To avoid merge conflicts, apply changes in order: Phase 1 adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does *not* modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
 
 **Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~3010 lines).
 
+**Shortest path to "vendor uploads KML/GPX, frontend renders":** Phase 0 → 1 → 1.5 → 2 → 2.5 (~3390 lines).
+
 **Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3960 lines; frontend still uses old rendering, but OSC/sound updates in real time).
 
-**All phases complete:** ~4320 lines new + ~790 lines modified.
+**All phases complete:** ~4660 lines new + ~830 lines modified.
 
 ---
 

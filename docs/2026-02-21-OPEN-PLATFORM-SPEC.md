@@ -55,12 +55,18 @@ All data within the system is unified into the following structure (JSON represe
 {
   "cellId": "85283473fffffff", // H3 hexagonal Cell ID (see §4)
   "source": "worldcover",      // Data source identifier
-  "channels": {                // Key-value pairs: namespaced channel key → normalized value (0–1)
+  "channels": {                // Normalized values (0–1), computed from channelsRaw + ChannelManifest rules
     "worldcover.tree": 0.42,
     "worldcover.urban": 0.15,
     "worldcover.bare": 0.03
     // ... each data source defines its own channel set; keys are sourceId.channelName (see §6.2)
   },
+  "channelsRaw": {             // Original values in source units (preserved for re-normalization)
+    "worldcover.tree": 0.42,   // WorldCover: raw == normalized (already 0–1 fractions)
+    "worldcover.urban": 0.15,
+    "worldcover.bare": 0.03
+  },
+  "resolution": 4,             // H3 resolution at which this cell was encoded (native resolution)
   "timestamp": null,           // ISO 8601 or null (static data)
   "temporalType": "static",   // "static" | "stream" | "timeseries"
   "meta": {                    // Optional metadata
@@ -69,6 +75,8 @@ All data within the system is unified into the following structure (JSON represe
   }
 }
 ```
+
+**Why both `channels` and `channelsRaw`?** Without raw values, changing normalization method, value range, or alert thresholds requires a full re-import of the data. By preserving raw values at import time, the system can recompute `channels` on the fly when the user adjusts normalization parameters (e.g., switching from `linear` to `log`, or narrowing the range). For data sources where raw values are already normalized (WorldCover fractions), `channelsRaw` is identical to `channels` — no additional storage overhead. For imported CSVs (e.g., PM2.5 in μg/m³), `channelsRaw` stores the original measurement and `channels` stores the 0–1 normalized value.
 
 ### 3.2 Temporal Dimension Classification
 
@@ -183,6 +191,18 @@ const cells = polygonToCells(
 | 7 | Neighborhood | ~1.2 km edge, ~5.2 km² — one hex covers a neighborhood or campus |
 
 These labels are defined in a `H3_RESOLUTION_LABELS` constant in `config.js` and served via `/api/config` for frontend consumption.
+
+**Multi-resolution storage and query strategy:** Different data sources may be imported at different H3 resolutions (e.g., WorldCover at res 4, a city-level air quality dataset at res 7). The viewport may request a resolution that differs from the stored resolution. The system uses the following rules:
+
+1. **Storage:** Each data source stores cells at its **native resolution** — the resolution used at import or ingest time. The `resolution` field in `DataRecord` (see §3.1) records this. The spatial index is keyed by `(cellId, source)`, not by resolution.
+
+2. **Downsampling** (query res < stored res — e.g., querying res 4 but data is stored at res 7): Aggregate child cells into the parent cell using the channel's fold method from its `ChannelManifest`. For `group: "distribution"` channels, use weighted mean (weighted by child cell count). For `group: "metric"` channels, use max (conservative — surface the strongest signal).
+
+3. **Upsampling** (query res > stored res — e.g., querying res 7 but data is stored at res 4): Broadcast the parent cell's value to all child cells uniformly. No spatial interpolation — the child cells inherit the parent's value. This is visually obvious (all children show the same color/value) and avoids fabricating false spatial detail.
+
+4. **Cross-resolution lookups** use `cellToParent(cellId, targetRes)` for downsampling and `cellToChildren(cellId, targetRes)` for upsampling, both from h3-js.
+
+5. **Same-resolution** (query res == stored res): Direct lookup, no conversion needed. This is the common case when `DEFAULT_H3_RESOLUTION` is used consistently.
 
 ### 4.4 CellEncoder Abstract Interface
 
@@ -565,11 +585,11 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 | ------ | -------- | ----- | ----- |
 | CSV (lat/lon + arbitrary numeric columns) | P0 | 1 | Lowest barrier, immediate support |
 | GeoJSON | P0 | 1 | Internal canonical format, direct consumption |
-| KML | P1 | Post-1 | Integration with Fog of World / Google Earth ecosystem (not in current migration plan) |
-| GPX | P1 | Post-1 | Integration with track-based apps (FR24, etc.) (not in current migration plan) |
+| KML | P1 | 2.5 | OGC standard, WGS84 natively — only need Point/LineString/Polygon coordinate extraction. Key for Fog of World / Google Earth ecosystem interop. |
+| GPX | P1 | 2.5 | Similar XML structure to KML — `<trkpt lat="" lon="">` elements. Key for track-based apps (FR24, Strava, etc.). |
 | API adapter (HTTP poll / WebSocket) | P2 | 4 | Integration with real-time data sources (earthquakes, air quality, flights, etc.) |
 
-> **Note:** The "Phase" column indicates the *earliest migration phase after which* the format could be added. KML/GPX are not included in the current migration plan (Phases 0–4) but can be implemented as additional adapters once the Phase 1 adapter framework is in place.
+> **Note:** KML and GPX are promoted to Phase 2.5 (between frontend decoupling and audio console) because they are critical for the "open platform" interoperability narrative — particularly KML for Fog of World integration. Both formats store coordinates in WGS84 natively, so no CRS conversion is needed. Implementation scope is limited to coordinate extraction from Point/LineString/Polygon geometries; KML style parsing and GPX extensions are out of scope.
 
 ---
 
@@ -649,3 +669,5 @@ Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining
 | Namespace | Dot-separated prefix (`sourceId.channelName`) that uniquely identifies a channel across adapters |
 | Alias | A user-facing display name mapped to a namespaced channel key |
 | Adapter Manifest | The combination of `id`, `version`, `channels`, `temporalType`, and `requiredConfig` that describes an adapter to the registry |
+| Native Resolution | The H3 resolution at which a data source's cells were originally encoded; stored per DataRecord for cross-resolution queries |
+| AOI | Area of Interest — a spatial bounding box used to filter stream adapter data requests to a specific region |

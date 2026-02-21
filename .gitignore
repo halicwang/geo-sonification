@@ -17,9 +17,6 @@ data/tiles/
 .env
 frontend/config.local.js
 
-# Claude Code local config
-CLAUDE.md
-
 # Max/MSP backup files
 *.maxpat.bak
 

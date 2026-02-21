@@ -33,6 +33,22 @@ The following locations in the existing codebase hardcode WorldCover's 11 classe
 
 ---
 
+## 1.5 Dependency Approval Gates
+
+All new npm dependencies require explicit approval per CLAUDE.md. The following table consolidates every planned dependency across all phases:
+
+| Phase | Dependency | Size | Purpose | Gate |
+| ----- | ---------- | ---- | ------- | ---- |
+| 0 | `h3-js` | ~1.2 MB (JS/WASM) | H3 hexagonal encoding | Approve before Phase 0 begins |
+| 1.5 | `multer` or `busboy` | ~50 KB | Multipart form-data parsing | Approve before Phase 1.5 begins |
+| Future (§8.1) | `fast-xml-parser` | ~40 KB | KML/GPX XML parsing | Approve when work begins |
+
+**ES5 constraint reminder:** All `sonification/*.js` files must be ES5 — no `let`/`const`, no arrow functions, no template literals, no destructuring. This is enforced by the Max/MSP JS engine (see CLAUDE.md).
+
+**`.maxpat` files are read-only:** Per CLAUDE.md, `.maxpat` files cannot be edited as text. Any future Max-side changes (Phase 3 / Future Work §8.2) must follow **extend-only semantics** and require a dedicated "Max-side change proposal" documenting the exact inlet/outlet changes, backward-compatibility impact, and ES5 compliance verification. No casual `.maxpat` edits.
+
+---
+
 ## 2. Phase 0: Foundation Layer Extraction (Zero Impact on Existing Functionality)
 
 **Goal:** Add H3 encoding alongside the existing system, running in parallel.
@@ -73,6 +89,14 @@ Requires approval per CLAUDE.md ("Do not introduce new npm dependencies without 
 - Tests: ~120 lines (encode round-trip, viewport enumeration, neighbors, cross-resolution, coordinate order regression — verify `polygonToCells()` uses `[lon, lat]` and `latLngToCell()` uses `(lat, lon)` to catch h3-js version-specific convention changes)
 - config/types changes: ~30 lines
 - **Total: ~290 lines of new code, ~30 lines of config/types changes (no runtime logic modified)**
+
+### 2.5 Definition of Done (Phase 0)
+
+- [ ] `h3-js` dependency approved and installed (`npm install h3-js`)
+- [ ] Encode/decode round-trip test passes: `latLngToCell(lat, lon, res)` → `cellToLatLng(cellId)` returns coordinates within one cell radius
+- [ ] `enumerateBounds()` regression test with two fixed bounding boxes: one normal (e.g., continental Europe) and one **dateline-crossing** (e.g., Pacific viewport spanning 170°E–170°W)
+- [ ] Coordinate order regression test: verify `latLngToCell(lat, lon)` vs `polygonToCells([lon, lat])` use their documented conventions — catch h3-js version-specific convention changes
+- [ ] All existing tests (`npm test`) pass with zero changes to existing code
 
 ---
 
@@ -119,6 +143,16 @@ server/
 - **csv-generic adapter:** `channelsRaw` stores the original CSV values; `channels` is computed using the ChannelManifest's normalization method and range (inferred from data or declared by user).
 - **Resolution field:** Each DataRecord includes a `resolution` field recording the H3 resolution at which it was encoded. This enables cross-resolution queries (see OPEN-PLATFORM-SPEC.md §4.3).
 
+### 3.4.5 Channel Index Policy
+
+The channel registry assigns integer indices to channels for OSC transmission (`/ch/{index}`). The following rules govern index assignment to balance stability (DoD requirement) with runtime flexibility (Phase 1.5 / Phase 4):
+
+- **Rule A — Builtin adapters:** WorldCover channel indices are fixed at hardcoded positions defined in the adapter manifest's channel order. These indices never change, regardless of what other sources are loaded. This guarantees OSC backward compatibility with existing Max patches.
+- **Rule B — Imported sources:** Indices are assigned in `manifest.json` import order. The same `manifest.json` produces the same indices across server restarts. Adding a new import appends indices after the last assigned index.
+- **Rule C — Runtime mutation:** `DELETE /api/sources/:id` or re-import may reassign indices for non-builtin channels. After any index change, the server MUST send `/ch/reload` (OSC) and `channel_update` (WebSocket) to notify all consumers. `GET /api/channels` is the single source of truth for current index assignments.
+
+This policy makes the Phase 1a DoD ("stable across restarts") testable for the worldcover-only case, while allowing Phase 1.5 and Phase 4 to mutate indices with proper notification.
+
 ### 3.5 Non-Functional Requirements (Phase 1a Scope)
 
 Phase 1a introduces the adapter framework, and Phase 1.5 adds `POST /api/import`. Resource governance hooks should be wired in from the start:
@@ -136,6 +170,14 @@ Authentication, observability, and supply chain concerns are out of scope for Ph
 - Tests: ~250 lines
 - Existing file modifications: ~120 lines (primarily splitting and thin wrappers)
 - **Total: ~1020 lines, of which ~900 new and ~120 modified**
+
+### 3.7 Definition of Done (Phase 1a)
+
+- [ ] **Golden regression:** Same viewport input → **canonicalized-identical** OSC output compared to pre-refactor baseline. Canonicalization: packets sorted by OSC address, float arguments compared within ε = 1e-6. This avoids false failures from float serialization noise or `Map` iteration order instability.
+- [ ] Registry index assignment is stable across server restarts (worldcover-only scenario — see §3.4.5 Channel Index Policy Rule A)
+- [ ] `csv-generic` adapter ingests a test CSV with `(lat, lon, pm25, temp)` columns and registers 2 channels in the registry
+- [ ] `npm test` + `npm run lint` pass
+- [ ] Existing frontend demo works identically (manual smoke test — navigate to 3 different viewports, confirm visual and auditory output unchanged)
 
 ---
 
@@ -158,6 +200,20 @@ scripts/
 | ---- | ------ | ------ |
 | `server/spatial.js` | Add `queryByH3(bounds, resolution)` method alongside existing `queryByBounds()`. Returns `CellSnapshot[]` (merged from multiple `DataRecord`s per cell — see SPEC §3.2). Internal index structure: `Map<cellId, Map<sourceId, DataRecord>>`. | Gradual replacement |
 
+### 3b.2.5 Recommended Refactoring Approach
+
+The current `spatial.js` (627 lines) has hidden responsibilities that make adding `queryByH3()` riskier than a simple "one method addition." The module simultaneously handles spatial index construction, bucket-key lookup, viewport hit-testing, date-line crossing, legacy aggregation, area-weighted aggregation, landcover breakdown assembly, and bounds validation. Recommend splitting before H3 work:
+
+| New Module | Extracted From | Responsibility | ~Lines |
+| ---------- | -------------- | -------------- | ------ |
+| `server/spatial-index.js` | Index build, bucket-key lookup, viewport hit-test, date-line crossing | Cell lookup & enumeration | ~130 |
+| `server/viewport-aggregator.js` | Legacy & area-weighted aggregation, landcover breakdown, stats assembly | Stats computation | ~280 |
+| `server/spatial.js` (retained) | Orchestration + `validateBounds()` | Thin facade delegating to index + aggregator | ~120 |
+
+**Rationale:** `spatial-index.js` is the only file that needs H3 changes in Phase 1b. `viewport-aggregator.js` is minimally affected by Phase 1b (input shape unchanged, but may need minor adaptation if index return type changes). `viewport-processor.js` (95 lines) stays as-is — it orchestrates spatial queries and OSC dispatch, both of which are transparent to the index implementation.
+
+> **Note:** This decomposition is a **recommendation**, not a requirement. The Definition of Done below measures outcomes, not module structure. If the developer prefers a different factoring that achieves the same DoD criteria, that is acceptable.
+
 ### 3b.3 Additional Considerations
 
 **Data re-indexing step.** Migrating from 0.5-degree grid IDs to H3 cell IDs requires all CSV data to be re-processed. This should be an explicit step in Phase 1b:
@@ -173,6 +229,14 @@ scripts/
 - `spatial.js` H3 index and `queryByH3()`: ~200 lines of changes
 - Validation script (`scripts/validate-h3-migration.js`): ~60 lines
 - **Total: ~260 lines, of which ~200 new/modified in spatial.js and ~60 new in scripts**
+
+### 3b.5 Definition of Done (Phase 1b)
+
+- [ ] `queryByH3()` produces equivalent aggregation results as `queryByBounds()` for WorldCover data. **Primary metric (must pass):** For 3 test viewports at resolution 4, compare per-channel aggregated means from both code paths — max absolute difference < 0.02 per channel, coverage difference < 0.02. **Secondary metric (reported, not gating):** Jaccard distance on enumerated cell sets = 1 − |H3 ∩ Rect| / |H3 ∪ Rect|, where both sets are computed at the same H3 resolution via `polygonToCells(bounds, res)` for the rect path and `queryByH3()` for the H3 path. This avoids comparing incompatible ID spaces (H3 cellId vs legacy grid_id).
+- [ ] H3 spatial index (`Map<cellId, Map<sourceId, DataRecord>>`) builds successfully on startup
+- [ ] `validateBounds()` behavior unchanged (same inputs → same validation results)
+- [ ] Validation script (`scripts/validate-h3-migration.js`) runs and reports both metrics per viewport
+- [ ] All existing tests (`npm test`) pass
 
 ---
 
@@ -279,10 +343,40 @@ Response (400):
 }
 ```
 
+### 4.6.5 Control Plane Endpoints
+
+Three read/delete endpoints for inspecting and managing runtime state:
+
+**`GET /api/sources`** — list all data sources (builtin + imported):
+
+```json
+{
+  "sources": [
+    { "id": "worldcover", "name": "ESA WorldCover 2021", "type": "builtin", "channelCount": 14, "cellCount": 17000, "resolution": 4 },
+    { "id": "air_quality", "name": "air_quality.csv", "type": "imported", "channelCount": 2, "cellCount": 1247, "resolution": 4 }
+  ]
+}
+```
+
+**`GET /api/channels`** — full channel registry with current index assignments:
+
+```json
+{
+  "channels": [
+    { "index": 0, "key": "worldcover.tree", "source": "worldcover", "name": "tree", "label": "Tree / Forest", "unit": "fraction", "group": "distribution" },
+    { "index": 14, "key": "air_quality.pm25", "source": "air_quality", "name": "pm25", "label": "pm25", "unit": "auto", "group": "metric" }
+  ]
+}
+```
+
+**`DELETE /api/sources/:id`** — **hard-delete** an imported source. Removes the source from the channel registry, spatial index, and disk manifest (`data/imports/manifest.json`). Returns 400 for builtin sources. After deletion, triggers `channel_update` (WebSocket) and `/ch/reload` (OSC) notifications. For course scope, hard-delete is sufficient — soft-delete/undo is a Future Work concern.
+
+**Governance:** A `MAX_UNIQUE_CELLS` constant (default: 50,000, configurable in `config.js`) is checked at import time. Uploads producing more unique cells than this limit are rejected with HTTP 413. This prevents runaway memory from unbounded imports during course demos.
+
 ### 4.7 Complete Import Flow
 
 1. Caller sends `POST /api/import` via curl or HTTP client with a CSV file
-2. Server validates and parses the CSV (first `IMPORT_PREVIEW_ROWS` rows for validation, full file for ingest), auto-detects column roles, runs validation checks
+2. Server validates and parses the CSV (first `IMPORT_PREVIEW_ROWS` rows for validation, full file for ingest), auto-detects column roles, runs validation checks. **Streaming parse:** Phase 1.5 uses the `csv-parse` streaming API (async counterpart of `csv-parse/sync` already in the dependency tree — no new dependency). The uploaded file is piped through the streaming parser incrementally, preventing OOM on large uploads and enabling early abort on validation failure. Early governance checks (file size, row count, column count — limits from `config.js`) are evaluated during this phase and reject with 413 before full ingest begins. Existing `data-loader.js` (startup WorldCover pipeline) is unchanged.
 3. Each row's `(lat, lon)` encoded to `cellId` via `H3Encoder`
 4. Multiple rows within the same `cellId` merged using the aggregation operator
 5. Generated `DataRecord`s appended to the spatial index
@@ -299,8 +393,21 @@ Response (400):
 - `POST /api/import` endpoint + preview stub + multipart handling: ~100 lines
 - `spatial.js` runtime append method: ~60 lines
 - `channel-registry.js` runtime update + notification: ~50 lines
+- Control plane endpoints (`GET /api/sources`, `GET /api/channels`, `DELETE /api/sources/:id`): ~30 lines
 - Tests (import-manager + import-validator): ~180 lines
-- **Total: ~770 lines, of which ~700 new and ~70 modified**
+- **Total: ~800 lines, of which ~730 new and ~70 modified**
+
+### 4.9 Definition of Done (Phase 1.5)
+
+- [ ] `POST /api/import` (single-step) accepts a CSV file via curl, returns 200 with source/channels/cellCount. `POST /api/import/preview` stub also returns 200 with the same preview-format response (per §4.6 — contract stability for future two-step split in §8.4). DoD does NOT require full two-step preview/confirm workflow.
+- [ ] Imported data survives server restart (`manifest.json` written to `data/imports/`; data reloaded on next startup)
+- [ ] `GET /api/sources` lists both builtin and imported sources
+- [ ] `GET /api/channels` returns full registry with correct indices (per Channel Index Policy §3.4.5)
+- [ ] `DELETE /api/sources/:id` removes an imported source and its disk manifest entry; returns 400 for builtin sources
+- [ ] Re-uploading the same `sourceId` replaces the previous import data
+- [ ] Upload exceeding `MAX_UNIQUE_CELLS` returns 413. Additionally, early governance checks (file size, row count, column count) reject oversized uploads at the parse phase before full ingest begins.
+- [ ] `npm test` + `npm run lint` pass
+- [ ] No regressions in existing WorldCover pipeline (manual smoke test)
 
 ---
 
@@ -344,6 +451,15 @@ frontend/
 - `h3-utils.js`: ~50 lines
 - Other frontend modifications: ~100 lines
 - **Total: ~480 lines**
+
+### 5.5 Definition of Done (Phase 2)
+
+- [ ] Hex grid renders correctly at 3 zoom levels: zoom 5 (continental), zoom 8 (regional), zoom 11 (city). Visual spot-check: no visible gaps or overlap between hexagons, cell boundaries align with expected geographic positions on the base map, dateline-crossing viewports do not produce whole-screen fill or shattered fragments.
+- [ ] Zoom-to-resolution mapping is documented and explicit in code or config (e.g., zoom 5–7 → res 3, zoom 8–10 → res 4, zoom 11+ → res 5), or fixed at a single resolution for course scope. The mapping must not be implicit or hardcoded in rendering logic.
+- [ ] Channel metadata fetched from `/api/channels` (Phase 1.5 control plane) — no hardcoded ESA class names, colors, or indices in frontend code
+- [ ] Imported CSV data renders as hex cells alongside WorldCover data
+- [ ] Grid overlay toggles on/off without page reload
+- [ ] No external CDN requests — h3-js cell boundaries are server-computed and sent via `/api/config` or WebSocket
 
 ---
 
@@ -549,6 +665,16 @@ These mappings can be freely adjusted by the user once Phase 3 (audio config con
 - Existing file modifications: ~80 lines
 - **Total: ~810 lines, of which ~730 new and ~80 modified**
 
+### 7.13 Definition of Done (Phase 4)
+
+- [ ] USGS adapter fetches from the real GeoJSON feed (`earthquake.usgs.gov`), parses features, and produces valid `DataRecord[]`
+- [ ] `GET /api/streams` shows the USGS adapter with status `"running"` and a valid `lastFetch` timestamp
+- [ ] Sliding time window correctly expires events older than `windowMs`
+- [ ] Data-change push fires when an earthquake event falls within a connected client's current viewport
+- [ ] Incremental push sends correct OSC: unit test asserts `udpPort.send()` call count matches the number of new cells affected (mock transport, no live UDP needed)
+- [ ] Exponential backoff activates on simulated fetch failure (unit test with mock `fetch`)
+- [ ] `npm test` + `npm run lint` pass
+
 ---
 
 ## 8. Future Work
@@ -576,6 +702,16 @@ Deferred from course scope. Prerequisite: Phase 1.5. Rasterization rules already
 ### 8.2 Configurable Audio Mapping and Web Console (was Phase 3)
 
 Deferred from course scope. Prerequisite: Phase 1a. The `audio_mapping.json` config file (SPEC §7.1) can be hand-edited without the console in the interim.
+
+> **Architectural principle: Server as fold-mapper, Max as audio renderer.** The server reads `audio_mapping.json`, computes folded bus values from channel data, and sends stable per-bus floats to Max via `/bus/{index}`. Max never needs to know about channel counts or fold methods. Adding new data channels = server folds them into existing buses → no Max changes required. The crossfade controller rewrite (Option A below) only handles `N_BUSES` messages, not `N_CHANNELS`.
+
+> **Note:** Existing per-channel `/ch/*` addresses are retained for debugging and visualization. `/bus/*` is additive — it does not replace `/ch/*`. This follows the extend-only OSC principle (CLAUDE.md).
+
+> **Bus registration (minimal self-description):** To avoid shifting the "Max doesn't know what index N means" problem from channels to buses, add bus-level registration messages:
+> - `/bus/register {index} {busName}` — sent at startup and after bus config change (foldMethod, volume range as optional trailing args)
+> - `/bus/reload` — sent when bus configuration changes at runtime (analogous to `/ch/reload`)
+>
+> These are extend-only additions. Max-side handling is optional — `/bus/register` can be silently ignored until a future Max patch decides to use bus names.
 
 **Goal:** Move audio mapping from hardcoded Max patch wiring to a configuration file, and provide a web console for real-time adjustment.
 
@@ -651,6 +787,41 @@ Deferred from course scope. Prerequisite: Phase 1.5.
 - **Import wizard frontend:** `frontend/import.html` + `frontend/import.js` (~200 lines) — drag-and-drop upload, preview report display with column role badges, resolution selector with scale labels, adjust/confirm flow.
 - **Cross-resolution queries:** Add `cellToParent()` branch to `queryByH3()` (~80 lines in `spatial.js`) — implements SPEC §4.3 rules 1–4 for mixed-resolution data sources.
 
+### 8.5 Alert Rule Engine
+
+Deferred from course scope. Prerequisite: Phase 1a + Phase 4.
+
+A minimal alert model that supports the "monitoring platform" narrative (see Motivation). Rules are declarative and JSON-configurable, following the same pattern as `audio_mapping.json`.
+
+**Rule schema:**
+```jsonc
+{
+  "ruleId": "high_magnitude_quake",
+  "channel": "usgs_earthquake.quake_mag",
+  "enterThreshold": 0.7,    // Normalized value that triggers the alert
+  "exitThreshold": 0.5,     // Hysteresis: alert clears when value drops below this
+  "severity": "critical",   // "info" | "warning" | "critical"
+  "cooldownMs": 30000,      // Minimum time between re-fires for the same cell
+  "dedupKey": "cellId"      // One active alert per (ruleId, cellId) pair
+}
+```
+
+**State machine per (ruleId, cellId):** `idle` → `active` → `cooldown` → `idle`. Hysteresis prevents oscillation at boundary values (enter at 0.7, exit at 0.5 — value must drop significantly before the alert can re-fire).
+
+**Dedup:** Same cell + same rule = one active alert. Prevents alert storms from high-frequency data sources updating the same cell repeatedly.
+
+**New OSC addresses (extend-only) with payload schemas:**
+- `/alert/fire  ruleId(s) cellId(s) severity(s) value(f) timestamp(i)`
+- `/alert/clear  ruleId(s) cellId(s) timestamp(i)`
+- `/alert/mute  ruleId(s) duration(i)`
+- `/alert/ack  ruleId(s) cellId(s) timestamp(i)`
+
+`/alert/ack` allows downstream consumers (Max or future UI) to acknowledge an active alert, resetting its visual/audio indicator without clearing the rule state. Explicit payload schemas enable testable unit/integration verification without relying on auditory confirmation.
+
+**Config file:** `alert_rules.json` (hand-editable, like `audio_mapping.json`). Loaded at startup, reloaded on file change.
+
+**Estimated effort:** ~300–400 lines (rule engine + state machine + OSC dispatch + config loader + tests).
+
 ---
 
 ## 9. Total Engineering Effort Summary
@@ -660,17 +831,19 @@ Deferred from course scope. Prerequisite: Phase 1.5.
 | 0: H3 Encoding Layer | ~290 lines | ~30 lines | Very low (pure addition) | None (requires `h3-js` dependency approval) |
 | 1a: Adapters + Registry | ~900 lines | ~120 lines | Medium (refactors core data flow) | Phase 0 |
 | 1b: spatial.js H3 Migration | ~200 lines | ~60 lines | **High** (parallel index structure) | Phase 1a |
-| 1.5: Runtime Import (simplified) | ~700 lines | ~70 lines | Medium (runtime state mutation + validation logic) | Phase 1a |
+| 1.5: Runtime Import (simplified) | ~730 lines | ~70 lines | Medium (runtime state mutation + validation logic) | Phase 1a |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1b |
 | 4: Stream + USGS Earthquake | ~730 lines | ~80 lines | Medium (real-time state + external dependency) | Phase 1a + Phase 1.5 |
 
-**In-scope total: ~3200 lines of new code, ~560 lines modified.**
+**In-scope total: ~3230 lines of new code, ~560 lines modified.**
+
+> **Disclaimer:** Line counts are complexity proxies, not schedule predictors. Actual calendar time depends on debugging, Max integration testing, and iteration cycles. Use these numbers for relative sizing between phases, not for setting deadlines.
 
 **`spatial.js` modification ordering:** Phases 1b, 1.5, and 4 all modify `spatial.js`. Apply changes in order: Phase 1b adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does *not* modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
 
-**Shortest path to "CSV upload → hex grid → sound":** Phase 0 → 1a → 1b → 1.5 → 2 (~2470 lines new).
+**Shortest path to "CSV upload → hex grid → sound":** Phase 0 → 1a → 1b → 1.5 → 2 (~2500 lines new).
 
-**Shortest path to "real-time earthquake → sound":** Phase 0 → 1a → 1.5 → 4 (~2620 lines new; **Phase 1b not required** — stream scheduler encodes H3 directly).
+**Shortest path to "real-time earthquake → sound":** Phase 0 → 1a → 1.5 → 4 (~2650 lines new; **Phase 1b not required** — stream scheduler encodes H3 directly).
 
 > **Note:** Phase 1b is required for Phase 2 (frontend needs `queryByH3()`), but not for Phase 4 (stream scheduler encodes H3 cell IDs directly and injects via `addCells()`).
 
@@ -688,9 +861,11 @@ Deferred from course scope. Prerequisite: Phase 1.5.
   - If time permits, do both.
 - **After the course ends:** Everything in Future Work (§8).
 
-### 10.1 Showcase Narratives
+### 10.1 Showcase Narratives and Product Verification Mainlines
 
-Two "closed-loop" demo paths, each self-contained and presentable on its own.
+The two closed loops below serve a dual purpose: **demo scripts** for course presentation AND **product verification mainlines**. After each phase lands, the applicable loop should be executed end-to-end. If a loop breaks, the phase is not complete.
+
+> **Test environment note:** Timing benchmarks (2s, 500ms, 200ms) assume local development (server + Max on same machine, localhost network). CI or remote environments may need relaxed thresholds — these numbers are smoke-test targets, not SLA guarantees.
 
 **Closed Loop A — "From Spreadsheet to Soundscape" (visual emphasis, Phases 0 → 1a → 1b → 1.5 → 2)**
 
@@ -698,6 +873,7 @@ Two "closed-loop" demo paths, each self-contained and presentable on its own.
 - Audience sees: hexagonal grid fills in, colors shift as the viewport moves across regions.
 - Audience hears: tonal gradient reflecting data values across the viewport — smooth crossfades between zones.
 - Core message: *"Any tabular geodata becomes an audible landscape in under a minute."*
+- **Verification criteria:** (1) API returns 200 with valid source/channels/cellCount, (2) hex grid appears within 2s of import, (3) panning produces audible change within 500ms, (4) no browser console errors.
 
 **Closed Loop B — "Live Earthquake Alert" (auditory emphasis, Phases 0 → 1a → 1.5 → 4)**
 
@@ -705,5 +881,6 @@ Two "closed-loop" demo paths, each self-contained and presentable on its own.
 - Audience sees: new hex cells pulse onto the map at the epicenter location.
 - Audience hears: immediate percussive alert when magnitude crosses threshold, ambient low rumble conveying depth.
 - Core message: *"You hear the earthquake before you see the dashboard notification."*
+- **Verification criteria:** (1) `GET /api/streams` shows USGS adapter as `"running"`, (2) new earthquake cell appears within one poll interval, (3) OSC message fires for the new cell, (4) alert sound triggers in Max within 200ms of OSC receipt.
 
 See §9 "Shortest path" calculations for the engineering effort behind each loop.

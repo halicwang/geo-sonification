@@ -30,6 +30,7 @@ Geo-Sonification is an **auditory monitoring layer for geographic situational aw
 2. **Unified grid encoding:** All data entering the system is mapped to a single discrete grid Cell ID scheme.
 3. **Configurable audio mapping:** Users can customize channel-to-audio-bus mapping, thresholds, and timbre selection.
 4. **Backward-compatible:** The existing WorldCover pipeline continues to work as the "default data adapter," preserving all existing demos.
+5. **Server as fold-mapper, Max as audio renderer:** The server performs all channel-to-bus fold-mapping (reading bus configuration, computing folded values). Max/MSP receives pre-computed, stable bus parameters via OSC and acts purely as an audio rendering engine. Adding new data channels never requires Max-side changes.
 
 ---
 
@@ -500,6 +501,8 @@ When `range` is explicitly provided, values are normalized to [0, 1] using the d
 
 **Preview sampling:** The preview step does NOT parse the entire file. It reads the first `IMPORT_PREVIEW_ROWS` rows (default: 50,000, configurable in `config.js`) and returns `sampledRows` and `totalRowsEstimate` (estimated from file size). The full file is only parsed during the confirm step. This prevents large files (millions of rows) from blocking the preview response.
 
+The import pipeline uses the `csv-parse` streaming API (async counterpart of `csv-parse/sync` already in the dependency tree — no new dependency). The uploaded file is piped through the streaming parser incrementally, preventing OOM on large uploads and enabling early abort when validation fails within the first `IMPORT_PREVIEW_ROWS` rows. The preview phase itself streams — it reads only `IMPORT_PREVIEW_ROWS` rows before closing the stream, so validation failures are detected without reading the entire file.
+
 ---
 
 ## 6. Channel Registry
@@ -627,6 +630,8 @@ Users define channel-to-audio mapping via a JSON configuration file:
 }
 ```
 
+**Implementation note (Design Goal 5):** The `foldMethod` and `channels` fields in each bus entry are evaluated server-side. The server computes the folded bus value per viewport update and sends a single float per bus to Max via `/bus/{index}`. Max never sees individual channel values for multi-channel buses — it receives pre-computed, stable per-bus parameters. See migration plan Future Work §8.2 for the full implementation path.
+
 ### 7.2 Web Console (Future Work)
 
 A web page (`/console`) provides real-time adjustment of:
@@ -751,3 +756,6 @@ Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining
 | Adapter Manifest | The combination of `id`, `version`, `channels`, `temporalType`, and `requiredConfig` that describes an adapter to the registry |
 | Native Resolution | The H3 resolution at which a data source's cells were originally encoded; stored per DataRecord for cross-resolution queries |
 | AOI | Area of Interest — a spatial bounding box used to filter stream adapter data requests to a specific region |
+| Fold-mapper | The server's role in computing bus values from channels; Max receives pre-folded results (Design Goal 5) |
+| Alert Rule | A declarative threshold + hysteresis + cooldown definition that triggers an auditory alert when a channel crosses a boundary (Future Work — see migration plan §8.5) |
+| Control Plane | REST endpoints for inspecting and managing runtime state (`/api/sources`, `/api/channels`, `/api/streams`) as distinct from data-plane endpoints (`/api/import`, WebSocket viewport) |

@@ -64,7 +64,9 @@ Phase 1 implements `static` only. `stream` and `timeseries` are reserved for fut
 
 ### 3.3 Internal Exchange Format
 
-Inter-module geographic data is passed as GeoJSON FeatureCollection (RFC 7946):
+**Internal (in-process):** Modules within the same Node.js process pass data as plain `DataRecord[]` arrays (see §3.1). This avoids the overhead of wrapping every record in GeoJSON `Feature` / `FeatureCollection` envelopes for purely in-memory communication.
+
+**External (API boundary):** When data leaves the server — via REST endpoints, WebSocket messages, or file export — it is serialized as GeoJSON FeatureCollection (RFC 7946):
 
 ```jsonc
 {
@@ -84,7 +86,7 @@ Inter-module geographic data is passed as GeoJSON FeatureCollection (RFC 7946):
 }
 ```
 
-This guarantees interoperability with external GIS tools — any tool that reads GeoJSON can directly consume intermediate data.
+This guarantees interoperability with external GIS tools — any tool that reads GeoJSON can directly consume the API output. A lightweight `toGeoJSON(records)` utility handles the conversion at the API boundary.
 
 ---
 
@@ -171,6 +173,8 @@ Phase 1 provides an `H3Encoder` implementation. Once the interface is frozen, ne
 
 Note that H3 includes an additional `neighbors(cellId, k)` method compared to Quadkey — this is a native H3 advantage, useful for spatial analysis scenarios such as "blended soundscape from surrounding N cells." A Quadkey encoder could implement the same interface via quadtree neighbor computation.
 
+> **Implementation note:** Since only H3 is planned for the foreseeable future, Phase 0 may implement `h3-encoder.js` directly without the `cell-encoder.js` abstract interface. The abstraction can be extracted later when a second encoder is actually needed, following YAGNI principles. This reduces Phase 0 scope and cognitive overhead.
+
 ---
 
 ## 5. Data Adapter Interface
@@ -208,7 +212,29 @@ Each data adapter is responsible for:
  */
 ```
 
-### 5.3 WorldCover Adapter (Existing System Refactor)
+### 5.3 Adapter Lifecycle (Stream / Timeseries Types)
+
+For `static` adapters, the `ingest()` method is called once at startup. For `stream` and `timeseries` adapters (Phase 4+), additional lifecycle methods are needed:
+
+```javascript
+/**
+ * @typedef {Object} StreamAdapterExtension
+ * @property {() => Promise<void>} start - Begin polling / open connection
+ * @property {() => Promise<void>} stop - Gracefully shut down
+ * @property {(error: Error) => void} onError - Error callback (log, retry, or degrade)
+ * @property {number} pollIntervalMs - Polling interval in milliseconds (for HTTP poll adapters)
+ * @property {number} maxRetries - Maximum consecutive failures before giving up
+ */
+```
+
+Error handling strategy:
+- On transient failure (network timeout, 5xx): retry with exponential backoff up to `maxRetries`.
+- On permanent failure (4xx, malformed data): log the error, emit an OSC `/adapter/error` message, and continue operating with stale data.
+- On adapter crash: the channel registry keeps the last known values; the adapter can be restarted without affecting other adapters.
+
+Phase 1 only implements `static` adapters; these lifecycle methods are reserved but not required until `stream` adapters are introduced.
+
+### 5.4 WorldCover Adapter (Existing System Refactor)
 
 The existing `data-loader.js` + `landcover.js` + `normalize.js` are refactored into the first adapter:
 
@@ -240,7 +266,7 @@ module.exports = {
 };
 ```
 
-### 5.4 Minimum Column Set for CSV Import
+### 5.5 Minimum Column Set for CSV Import
 
 When users import custom CSV data, the system requires:
 

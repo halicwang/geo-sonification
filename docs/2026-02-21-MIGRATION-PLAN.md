@@ -34,7 +34,9 @@ The following locations in the existing codebase hardcode WorldCover's 11 classe
 
 ## 2. Phase 0: Foundation Layer Extraction (Zero Impact on Existing Functionality)
 
-**Goal:** Add H3 encoding and the CellEncoder interface alongside the existing system, running in parallel.
+**Goal:** Add H3 encoding alongside the existing system, running in parallel.
+
+> **Note:** Per YAGNI, consider skipping the abstract `CellEncoder` interface (`cell-encoder.js`) in this phase and implementing `h3-encoder.js` directly. The abstraction can be extracted later if a second encoder is needed. This reduces Phase 0 to ~250 lines.
 
 ### 2.1 New Files
 
@@ -110,7 +112,17 @@ server/
 - The generic CSV adapter at this stage only needs to import data and expose channels; full audio mapping is not required.
 - When only WorldCover is loaded, the channel registry behaves identically to the hardcoded 11-class system.
 
-### 3.4 Effort Estimate
+### 3.4 Additional Considerations
+
+**`spatial.js` refactor complexity.** The current `lon_buckets / lat_buckets` bucket-based spatial index and the H3 `Map<cellId, DataRecord>` lookup are fundamentally different data structures. Adding `queryByH3()` is not simply adding a method — it requires building a parallel index structure (H3 cell ID → data mapping). Estimate `spatial.js` changes separately from other modifications; the actual modified line count is likely higher than the overall ~200 line estimate suggests.
+
+**Data re-indexing step.** Migrating from 0.5-degree grid IDs to H3 cell IDs requires all CSV data to be re-processed. This should be an explicit step in Phase 1:
+1. The WorldCover adapter's `ingest()` reads the raw CSV and encodes each row to an H3 cell ID.
+2. The re-indexed data is written to `data/cache/` (which is `.gitignore`-d and auto-rebuilt).
+3. During the transition period, `GridCell` retains both `grid_id` (legacy) and `cellId` (H3) so downstream consumers can migrate incrementally.
+4. A one-time validation script compares old spatial query results against new H3 query results to confirm data integrity.
+
+### 3.5 Effort Estimate
 
 - Adapter framework + WorldCover adapter: ~300 lines
 - csv-generic adapter: ~150 lines
@@ -150,7 +162,7 @@ frontend/
 - **CDN**: `<script src="https://unpkg.com/h3-js"></script>` (consistent with the existing no-build-tool frontend)
 - **Server-computed**: `/api/h3` endpoint returns pre-computed hexagonal GeoJSON (zero frontend dependency, but increases server load)
 
-The CDN approach is recommended for simplicity.
+The CDN approach is simpler to implement. However, `h3-js` is approximately 1.2 MB (WASM), which has a non-trivial impact on initial page load. The server-computed approach adds zero frontend dependencies and is more consistent with the project's "no build tools" frontend philosophy. **Recommendation:** benchmark both approaches before committing. If the map client is typically used on fast connections (campus/studio), CDN is acceptable; otherwise, prefer server-computed.
 
 ### 4.4 Effort Estimate
 
@@ -216,7 +228,16 @@ server/adapters/usgs-earthquake.js           # USGS adapter
 server/adapters/__tests__/usgs-earthquake.test.js
 ```
 
-### 6.3 Effort Estimate
+### 6.3 Max Integration Gap
+
+Phase 4 can proceed before Phase 3, but there is a dependency to be aware of: if a second data source adds new channels, Max's `crossfade_controller.js` still has a hardcoded 12-inlet configuration and cannot consume them. Two options:
+
+1. **Scope Phase 4 validation to the server side only** — verify that the new adapter ingests data, registers channels, and produces correct OSC `/ch/*` messages, without requiring Max to render them audibly.
+2. **Pull the minimal Max-side change forward** — make `crossfade_controller.js` read its inlet count from a configuration message (`/ch/count N`) before Phase 3 delivers the full web console.
+
+Option 1 is recommended to keep Phase 4 lightweight.
+
+### 6.4 Effort Estimate
 
 - Adapter implementation: ~100 lines
 - Tests: ~60 lines

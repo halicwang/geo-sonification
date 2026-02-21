@@ -237,6 +237,8 @@ These labels are defined in a `H3_RESOLUTION_LABELS` constant in `config.js` and
 
 5. **Same-resolution** (query res == stored res): Direct lookup, no conversion needed. This is the common case when `DEFAULT_H3_RESOLUTION` is used consistently.
 
+> **Course demo scope:** The migration plan (Phase 1b) implements single-resolution queries only. At import time, data is stored at `DEFAULT_H3_RESOLUTION`; mismatched resolutions are coerced or rejected. The full cross-resolution strategy (rules 1–4 above) is a future enhancement.
+
 ### 4.4 CellEncoder Abstract Interface
 
 Reserved for future replacement with Quadkey or other encoding schemes:
@@ -306,7 +308,7 @@ Each data adapter is responsible for:
  * @property {string} unit - Unit (e.g., "fraction", "μg/m³", "count")
  * @property {string} normalization - Normalization method: "linear" | "log" | "percentile"
  * @property {string} [color] - Suggested visualization color
- * @property {string} [group] - Semantic grouping (e.g., "distribution" for channels that sum to ~1, "metric" for independent indicators). Used by Phase 3 console for bus mapping UI and by /ch/register for downstream consumers to distinguish channel semantics.
+ * @property {string} [group] - Semantic grouping (e.g., "distribution" for channels that sum to ~1, "metric" for independent indicators). Used by the future web console for bus mapping UI and by /ch/register for downstream consumers to distinguish channel semantics.
  */
 ```
 
@@ -405,6 +407,8 @@ Configuration in `config.js`: `DEFAULT_AOI_STRATEGY`, `AOI_MARGIN_DEG`, `AOI_DEB
 **AOI size cap:** When the merged union bounding box exceeds `MAX_AOI_AREA_KM2` (default: 10,000,000 km², configurable — roughly the area of Europe), the AOI manager must prevent a near-global query. Phase 4 implementation starts with a simple fallback: reject the merge and use only the most-recently-active client's viewport as the AOI. A future refinement can partition clients into up to `MAX_AOI_BUCKETS` (default: 3) spatial clusters by centroid proximity, each with its own independent AOI. This is a known limitation — two clients on opposite sides of the globe cannot both benefit from AOI-scoped filtering simultaneously without the bucketed strategy.
 
 Configuration in `config.js`: `MAX_AOI_AREA_KM2`, `MAX_AOI_BUCKETS`.
+
+> **Phase 4 scope:** The migration plan implements "global" strategy only. The "aoi" strategy, `aoi-manager.js`, and the FIRMS fire adapter are Future Work. The global strategy is sufficient for a single-client course demo.
 
 ### 5.5 WorldCover Adapter (Existing System Refactor)
 
@@ -540,7 +544,7 @@ This namespaced key is the canonical identifier used in:
 
 > **Important:** Namespaced keys are constructed at the **query/merge layer** when building a `CellSnapshot`, NOT stored inside `DataRecord`. A `DataRecord` uses bare channel names (see §3.1 constraint). This separation keeps storage records clean and avoids double-encoding the source identity.
 
-**Display aliases:** The Phase 3 web console allows users to assign short aliases for frequently used channels (e.g., display `purpleair.pm25` as `pm25`). Aliases are cosmetic — they appear in the console UI only and do not affect OSC output, bus mapping keys, or internal data. Alias mappings are stored in `audio_mapping.json` under a `channelAliases` key.
+**Display aliases:** The future web console (see migration plan Future Work) allows users to assign short aliases for frequently used channels (e.g., display `purpleair.pm25` as `pm25`). Aliases are cosmetic — they appear in the console UI only and do not affect OSC output, bus mapping keys, or internal data. Alias mappings are stored in `audio_mapping.json` under a `channelAliases` key.
 
 **Backward compatibility:** The WorldCover adapter uses `id: 'worldcover'`, so its channels become `worldcover.tree`, `worldcover.shrub`, etc. internally. For backward-compatible OSC output (`/lc/*` addresses), the mapping in `osc_schema.js` strips the namespace prefix — no Max patch changes required.
 
@@ -623,7 +627,7 @@ Users define channel-to-audio mapping via a JSON configuration file:
 }
 ```
 
-### 7.2 Web Console (Phase 3)
+### 7.2 Web Console (Future Work)
 
 A web page (`/console`) provides real-time adjustment of:
 
@@ -635,6 +639,8 @@ A web page (`/console`) provides real-time adjustment of:
 
 Changes are pushed in real time via WebSocket to the Node.js server, which then updates Max via OSC configuration messages.
 
+> **Implementation status:** The web console is Future Work in the migration plan. The `audio_mapping.json` config file (§7.1) can be hand-edited without the console. Dynamic channel count requires a significant redesign of `crossfade_controller.js` — see the migration plan Future Work section.
+
 ---
 
 ## 8. Import Format Support Roadmap
@@ -643,11 +649,11 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 | ------ | -------- | ----- | ----- |
 | CSV (lat/lon + arbitrary numeric columns) | P0 | 1 | Lowest barrier, immediate support |
 | GeoJSON | P0 | 1 | Internal canonical format, direct consumption |
-| KML | P1 | 2.5 | OGC standard, WGS84 natively — only need Point/LineString/Polygon coordinate extraction. Key for Fog of World / Google Earth ecosystem interop. |
-| GPX | P1 | 2.5 | Similar XML structure to KML — `<trkpt lat="" lon="">` elements. Key for track-based apps (FR24, Strava, etc.). |
+| KML | P1 | Future | OGC standard, WGS84 natively — only need Point/LineString/Polygon coordinate extraction. Key for Fog of World / Google Earth ecosystem interop. |
+| GPX | P1 | Future | Similar XML structure to KML — `<trkpt lat="" lon="">` elements. Key for track-based apps (FR24, Strava, etc.). |
 | API adapter (HTTP poll / WebSocket) | P2 | 4 | Integration with real-time data sources (earthquakes, air quality, flights, etc.) |
 
-> **Note:** KML and GPX are promoted to Phase 2.5 (between frontend decoupling and audio console) because they are critical for the "open platform" interoperability narrative — particularly KML for Fog of World integration. Both formats store coordinates in WGS84 natively, so no CRS conversion is needed. Implementation scope is limited to coordinate extraction from Point/LineString/Polygon geometries; KML style parsing and GPX extensions are out of scope.
+> **Note:** KML and GPX have been deferred to Future Work for the course timeline. They remain critical for the "open platform" interoperability narrative — particularly KML for Fog of World integration. Both formats store coordinates in WGS84 natively, so no CRS conversion is needed. Implementation scope is limited to coordinate extraction from Point/LineString/Polygon geometries; KML style parsing and GPX extensions are out of scope.
 
 ### 8.1 Geometry-to-H3 Rasterization Rules
 
@@ -657,7 +663,7 @@ When importing non-point geometries (LineString, Polygon), the system must conve
 | ------------- | -------------------- | ----- |
 | Point / `<wpt>` | `latLngToCell(lat, lon, res)` | Direct encoding, one cell per point |
 | LineString / `<trkseg>` / GPX track | Distance-based sampling: take a point every `IMPORT_LINE_SAMPLE_METERS` (default: 250, configurable in `config.js`), encode each sampled point, deduplicate resulting cellIds | Avoids over-sampling dense tracks and under-sampling sparse ones. The 250m default produces reasonable density at res 5–7 without flooding the index |
-| Polygon / `<Polygon>` | `polygonToCells(boundary, res)` from h3-js | Interior fill. Polygon holes are ignored in Phase 2.5 (future: subtract hole cells from the filled set) |
+| Polygon / `<Polygon>` | `polygonToCells(boundary, res)` from h3-js | Interior fill. Polygon holes are ignored initially (future: subtract hole cells from the filled set) |
 
 `IMPORT_LINE_SAMPLE_METERS` is defined in `config.js`. GPX tracks with `<time>` elements preserve timestamps per sampled point for future `timeseries` temporal type support.
 

@@ -5,23 +5,23 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 ## Tech Stack & Constraints
 
 - Pure JavaScript — no TypeScript. Use JSDoc type annotations for IDE support.
-- No linter or formatter configured.
+- ESLint + Prettier configured at the project root. Run `npm run lint` and `npm run format:check`.
 - Node.js 18+, Express, WebSocket (`ws`), OSC over UDP (`osc`).
 - Max/MSP 8+ — JS scripts inside Max run on an **ES5 engine**. No arrow functions, template literals, destructuring, `let`/`const`, or any ES6+ syntax in `sonification/*.js` files.
 - Do not introduce new npm dependencies without explicit approval.
 
 ## Directory Conventions
 
-| Directory | Purpose | File naming |
-|---|---|---|
-| `server/` | Node.js backend | kebab-case (`mode-manager.js`) |
-| `sonification/` | Max/MSP patches & JS control scripts | snake_case (`crossfade_controller.js`) |
-| `frontend/` | Plain HTML/CSS/JS map client, no build tools | — |
-| `data/raw/` | GEE exports — source of truth, do not edit manually | — |
-| `data/cache/` | Derived data, auto-rebuilt by server — do not edit or commit | — |
-| `gee/` | Google Earth Engine export scripts | — |
-| `docs/` | Design documents and dev logs | — |
-| `scripts/` | Utility scripts | — |
+| Directory       | Purpose                                                      | File naming                            |
+| --------------- | ------------------------------------------------------------ | -------------------------------------- |
+| `server/`       | Node.js backend                                              | kebab-case (`mode-manager.js`)         |
+| `sonification/` | Max/MSP patches & JS control scripts                         | snake_case (`crossfade_controller.js`) |
+| `frontend/`     | Plain HTML/CSS/JS map client, no build tools                 | —                                      |
+| `data/raw/`     | GEE exports — source of truth, do not edit manually          | —                                      |
+| `data/cache/`   | Derived data, auto-rebuilt by server — do not edit or commit | —                                      |
+| `gee/`          | Google Earth Engine export scripts                           | —                                      |
+| `docs/`         | Design documents and dev logs                                | —                                      |
+| `scripts/`      | Utility scripts                                              | —                                      |
 
 ## Naming Conventions
 

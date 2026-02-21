@@ -6,8 +6,8 @@
  * Important: this module is independent from mode-manager hysteresis state.
  */
 
-const HTTP_DELTA_TTL_MS = 5 * 60 * 1000;            // 5 min
-const HTTP_DELTA_CLEANUP_INTERVAL_MS = 60 * 1000;   // 1 min
+const HTTP_DELTA_TTL_MS = 5 * 60 * 1000; // 5 min
+const HTTP_DELTA_CLEANUP_INTERVAL_MS = 60 * 1000; // 1 min
 
 const httpDeltaByClient = new Map(); // key -> { snapshot, lastSeen }
 let cleanupTimer = null;
@@ -51,7 +51,7 @@ function getHttpDeltaState(clientKey) {
 function saveHttpDeltaState(clientKey, deltaState) {
     httpDeltaByClient.set(clientKey, {
         snapshot: cloneSnapshot(deltaState.previousSnapshot),
-        lastSeen: Date.now()
+        lastSeen: Date.now(),
     });
     ensureCleanupTimer();
 }
@@ -78,9 +78,10 @@ function getHttpDeltaClientKey(req) {
 
     const xff = req.headers['x-forwarded-for'];
     const xffValue = Array.isArray(xff) ? xff[0] : xff;
-    const ip = (typeof xffValue === 'string' && xffValue.trim() !== '')
-        ? xffValue.split(',')[0].trim()
-        : (req.ip || req.socket?.remoteAddress || 'unknown');
+    const ip =
+        typeof xffValue === 'string' && xffValue.trim() !== ''
+            ? xffValue.split(',')[0].trim()
+            : req.ip || req.socket?.remoteAddress || 'unknown';
 
     return `ip:${ip}`;
 }
@@ -89,5 +90,5 @@ module.exports = {
     createDeltaState,
     getHttpDeltaState,
     saveHttpDeltaState,
-    getHttpDeltaClientKey
+    getHttpDeltaClientKey,
 };

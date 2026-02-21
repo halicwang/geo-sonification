@@ -5,7 +5,7 @@ const {
     AGGREGATED_OSC_ORDER,
     OSC_SEQUENCE_WITH_DELTA,
     buildAggregatedPackets,
-    buildDeltaPacket
+    buildDeltaPacket,
 } = require('../osc_schema');
 
 describe('osc_schema constants', () => {
@@ -19,7 +19,7 @@ describe('osc_schema constants', () => {
             OSC_ADDRESSES.LANDCOVER,
             OSC_ADDRESSES.NIGHTLIGHT,
             OSC_ADDRESSES.POPULATION,
-            OSC_ADDRESSES.FOREST
+            OSC_ADDRESSES.FOREST,
         ]);
         expect(AGGREGATED_OSC_ORDER.slice(4)).toEqual(LC_ADDRESS_ORDER);
     });
@@ -28,10 +28,14 @@ describe('osc_schema constants', () => {
         expect(OSC_SEQUENCE_WITH_DELTA.slice(0, 3)).toEqual([
             OSC_ADDRESSES.MODE,
             OSC_ADDRESSES.PROXIMITY,
-            OSC_ADDRESSES.DELTA_LC
+            OSC_ADDRESSES.DELTA_LC,
         ]);
-        expect(OSC_SEQUENCE_WITH_DELTA.slice(3, 3 + AGGREGATED_OSC_ORDER.length)).toEqual(AGGREGATED_OSC_ORDER);
-        expect(OSC_SEQUENCE_WITH_DELTA[OSC_SEQUENCE_WITH_DELTA.length - 1]).toBe(OSC_ADDRESSES.COVERAGE);
+        expect(OSC_SEQUENCE_WITH_DELTA.slice(3, 3 + AGGREGATED_OSC_ORDER.length)).toEqual(
+            AGGREGATED_OSC_ORDER
+        );
+        expect(OSC_SEQUENCE_WITH_DELTA[OSC_SEQUENCE_WITH_DELTA.length - 1]).toBe(
+            OSC_ADDRESSES.COVERAGE
+        );
     });
 });
 
@@ -42,11 +46,11 @@ describe('osc_schema packet builders', () => {
             nightlightNorm: 0.2,
             populationNorm: 0.4,
             forestNorm: 0.6,
-            lcFractions: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+            lcFractions: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
         });
 
         expect(packets).toHaveLength(15);
-        expect(packets.map(p => p.address)).toEqual(AGGREGATED_OSC_ORDER);
+        expect(packets.map((p) => p.address)).toEqual(AGGREGATED_OSC_ORDER);
         expect(packets[0].args[0]).toEqual({ type: 'i', value: 50 });
         expect(packets[4 + 4].args[0].value).toBeCloseTo(1.0, 6); // /lc/50
     });

@@ -21,7 +21,7 @@ const {
     buildProximityPacket,
     buildDeltaPacket,
     buildCoveragePacket,
-    buildAggregatedPackets
+    buildAggregatedPackets,
 } = require('../server/osc_schema');
 const { computeDeltaMetrics } = require('../server/osc-metrics');
 
@@ -39,14 +39,16 @@ function lerp(a, b, t) {
 }
 
 function lcState(values) {
-    return LC_CLASS_ORDER.map(cls => clamp01(values[cls] || 0));
+    return LC_CLASS_ORDER.map((cls) => clamp01(values[cls] || 0));
 }
 
 function normalizeLcFractions(fractions) {
-    const safe = LC_CLASS_ORDER.map((_, index) => clamp01(Array.isArray(fractions) ? fractions[index] : 0));
+    const safe = LC_CLASS_ORDER.map((_, index) =>
+        clamp01(Array.isArray(fractions) ? fractions[index] : 0)
+    );
     const sum = safe.reduce((acc, value) => acc + value, 0);
     if (sum <= 0) return safe;
-    return safe.map(value => value / sum);
+    return safe.map((value) => value / sum);
 }
 
 function interpolateFrame(a, b, t) {
@@ -58,7 +60,7 @@ function interpolateFrame(a, b, t) {
         nightlight: clamp01(lerp(a.nightlight, b.nightlight, t)),
         population: clamp01(lerp(a.population, b.population, t)),
         forest: clamp01(lerp(a.forest, b.forest, t)),
-        lcFractions: normalizeLcFractions(lcFractions)
+        lcFractions: normalizeLcFractions(lcFractions),
     };
 }
 
@@ -74,7 +76,12 @@ function dominantClassFromFractions(lcFractions) {
     return maxIndex === -1 ? 0 : LC_CLASS_ORDER[maxIndex];
 }
 
-function createKeyframeScenario({ description, durationMs, frameMs = DEFAULT_FRAME_MS, keyframes }) {
+function createKeyframeScenario({
+    description,
+    durationMs,
+    frameMs = DEFAULT_FRAME_MS,
+    keyframes,
+}) {
     return {
         description,
         durationMs,
@@ -98,7 +105,7 @@ function createKeyframeScenario({ description, durationMs, frameMs = DEFAULT_FRA
             }
 
             return keyframes[keyframes.length - 1].state;
-        }
+        },
     };
 }
 
@@ -115,10 +122,10 @@ function createScenarios() {
                         proximity: 0.95,
                         coverage: 0.92,
                         nightlight: 0.12,
-                        population: 0.10,
+                        population: 0.1,
                         forest: 0.96,
-                        lcFractions: lcState({ 10: 1.0 })
-                    }
+                        lcFractions: lcState({ 10: 1.0 }),
+                    },
                 },
                 {
                     t: 12000,
@@ -127,12 +134,12 @@ function createScenarios() {
                         proximity: 0.95,
                         coverage: 0.92,
                         nightlight: 0.12,
-                        population: 0.10,
+                        population: 0.1,
                         forest: 0.96,
-                        lcFractions: lcState({ 10: 1.0 })
-                    }
-                }
-            ]
+                        lcFractions: lcState({ 10: 1.0 }),
+                    },
+                },
+            ],
         }),
         'static-mixed': createKeyframeScenario({
             description: 'Stable mixed viewport: 60% tree, 30% water, 10% crop.',
@@ -143,26 +150,26 @@ function createScenarios() {
                     state: {
                         mode: 'aggregated',
                         proximity: 0.82,
-                        coverage: 0.70,
+                        coverage: 0.7,
                         nightlight: 0.25,
-                        population: 0.20,
+                        population: 0.2,
                         forest: 0.66,
-                        lcFractions: lcState({ 10: 0.6, 40: 0.1, 80: 0.3 })
-                    }
+                        lcFractions: lcState({ 10: 0.6, 40: 0.1, 80: 0.3 }),
+                    },
                 },
                 {
                     t: 12000,
                     state: {
                         mode: 'aggregated',
                         proximity: 0.82,
-                        coverage: 0.70,
+                        coverage: 0.7,
                         nightlight: 0.25,
-                        population: 0.20,
+                        population: 0.2,
                         forest: 0.66,
-                        lcFractions: lcState({ 10: 0.6, 40: 0.1, 80: 0.3 })
-                    }
-                }
-            ]
+                        lcFractions: lcState({ 10: 0.6, 40: 0.1, 80: 0.3 }),
+                    },
+                },
+            ],
         }),
         'gradual-transition': createKeyframeScenario({
             description: '10s linear transition from tree-dominant to urban-dominant.',
@@ -173,12 +180,12 @@ function createScenarios() {
                     state: {
                         mode: 'aggregated',
                         proximity: 0.88,
-                        coverage: 0.90,
-                        nightlight: 0.10,
+                        coverage: 0.9,
+                        nightlight: 0.1,
                         population: 0.15,
-                        forest: 0.90,
-                        lcFractions: lcState({ 10: 1.0 })
-                    }
+                        forest: 0.9,
+                        lcFractions: lcState({ 10: 1.0 }),
+                    },
                 },
                 {
                     t: 10000,
@@ -189,10 +196,10 @@ function createScenarios() {
                         nightlight: 0.85,
                         population: 0.88,
                         forest: 0.12,
-                        lcFractions: lcState({ 50: 1.0 })
-                    }
-                }
-            ]
+                        lcFractions: lcState({ 50: 1.0 }),
+                    },
+                },
+            ],
         }),
         'abrupt-switch': createKeyframeScenario({
             description: 'Instant jump from tree to bare to stress /delta response.',
@@ -202,51 +209,51 @@ function createScenarios() {
                     t: 0,
                     state: {
                         mode: 'aggregated',
-                        proximity: 0.90,
+                        proximity: 0.9,
                         coverage: 0.88,
                         nightlight: 0.12,
                         population: 0.14,
                         forest: 0.86,
-                        lcFractions: lcState({ 10: 1.0 })
-                    }
+                        lcFractions: lcState({ 10: 1.0 }),
+                    },
                 },
                 {
                     t: 3999,
                     state: {
                         mode: 'aggregated',
-                        proximity: 0.90,
+                        proximity: 0.9,
                         coverage: 0.88,
                         nightlight: 0.12,
                         population: 0.14,
                         forest: 0.86,
-                        lcFractions: lcState({ 10: 1.0 })
-                    }
+                        lcFractions: lcState({ 10: 1.0 }),
+                    },
                 },
                 {
                     t: 4000,
                     state: {
                         mode: 'aggregated',
-                        proximity: 0.90,
+                        proximity: 0.9,
                         coverage: 0.75,
                         nightlight: 0.35,
                         population: 0.26,
                         forest: 0.05,
-                        lcFractions: lcState({ 60: 1.0 })
-                    }
+                        lcFractions: lcState({ 60: 1.0 }),
+                    },
                 },
                 {
                     t: 8000,
                     state: {
                         mode: 'aggregated',
-                        proximity: 0.90,
+                        proximity: 0.9,
                         coverage: 0.75,
                         nightlight: 0.35,
                         population: 0.26,
                         forest: 0.05,
-                        lcFractions: lcState({ 60: 1.0 })
-                    }
-                }
-            ]
+                        lcFractions: lcState({ 60: 1.0 }),
+                    },
+                },
+            ],
         }),
         'zoom-sweep': createKeyframeScenario({
             description: 'Proximity sweep from 1.0 to 0.0 while landcover remains stable.',
@@ -257,26 +264,26 @@ function createScenarios() {
                     state: {
                         mode: 'aggregated',
                         proximity: 1.0,
-                        coverage: 0.80,
-                        nightlight: 0.40,
+                        coverage: 0.8,
+                        nightlight: 0.4,
                         population: 0.38,
                         forest: 0.44,
-                        lcFractions: lcState({ 10: 0.5, 50: 0.2, 80: 0.3 })
-                    }
+                        lcFractions: lcState({ 10: 0.5, 50: 0.2, 80: 0.3 }),
+                    },
                 },
                 {
                     t: 15000,
                     state: {
                         mode: 'aggregated',
                         proximity: 0.0,
-                        coverage: 0.80,
-                        nightlight: 0.40,
+                        coverage: 0.8,
+                        nightlight: 0.4,
                         population: 0.38,
                         forest: 0.44,
-                        lcFractions: lcState({ 10: 0.5, 50: 0.2, 80: 0.3 })
-                    }
-                }
-            ]
+                        lcFractions: lcState({ 10: 0.5, 50: 0.2, 80: 0.3 }),
+                    },
+                },
+            ],
         }),
         'world-tour': createKeyframeScenario({
             description: 'Amazon -> Atlantic -> Sahara -> European city journey.',
@@ -291,8 +298,8 @@ function createScenarios() {
                         nightlight: 0.15,
                         population: 0.18,
                         forest: 0.88,
-                        lcFractions: lcState({ 10: 0.78, 80: 0.08, 90: 0.10, 95: 0.04 })
-                    }
+                        lcFractions: lcState({ 10: 0.78, 80: 0.08, 90: 0.1, 95: 0.04 }),
+                    },
                 },
                 {
                     t: 12000,
@@ -302,9 +309,9 @@ function createScenarios() {
                         coverage: 0.12,
                         nightlight: 0.08,
                         population: 0.06,
-                        forest: 0.10,
-                        lcFractions: lcState({ 80: 0.88, 20: 0.05, 10: 0.03, 90: 0.04 })
-                    }
+                        forest: 0.1,
+                        lcFractions: lcState({ 80: 0.88, 20: 0.05, 10: 0.03, 90: 0.04 }),
+                    },
                 },
                 {
                     t: 24000,
@@ -315,8 +322,8 @@ function createScenarios() {
                         nightlight: 0.18,
                         population: 0.14,
                         forest: 0.04,
-                        lcFractions: lcState({ 60: 0.72, 20: 0.16, 30: 0.08, 80: 0.04 })
-                    }
+                        lcFractions: lcState({ 60: 0.72, 20: 0.16, 30: 0.08, 80: 0.04 }),
+                    },
                 },
                 {
                     t: 36000,
@@ -327,8 +334,8 @@ function createScenarios() {
                         nightlight: 0.84,
                         population: 0.86,
                         forest: 0.14,
-                        lcFractions: lcState({ 50: 0.65, 40: 0.16, 10: 0.09, 80: 0.05, 20: 0.05 })
-                    }
+                        lcFractions: lcState({ 50: 0.65, 40: 0.16, 10: 0.09, 80: 0.05, 20: 0.05 }),
+                    },
                 },
                 {
                     t: 48000,
@@ -339,11 +346,11 @@ function createScenarios() {
                         nightlight: 0.84,
                         population: 0.86,
                         forest: 0.14,
-                        lcFractions: lcState({ 50: 0.65, 40: 0.16, 10: 0.09, 80: 0.05, 20: 0.05 })
-                    }
-                }
-            ]
-        })
+                        lcFractions: lcState({ 50: 0.65, 40: 0.16, 10: 0.09, 80: 0.05, 20: 0.05 }),
+                    },
+                },
+            ],
+        }),
     };
 }
 
@@ -363,7 +370,7 @@ async function pickScenarioInteractively(scenarios) {
     console.log('');
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const answer = await new Promise(resolve => rl.question('Choose scenario number: ', resolve));
+    const answer = await new Promise((resolve) => rl.question('Choose scenario number: ', resolve));
     rl.close();
 
     const index = Number.parseInt(answer, 10);
@@ -395,7 +402,7 @@ function createOscPort(host, port) {
         localAddress: '0.0.0.0',
         localPort: 0,
         remoteAddress: host,
-        remotePort: port
+        remotePort: port,
     });
 }
 
@@ -414,7 +421,9 @@ async function run() {
     console.log(`[Simulator] Scenario: ${scenarioName}`);
     console.log(`[Simulator] Description: ${scenario.description}`);
     console.log(`[Simulator] Target: ${host}:${port}`);
-    console.log(`[Simulator] Frame interval: ${frameMs}ms, duration: ${(scenario.durationMs / 1000).toFixed(1)}s`);
+    console.log(
+        `[Simulator] Frame interval: ${frameMs}ms, duration: ${(scenario.durationMs / 1000).toFixed(1)}s`
+    );
 
     const oscPort = createOscPort(host, port);
 
@@ -466,15 +475,15 @@ async function run() {
                 nightlightNorm: state.nightlight,
                 populationNorm: state.population,
                 forestNorm: state.forest,
-                lcFractions
-            })
+                lcFractions,
+            }),
         });
         oscPort.send(buildCoveragePacket(state.coverage));
 
         if (step % Math.max(1, Math.round(1000 / frameMs)) === 0 || step === totalSteps) {
             console.log(
                 `[Simulator] t=${(elapsedMs / 1000).toFixed(1)}s ` +
-                `proximity=${clamp01(state.proximity).toFixed(2)}`
+                    `proximity=${clamp01(state.proximity).toFixed(2)}`
             );
         }
 

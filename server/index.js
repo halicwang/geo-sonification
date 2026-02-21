@@ -21,13 +21,26 @@ const { WebSocketServer } = WebSocket;
 const path = require('path');
 
 const {
-    HTTP_PORT, WS_PORT, OSC_HOST, OSC_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE,
-    PROXIMITY_ZOOM_LOW, PROXIMITY_ZOOM_HIGH
+    HTTP_PORT,
+    WS_PORT,
+    OSC_HOST,
+    OSC_PORT,
+    ALLOWED_ORIGINS,
+    BROADCAST_STATS,
+    GRID_SIZE,
+    PROXIMITY_ZOOM_LOW,
+    PROXIMITY_ZOOM_HIGH,
 } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
 const {
-    isOscReady, sendToMax, sendGridsToMax, sendModeToMax,
-    sendProximityToMax, sendDeltaToMax, sendCoverageToMax, closeOsc
+    isOscReady,
+    sendToMax,
+    sendGridsToMax,
+    sendModeToMax,
+    sendProximityToMax,
+    sendDeltaToMax,
+    sendCoverageToMax,
+    closeOsc,
 } = require('./osc');
 const { loadGridData } = require('./data-loader');
 const spatial = require('./spatial');
@@ -35,18 +48,22 @@ const { validateBounds } = spatial;
 const {
     getLcFractionsFromDistribution,
     computeProximityFromZoom,
-    computeDeltaMetrics
+    computeDeltaMetrics,
 } = require('./osc-metrics');
 const {
     createDeltaState,
     getHttpDeltaState,
     saveHttpDeltaState,
-    getHttpDeltaClientKey
+    getHttpDeltaClientKey,
 } = require('./delta-state');
 const {
-    createModeState, getHttpModeState, saveHttpModeState,
-    applyHysteresis, getHttpClientKey,
-    PER_GRID_THRESHOLD_ENTER, PER_GRID_THRESHOLD_EXIT
+    createModeState,
+    getHttpModeState,
+    saveHttpModeState,
+    applyHysteresis,
+    getHttpClientKey,
+    PER_GRID_THRESHOLD_ENTER,
+    PER_GRID_THRESHOLD_EXIT,
 } = require('./mode-manager');
 
 // ============ Constants ============
@@ -111,7 +128,13 @@ function processViewport(bounds, modeState, deltaState, zoom) {
     }
 
     // Always send aggregated stats so Max displays/synth never go silent
-    sendToMax(stats.dominantLandcover, stats.nightlightNorm, stats.populationNorm, stats.forestNorm, lcFractions);
+    sendToMax(
+        stats.dominantLandcover,
+        stats.nightlightNorm,
+        stats.populationNorm,
+        stats.forestNorm,
+        lcFractions
+    );
     sendCoverageToMax(stats.landCoverageRatio);
 
     // Additionally send per-grid data when zoomed in
@@ -132,7 +155,7 @@ function processViewport(bounds, modeState, deltaState, zoom) {
 function parseViewportBounds(bounds, clientLabel = 'request') {
     if (!Array.isArray(bounds) || bounds.length !== 4) {
         return {
-            error: `${clientLabel} bounds must be an array: [west, south, east, north]`
+            error: `${clientLabel} bounds must be an array: [west, south, east, north]`,
         };
     }
     return { bounds };
@@ -142,19 +165,21 @@ function parseViewportBounds(bounds, clientLabel = 'request') {
 const app = express();
 
 // Per-request CORS check against the whitelist in config.js
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. curl, mobile apps)
-        if (!origin) return callback(null, true);
-        if (ALLOWED_ORIGINS.includes(origin)) {
-            callback(null, true);
-        } else {
-            console.warn(`CORS: Blocked request from origin: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: false
-}));
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            // Allow requests with no origin (e.g. curl, mobile apps)
+            if (!origin) return callback(null, true);
+            if (ALLOWED_ORIGINS.includes(origin)) {
+                callback(null, true);
+            } else {
+                console.warn(`CORS: Blocked request from origin: ${origin}`);
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
+        credentials: false,
+    })
+);
 
 app.use(express.json());
 
@@ -169,7 +194,7 @@ app.get('/health', (req, res) => {
     res.status(200).json({
         ok: true,
         dataLoaded,
-        oscReady: isOscReady()
+        oscReady: isOscReady(),
     });
 });
 
@@ -180,7 +205,7 @@ app.get('/api/config', (req, res) => {
         httpPort: HTTP_PORT,
         oscReady: isOscReady(),
         gridSize: GRID_SIZE,
-        landcoverMeta: LANDCOVER_META
+        landcoverMeta: LANDCOVER_META,
     });
 });
 
@@ -246,7 +271,7 @@ async function startServer() {
         });
 
         // Start WebSocket server
-        const wss = wssServer = new WebSocketServer({ port: WS_PORT });
+        const wss = (wssServer = new WebSocketServer({ port: WS_PORT }));
 
         wss.on('connection', (ws) => {
             console.log('WebSocket client connected');
@@ -290,12 +315,23 @@ async function startServer() {
                         }
 
                         if (!dataLoaded) {
-                            ws.send(JSON.stringify({ type: 'stats', loading: true, message: 'Data loading...' }));
+                            ws.send(
+                                JSON.stringify({
+                                    type: 'stats',
+                                    loading: true,
+                                    message: 'Data loading...',
+                                })
+                            );
                             return;
                         }
 
                         const zoom = Number.isFinite(data.zoom) ? data.zoom : undefined;
-                        const result = processViewport(parsedBounds.bounds, modeState, deltaState, zoom);
+                        const result = processViewport(
+                            parsedBounds.bounds,
+                            modeState,
+                            deltaState,
+                            zoom
+                        );
                         if (result.error) {
                             ws.send(JSON.stringify({ type: 'error', error: result.error }));
                             return;
@@ -305,13 +341,20 @@ async function startServer() {
 
                         // Default: unicast (only sender). BROADCAST_STATS=1: all clients.
                         if (BROADCAST_STATS) {
-                            wss.clients.forEach(client => {
-                                if (client.readyState === WebSocket.OPEN && client.bufferedAmount < WS_MAX_BUFFERED) {
-                                    try { client.send(payload); } catch (sendErr) {
+                            wss.clients.forEach((client) => {
+                                if (
+                                    client.readyState === WebSocket.OPEN &&
+                                    client.bufferedAmount < WS_MAX_BUFFERED
+                                ) {
+                                    try {
+                                        client.send(payload);
+                                    } catch (sendErr) {
                                         console.error('Failed to send to client:', sendErr);
                                     }
                                 } else if (client.readyState === WebSocket.OPEN) {
-                                    console.warn(`[WS] Skipping slow client (buffered=${client.bufferedAmount})`);
+                                    console.warn(
+                                        `[WS] Skipping slow client (buffered=${client.bufferedAmount})`
+                                    );
                                 }
                             });
                         } else {
@@ -324,7 +367,9 @@ async function startServer() {
                     console.error('WebSocket message error:', err);
                     try {
                         if (ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify({ type: 'error', error: 'Invalid message format' }));
+                            ws.send(
+                                JSON.stringify({ type: 'error', error: 'Invalid message format' })
+                            );
                         }
                     } catch (sendErr) {
                         console.error('Failed to send error response:', sendErr);
@@ -361,7 +406,7 @@ async function startServer() {
 function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down...`);
     if (wssServer) {
-        wssServer.clients.forEach(client => client.terminate());
+        wssServer.clients.forEach((client) => client.terminate());
         wssServer.close();
     }
     if (httpServer) httpServer.close();

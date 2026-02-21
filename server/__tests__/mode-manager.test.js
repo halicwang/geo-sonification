@@ -1,4 +1,9 @@
-const { createModeState, applyHysteresis, PER_GRID_THRESHOLD_ENTER, PER_GRID_THRESHOLD_EXIT } = require('../mode-manager');
+const {
+    createModeState,
+    applyHysteresis,
+    PER_GRID_THRESHOLD_ENTER,
+    PER_GRID_THRESHOLD_EXIT,
+} = require('../mode-manager');
 
 describe('createModeState', () => {
     test('returns initial aggregated state', () => {

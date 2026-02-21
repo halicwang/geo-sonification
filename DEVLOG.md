@@ -13,6 +13,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 **Core problem**: Use sound to make trend, acceleration, and key years perceptually immediate — listeners should hear whether cumulative loss over 20 years is substantial without staring at a chart.
 
 **Sound structure (original plan)**:
+
 - 2D place baseline — land-cover composition defines background timbre (forest = organic/continuous, water = open/floating, built-up = mechanical/regular)
 - Time-weighted degradation — cumulative loss drives detune, instability, roughness, fragmentation over time
 - Year-based events — annual loss triggers ruptures/noise in high-loss years; annual gain attenuates loss weight
@@ -24,26 +25,31 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 Key feedback from instructor review of the first working demo (frontend + sine wave mapping):
 
 ### What worked
+
 - Interactive map with Mapbox grid overlay — novel that it covers the whole world, not just one city
 - Data pipeline from GEE to frontend to Max via OSC is functional
 - Real-time interaction: hover over grid cells, get data back
 
 ### Design tension identified
+
 - **Historical vs. real-time**: The map shows today's data, but the original plan wants to sonify 20 years of change. Navigating a "now" map while listening to the past is perceptually confusing.
 - Instructor recommendation: **drop the historical time-series axis** and focus on real-time "now" data. The interactive map probing is the strong differentiator.
 
 ### Sonification strategy shift
+
 - Direct frequency mapping (data → pitch) is not very informative — listeners can't tell actual values
 - Sound doesn't need to directly map data with precise numeric fidelity; **loose, indirect mappings are valid sonification**
 - Example: green space → one type of music, developed area → different type of music. Switching sounds based on data category is legitimate sonification
 - Sound's role: **emotional impact and weight**, not numeric readout. Like a film score enhances visual storytelling.
 
 ### New directions discussed
+
 - Add more data dimensions beyond just landcover: **population**, nightlight, forest percentage — more streams = more things to work with in sound design, enables comparisons
 - Consider focusing on a specific region (e.g., one city) if detailed historical data is available, or stay global with real-time data
 - Acoustic ecology angle mentioned (Nature's Soundscape studies in British Columbia) — not pursued but interesting reference
 
 ### Action items from discussion
+
 - Integrate landscape/landcover data into the map (was only using loss rate at this point)
 - Add population data as a new dimension
 - Focus on "now" data, abandon historical time-series for this project
@@ -58,12 +64,14 @@ See `docs/2026-02-06-per-grid-devlog.md` for full design rationale.
 **Core idea**: When the user zooms in far enough (≤50 grid cells visible), switch from aggregated (1 blended sound) to per-grid mode (N independent voices, spatially distributed). Threshold uses hysteresis (enter at 50, exit at 50) to avoid oscillation.
 
 **Server changes** (`server/osc.js`, `server/index.js`):
+
 - New `sendGridsToMax()` — sends `/grid/count`, `/viewport`, then N × `/grid` (lon, lat, lc, nl, pop, forest)
 - New `processViewport()` shared helper — handles hysteresis-based mode switching for both WebSocket and HTTP clients
 - Per-client mode state tracked separately (WS: per-connection, HTTP: per-IP with 5-min TTL expiry)
 - `normalizeOscValues()` extracted to standalone `normalize.js` for reuse in both modes
 
 **Max patch** (`sonification/max_wav_osc.maxpat`):
+
 - Added `route /grid/count /grid /viewport` branch on per-grid `udpreceive`
 - `print` objects for data verification (sound design deferred)
 
@@ -96,6 +104,7 @@ Three new OSC message types added to complete the per-grid data pipeline. Design
 **Solution**: Server pre-computes and sends `/grid/pos` with `xNorm` (0=west, 1=east) and `yNorm` (0=south, 1=north). Max can directly map these to stereo panning or spatial placement.
 
 **Implementation details**:
+
 - Uses **cell center** (lon + GRID_SIZE/2, lat + GRID_SIZE/2), not bottom-left corner — otherwise all cells are offset by half a grid cell
 - Date-line crossing (west > east → negative xRange) falls through to 0.5 default — acceptable for current data coverage
 - Computed once per viewport update (xRange/yRange outside the per-cell loop)
@@ -119,6 +128,7 @@ Aggregated mode unchanged (15 messages: 4 stats + 11 `/lc/*`).
 ### Max Patch Updates
 
 Updated route from `route /grid/count /grid /viewport` to:
+
 ```
 route /grid/count /grid/pos /grid/lc /grid /viewport
 ```
@@ -137,10 +147,10 @@ New objects: `unpack f f` for `/grid/pos`, `unpack f f f f f f f f f f f` for `/
 
 Two "forest" values exist in the OSC stream with different semantics:
 
-| Message | Denominator | Meaning |
-|---------|-------------|---------|
-| `/forest` (aggregated) / `/grid` forest arg | land area only | forest_area ÷ land_area (excludes water) |
-| `/lc/10` (aggregated) / `/grid/lc` first float | total area | tree_cover_pixels ÷ total_pixels (includes water) |
+| Message                                        | Denominator    | Meaning                                           |
+| ---------------------------------------------- | -------------- | ------------------------------------------------- |
+| `/forest` (aggregated) / `/grid` forest arg    | land area only | forest_area ÷ land_area (excludes water)          |
+| `/lc/10` (aggregated) / `/grid/lc` first float | total area     | tree_cover_pixels ÷ total_pixels (includes water) |
 
 For a coastal cell that's 50% water + 50% forest: `/forest` = 1.0, `/lc/10` ≈ 0.5.
 
@@ -160,19 +170,19 @@ For a coastal cell that's 50% water + 50% forest: `/forest` = 1.0, `/lc/10` ≈ 
 ### Key architecture decisions
 
 1. **Global ordering update (insert-only)**:
-   - `/mode` -> `/proximity` -> `/delta/*` -> existing messages
-   - Existing aggregated payload ordering remains unchanged.
-   - Existing per-grid payload logic remains unchanged.
+    - `/mode` -> `/proximity` -> `/delta/*` -> existing messages
+    - Existing aggregated payload ordering remains unchanged.
+    - Existing per-grid payload logic remains unchanged.
 2. **Client-state separation preserved**:
-   - Existing mode hysteresis state remains in `mode-manager.js` (no behavior change).
-   - Delta state is managed independently in `delta-state.js`.
+    - Existing mode hysteresis state remains in `mode-manager.js` (no behavior change).
+    - Delta state is managed independently in `delta-state.js`.
 3. **Delta keying strategy**:
-   - WebSocket: per-connection state
-   - HTTP: `clientId` from request body first, fallback to IP
-   - HTTP delta state uses 5-minute TTL cleanup
+    - WebSocket: per-connection state
+    - HTTP: `clientId` from request body first, fallback to IP
+    - HTTP delta state uses 5-minute TTL cleanup
 4. **Schema single source of truth**:
-   - `server/osc_schema.js` centralizes OSC addresses, class order, canonical sequence, and packet builders
-   - Both `server/osc.js` and `scripts/osc_simulator.js` import this schema
+    - `server/osc_schema.js` centralizes OSC addresses, class order, canonical sequence, and packet builders
+    - Both `server/osc.js` and `scripts/osc_simulator.js` import this schema
 
 ### New config knobs
 
@@ -185,42 +195,42 @@ All added to `server/config.js` with validation and documented in `.env.example`
 ### Formula notes (implemented)
 
 - `proximity` from zoom level (updated 2026-02-20, originally grid-count based):
-  - `zoom <= PROXIMITY_ZOOM_LOW` -> `0` (distant/ocean)
-  - `zoom >= PROXIMITY_ZOOM_HIGH` -> `1` (zoomed in)
-  - linear interpolation in between
+    - `zoom <= PROXIMITY_ZOOM_LOW` -> `0` (distant/ocean)
+    - `zoom >= PROXIMITY_ZOOM_HIGH` -> `1` (zoomed in)
+    - linear interpolation in between
 - `delta`:
-  - `magnitude = clamp(0.5 * sum(abs(current_i - prev_i)), 0, 1)`
-  - `dt` clamped to `[DT_MIN_MS, DT_MAX_MS]`
-  - `rate = clamp((magnitude / (dt/1000)) / DELTA_RATE_CEILING, 0, 1)`
-  - First frame emits all-zero deltas
+    - `magnitude = clamp(0.5 * sum(abs(current_i - prev_i)), 0, 1)`
+    - `dt` clamped to `[DT_MIN_MS, DT_MAX_MS]`
+    - `rate = clamp((magnitude / (dt/1000)) / DELTA_RATE_CEILING, 0, 1)`
+    - First frame emits all-zero deltas
 
 ### Simulator behavior
 
 - Supports:
-  - `static-forest`
-  - `static-mixed`
-  - `gradual-transition`
-  - `abrupt-switch`
-  - `zoom-sweep`
-  - `world-tour`
+    - `static-forest`
+    - `static-mixed`
+    - `gradual-transition`
+    - `abrupt-switch`
+    - `zoom-sweep`
+    - `world-tour`
 - CLI:
-  - `node scripts/osc_simulator.js <scenario>`
-  - No args + TTY -> interactive selection
-  - No args + non-TTY -> print usage and exit
+    - `node scripts/osc_simulator.js <scenario>`
+    - No args + TTY -> interactive selection
+    - No args + non-TTY -> print usage and exit
 - Graceful shutdown on Ctrl+C
 
 ### Validation and regression coverage
 
 - Expanded OSC unit tests:
-  - `/proximity` send + clamp
-  - `/delta` send + canonical addresses
+    - `/proximity` send + clamp
+    - `/delta` send + canonical addresses
 - Added schema tests:
-  - class order, address ordering, canonical sequence
+    - class order, address ordering, canonical sequence
 - Added pure metrics tests:
-  - proximity edge/linear mapping
-  - delta magnitude/rate formulas and dt clamping
+    - proximity edge/linear mapping
+    - delta magnitude/rate formulas and dt clamping
 - Added delta-state tests:
-  - clientId-first key derivation and state persistence
+    - clientId-first key derivation and state persistence
 
 ---
 
@@ -229,6 +239,7 @@ All added to `server/config.js` with validation and documented in `.env.example`
 ### Sound design philosophy
 
 Three-layer structure:
+
 - **Base + texture layer**: ambient loops produced in Ableton (organic synths, drones, noise textures), exported as loopable WAV files per land cover type. Max handles loop playback and volume control.
 - **Icon layer**: short auditory icons (bird calls, car horns, wind gusts) triggered by data-driven logic in Max.
 - **Crossfade mixing**: data from the server (11 land cover channels + proximity) controls volume envelopes and trigger probabilities.
@@ -238,11 +249,13 @@ Listening experience goal: **65% emotional/aesthetic quality, 35% informational 
 ### Phase 1 scope and fold-mapping
 
 Only 3 representative land cover types have dedicated audio assets:
+
 - **Tree** (rainforest): organic LFO + humid noise + bird/insect icons
 - **Urban** (city): low-frequency drone + mechanical texture + car horn icons
 - **Bare** (desert): wind synthesis + sand particles + wind gust icons
 
 To avoid large silent regions during global exploration, 11 output channels are folded into 5 audio buses **in the Max patch wiring** (not in server code or JS scripts):
+
 - **Tree bus**: classes 10 (Tree), 20 (Shrub), 30 (Grass), 90 (Wetland), 95 (Mangrove), 100 (Moss) — natural vegetation
 - **Crop bus**: class 40 (Cropland)
 - **Urban bus**: class 50 (Urban) only
@@ -271,6 +284,7 @@ Smoothing: EMA with `alpha = 1 - exp(-dt / smoothingTime)`, default tau = 500ms.
 `sonification/icon_trigger.js` — 13 inlets, 2 outlets.
 
 Weighted probabilistic triggering on each metro bang:
+
 1. Per-class weight = lcPercent × proximity × cooldown × active
 2. Total trigger probability = totalWeight × baseRate (default 0.05)
 3. Weighted random selection among eligible classes
@@ -327,11 +341,11 @@ New 4th audio bus — **Water bus** — combining two signal paths via `[maximum
 
 Ocean is defined as the **absence of grid data**, not a land cover class. The metric is `1 − coverage`.
 
-| Level | Condition | Target |
-|-------|-----------|--------|
-| Pure ocean | `proximity == 0` (no grids at all) | 1.0 |
-| Coastal | `coverage < 0.1` AND `proximity > 0.7` | 0.7 |
-| Land | otherwise | 0.0 |
+| Level      | Condition                              | Target |
+| ---------- | -------------------------------------- | ------ |
+| Pure ocean | `proximity == 0` (no grids at all)     | 1.0    |
+| Coastal    | `coverage < 0.1` AND `proximity > 0.7` | 0.7    |
+| Land       | otherwise                              | 0.0    |
 
 EMA smoothing (500ms time constant) prevents abrupt jumps. Triggered by `/coverage`, which arrives last in the server send cycle (`/proximity` → `/delta/*` → `/lc/*` → `/coverage`), ensuring proximity is already current when evaluation runs.
 
@@ -352,12 +366,12 @@ crossfade_controller
 
 ### Behavior matrix
 
-| Scenario | proximity | coverage | ocean target | crossfade 70+80 | Water bus output |
-|----------|-----------|----------|-------------|-----------------|-----------------|
-| Open ocean (no grids) | 0 | 0 | **1.0** | 0 | **1.0** |
-| Coastline (few grids) | 0.8 | 0.05 | **0.7** | ~0.1 | **0.7** |
-| Inland lake (30% water) | 0.9 | 0.85 | 0 | ~0.27 | **0.27** |
-| Inland no water | 0.9 | 0.90 | 0 | 0 | **0** |
+| Scenario                | proximity | coverage | ocean target | crossfade 70+80 | Water bus output |
+| ----------------------- | --------- | -------- | ------------ | --------------- | ---------------- |
+| Open ocean (no grids)   | 0         | 0        | **1.0**      | 0               | **1.0**          |
+| Coastline (few grids)   | 0.8       | 0.05     | **0.7**      | ~0.1            | **0.7**          |
+| Inland lake (30% water) | 0.9       | 0.85     | 0            | ~0.27           | **0.27**         |
+| Inland no water         | 0.9       | 0.90     | 0            | 0               | **0**            |
 
 ### Files changed
 

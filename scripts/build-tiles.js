@@ -26,9 +26,19 @@ const GEOJSON_PATH = path.join(SRC_DIR, 'all.geojson');
 // Only these properties go into tiles (rendering only).
 // Server-only fields (population, nightlight, forest, etc.) are stripped.
 const TILE_PROPERTIES = [
-    'grid_id', 'landcover_class',
-    'lc_pct_10', 'lc_pct_20', 'lc_pct_30', 'lc_pct_40', 'lc_pct_50',
-    'lc_pct_60', 'lc_pct_70', 'lc_pct_80', 'lc_pct_90', 'lc_pct_95', 'lc_pct_100'
+    'grid_id',
+    'landcover_class',
+    'lc_pct_10',
+    'lc_pct_20',
+    'lc_pct_30',
+    'lc_pct_40',
+    'lc_pct_50',
+    'lc_pct_60',
+    'lc_pct_70',
+    'lc_pct_80',
+    'lc_pct_90',
+    'lc_pct_95',
+    'lc_pct_100',
 ];
 
 function stripProps(grid) {
@@ -46,14 +56,16 @@ function gridToFeature(grid, gridSize, minzoom, maxzoom) {
         properties: stripProps(grid),
         geometry: {
             type: 'Polygon',
-            coordinates: [[
-                [grid.lon, grid.lat],
-                [grid.lon + gridSize, grid.lat],
-                [grid.lon + gridSize, grid.lat + gridSize],
-                [grid.lon, grid.lat + gridSize],
-                [grid.lon, grid.lat]
-            ]]
-        }
+            coordinates: [
+                [
+                    [grid.lon, grid.lat],
+                    [grid.lon + gridSize, grid.lat],
+                    [grid.lon + gridSize, grid.lat + gridSize],
+                    [grid.lon, grid.lat + gridSize],
+                    [grid.lon, grid.lat],
+                ],
+            ],
+        },
     };
 }
 
@@ -66,7 +78,7 @@ async function main() {
     console.log(`[build-tiles] Loaded ${allGrids.length} base cells (0.5°)`);
 
     // 2. Build GeoJSON — all cells at full 0.5° resolution across all zoom levels
-    const features = allGrids.map(g => gridToFeature(g, 0.5, 0, 12));
+    const features = allGrids.map((g) => gridToFeature(g, 0.5, 0, 12));
 
     const geojson = { type: 'FeatureCollection', features };
     console.log(`[build-tiles] ${features.length} features (0.5° base cells, zoom 0-12)`);
@@ -75,11 +87,14 @@ async function main() {
     fs.mkdirSync(SRC_DIR, { recursive: true });
     const json = JSON.stringify(geojson);
     fs.writeFileSync(GEOJSON_PATH, json);
-    console.log(`[build-tiles] Wrote ${(json.length / 1e6).toFixed(1)}MB GeoJSON → ${GEOJSON_PATH}`);
+    console.log(
+        `[build-tiles] Wrote ${(json.length / 1e6).toFixed(1)}MB GeoJSON → ${GEOJSON_PATH}`
+    );
 
     // 4. Run tippecanoe
     const tippecanoeArgs = [
-        '-o', OUTPUT,
+        '-o',
+        OUTPUT,
         '--force',
         '--layer=grids',
         '--minimum-zoom=0',
@@ -87,7 +102,7 @@ async function main() {
         '--no-feature-limit',
         '--no-tile-size-limit',
         '--no-tile-compression',
-        GEOJSON_PATH
+        GEOJSON_PATH,
     ];
     console.log(`[build-tiles] Running: tippecanoe ${tippecanoeArgs.join(' ')}`);
     const t1 = Date.now();
@@ -104,7 +119,7 @@ async function main() {
     console.log('[build-tiles] Done!');
 }
 
-main().catch(err => {
+main().catch((err) => {
     console.error('[build-tiles] FATAL:', err);
     process.exit(1);
 });

@@ -74,9 +74,17 @@ outlets = 2;
 // ─── Inlet / Outlet assist strings ──────────────────────────────────
 
 var LC_LABELS = [
-    "Tree (10)", "Shrub (20)", "Grass (30)", "Crop (40)",
-    "Urban (50)", "Bare (60)", "Snow/Ice (70)", "Water (80)",
-    "Wetland (90)", "Mangrove (95)", "Moss/Lichen (100)"
+    "Tree (10)",
+    "Shrub (20)",
+    "Grass (30)",
+    "Crop (40)",
+    "Urban (50)",
+    "Bare (60)",
+    "Snow/Ice (70)",
+    "Water (80)",
+    "Wetland (90)",
+    "Mangrove (95)",
+    "Moss/Lichen (100)",
 ];
 
 var i;
@@ -109,7 +117,7 @@ var cooldownMs = 3000;
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function clamp01(v) {
-    if (v !== v) return 0;  // NaN guard
+    if (v !== v) return 0; // NaN guard
     if (v < 0) return 0;
     if (v > 1) return 1;
     return v;
@@ -151,8 +159,7 @@ function bang() {
     var i;
     for (i = 0; i < NUM_CLASSES; i++) {
         var w = 0;
-        if (activeSet[LC_CLASSES[i]]
-            && (now - lastTriggerTime[i] >= cooldownMs)) {
+        if (activeSet[LC_CLASSES[i]] && now - lastTriggerTime[i] >= cooldownMs) {
             w = lcPercent[i] * proximity;
         }
         weights[i] = w;

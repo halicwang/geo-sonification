@@ -4,7 +4,7 @@
  */
 
 jest.mock('../normalize', () => ({
-    normalizeOscValues: () => ({ nightlightNorm: 0, populationNorm: 0, forestNorm: 0 })
+    normalizeOscValues: () => ({ nightlightNorm: 0, populationNorm: 0, forestNorm: 0 }),
 }));
 
 const { init, calculateViewportStats } = require('../spatial');
@@ -12,7 +12,8 @@ const { init, calculateViewportStats } = require('../spatial');
 function makeCell(overrides) {
     return {
         grid_id: 'test',
-        lon: 0, lat: 0,
+        lon: 0,
+        lat: 0,
         landcover_class: 10,
         land_area_km2: 100,
         cell_area_km2: 100,
@@ -23,7 +24,7 @@ function makeCell(overrides) {
         forest_area_km2: 0,
         population_total: 0,
         population_density: 0,
-        ...overrides
+        ...overrides,
     };
 }
 
@@ -49,10 +50,13 @@ describe('land coverage ratio', () => {
     test('2 cells out of 4 theoretical: ratio = 0.5', () => {
         // 2x2 grid of theoretical cells: (0,0), (0.5,0), (0,0.5), (0.5,0.5)
         // Only provide data for 2 of them
-        init([
-            makeCell({ grid_id: 'a', lon: 0, lat: 0 }),
-            makeCell({ grid_id: 'b', lon: 0.5, lat: 0 })
-        ], null);
+        init(
+            [
+                makeCell({ grid_id: 'a', lon: 0, lat: 0 }),
+                makeCell({ grid_id: 'b', lon: 0.5, lat: 0 }),
+            ],
+            null
+        );
         // Viewport covering exactly the 2x2 block (bounds inside all 4 cells)
         const stats = calculateViewportStats([0.1, 0.1, 0.9, 0.9]);
         expect(stats.theoreticalGridCount).toBe(4);
@@ -69,10 +73,13 @@ describe('land coverage ratio', () => {
     });
 
     test('antimeridian crossing counts from both ranges', () => {
-        init([
-            makeCell({ grid_id: 'east', lon: 179.5, lat: 0 }),
-            makeCell({ grid_id: 'west', lon: -180, lat: 0 })
-        ], null);
+        init(
+            [
+                makeCell({ grid_id: 'east', lon: 179.5, lat: 0 }),
+                makeCell({ grid_id: 'west', lon: -180, lat: 0 }),
+            ],
+            null
+        );
         // Viewport crossing the date line: 179°E to 179°W
         const stats = calculateViewportStats([179, -0.5, -179, 0.6]);
         expect(stats.theoreticalGridCount).toBeGreaterThanOrEqual(2);

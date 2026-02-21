@@ -9,12 +9,14 @@ Date: 2026-02-06
 On each viewport update, the server sends **15 OSC messages** to MaxMSP:
 
 **Aggregated stats (4 messages):**
+
 - `/landcover` (int 10-100) — dominant ESA WorldCover class in viewport
 - `/nightlight` (float 0-1) — normalized nightlight brightness
 - `/population` (float 0-1) — normalized population density
 - `/forest` (float 0-1) — normalized forest coverage
 
 **Landcover distribution (11 messages, added today):**
+
 - `/lc/10` through `/lc/100` (float 0-1) — area fraction per ESA class in viewport
 - 11 classes: Tree/Forest, Shrubland, Grassland, Cropland, Urban, Bare, Snow/Ice, Water, Wetland, Mangroves, Moss/Lichen
 - Classes not present in the viewport send 0.0; all 11 are always sent
@@ -24,6 +26,7 @@ Data pipeline: `Frontend (Mapbox) → WebSocket → Node.js Server → spatial.j
 ### Existing Infrastructure
 
 Pre-optimizations already completed for per-grid:
+
 - `normalizeOscValues()` extracted from `spatial.js` into standalone `normalize.js`, accepts explicit `normalizeParams` — reusable for per-grid normalization
 - `calculateViewportStats()` now returns `gridsInView` array, directly accessible in `processViewport()`
 - Spatial index (`spatialIndex`) provides O(1) viewport queries via 2D bucketing
@@ -57,6 +60,7 @@ gridCount <= PER_GRID_THRESHOLD →  per-grid mode
 ```
 
 **Recommended starting threshold: 20-50 cells.** Do not start with 1000. Rationale:
+
 - Per-grid's value lies in spatial detail when zoomed in; aggregated mode is sufficient when zoomed out
 - Max `poly~` performance needs testing — start with fewer voices
 - Threshold is adjustable via environment variable, no code changes required
@@ -66,13 +70,14 @@ gridCount <= PER_GRID_THRESHOLD →  per-grid mode
 Simplest effective approach: **longitude → stereo L/R**
 
 ```javascript
-pan = (grid.lon - viewport.west) / (viewport.east - viewport.west)
+pan = (grid.lon - viewport.west) / (viewport.east - viewport.west);
 // 0.0 = hard left, 1.0 = hard right
 ```
 
 The server only needs to send `lon`, `lat`, and viewport bounds to Max; panning computation happens on the Max side.
 
 Optional advanced dimensions:
+
 - Latitude → pitch/brightness (north = high frequency, south = low frequency)
 - Area/weight → volume
 - **Start with L/R pan only, validate the effect before adding more**
@@ -88,6 +93,7 @@ Optional advanced dimensions:
 **(b) Same-class stacking ≠ chaos.** If 25 out of 30 grids are grassland, they produce similar sounds → stacking makes the sound "thicker," like 40 violins in an orchestra playing the same melody. The few different grids (e.g., 2 river cells, 1 urban cell) become spatially locatable "highlights."
 
 **(c) Volume differentiation.** Not every grid needs equal volume. Minority classes can be made more prominent:
+
 ```
 40 grassland cells → each very quiet (background layer)
 2 river cells      → slightly louder
@@ -99,6 +105,7 @@ Perceptual result: a grassland bed with a few spatially distinct special points.
 ### 4. Both Modes Coexist
 
 In per-grid mode, **aggregated OSC messages are still sent** (including the 11-class distribution). This means:
+
 - Max can freely choose which data set to use
 - Existing aggregated sound design remains intact
 - Frontend stats panel is unaffected
@@ -125,6 +132,7 @@ Parameters for each `/grid` message:
 | forest | float 0-1 | Normalized forest coverage |
 
 Plus optional viewport bounds (for Max-side panning calculation):
+
 ```
 /viewport  west south east north                   ← viewport bounds for panning
 ```
@@ -136,12 +144,14 @@ Plus optional viewport bounds (for Max-side panning calculation):
 ### Server Side (~40 lines of code)
 
 **`config.js`** — 2 lines:
+
 ```javascript
 const PER_GRID_THRESHOLD = parseInt(process.env.PER_GRID_THRESHOLD || '50', 10);
 // export
 ```
 
 **`osc.js`** — ~20 lines, new `sendGridsToMax()`:
+
 ```javascript
 function sendGridsToMax(gridsInView, bounds, normalizeParams) {
     const [west, south, east, north] = bounds;
@@ -168,9 +178,16 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
 ```
 
 **`index.js`** — ~5 lines, add branch to `processViewport()`:
+
 ```javascript
 // Aggregated OSC always sent
-sendToMax(stats.dominantLandcover, stats.nightlightNorm, stats.populationNorm, stats.forestNorm, stats.landcoverDistribution);
+sendToMax(
+    stats.dominantLandcover,
+    stats.nightlightNorm,
+    stats.populationNorm,
+    stats.forestNorm,
+    stats.landcoverDistribution
+);
 // Per-grid: send individual grids when below threshold
 if (gridsInView.length <= PER_GRID_THRESHOLD && gridsInView.length > 0) {
     sendGridsToMax(gridsInView, validation.bounds, normalizeParams);
@@ -178,6 +195,7 @@ if (gridsInView.length <= PER_GRID_THRESHOLD && gridsInView.length > 0) {
 ```
 
 **Frontend** — ~10 lines:
+
 - Stats panel displays current mode: "Aggregated" or "Per-Grid (N cells)"
 - WS response stats includes `mode: 'aggregated' | 'per-grid'`
 
@@ -215,6 +233,7 @@ route /grid/count /grid
 ```
 
 The subpatch inside `poly~` (`grid_voice.maxpat`) contains each voice's logic:
+
 ```
 [in 1]  ← /grid parameters (lon lat lc nl pop forest)
    │

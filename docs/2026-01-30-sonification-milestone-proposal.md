@@ -1,6 +1,6 @@
 # Geo‑Sonification Milestone Proposal
 
-Author: Zixiao Wang (Halic) 
+Author: Zixiao Wang (Halic)
 Date: 2026-01-29
 
 ## Abstract
@@ -18,7 +18,7 @@ The revised project focuses on **interactive exploration of present‑day, globa
 
 ## 1. Project goal
 
-Build an **interactive sound map** where panning/zooming the map continuously updates sound parameters (via OSC into Max/MSP) so listeners can *feel* how different places differ in:
+Build an **interactive sound map** where panning/zooming the map continuously updates sound parameters (via OSC into Max/MSP) so listeners can _feel_ how different places differ in:
 
 - land cover (forest / urban / water / etc.)
 - nightlight intensity
@@ -57,11 +57,11 @@ Core design principle: keep mappings **stable and learnable**, but allow express
 
 ### 4.1 Mappings (proposed)
 
-- **Landcover (categorical)** → *timbre family / sound palette switch*
-  - e.g., forest = organic drone; urban/built = mechanical pulse; water = airy noise + slow modulation; cropland = patterned arpeggio
-- **Population density (continuous)** → *rhythm density / event rate / transient intensity*
-- **Nightlight (continuous)** → *brightness (filter cutoff), presence (gain), harmonic density*
-- **Forest share (continuous)** → *smoothness vs. roughness, reverb amount, spectral tilt*
+- **Landcover (categorical)** → _timbre family / sound palette switch_
+    - e.g., forest = organic drone; urban/built = mechanical pulse; water = airy noise + slow modulation; cropland = patterned arpeggio
+- **Population density (continuous)** → _rhythm density / event rate / transient intensity_
+- **Nightlight (continuous)** → _brightness (filter cutoff), presence (gain), harmonic density_
+- **Forest share (continuous)** → _smoothness vs. roughness, reverb amount, spectral tilt_
 
 ### 4.2 Aggregation (why viewport‑level?)
 

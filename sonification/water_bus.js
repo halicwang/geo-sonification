@@ -90,23 +90,23 @@ setoutletassist(0, "Smoothed ocean level float 0-1");
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-var OCEAN_COVERAGE_THRESHOLD = 0.1;   // coverage below this → "mostly ocean"
-var COASTAL_PROX_THRESHOLD = 0.7;     // proximity above this → "zoomed in enough"
-var COASTAL_LEVEL = 0.7;              // output level for coastal zone
+var OCEAN_COVERAGE_THRESHOLD = 0.1; // coverage below this → "mostly ocean"
+var COASTAL_PROX_THRESHOLD = 0.7; // proximity above this → "zoomed in enough"
+var COASTAL_LEVEL = 0.7; // output level for coastal zone
 
 // ─── State ──────────────────────────────────────────────────────────
 
 var proximity = 0;
 var coverage = 0;
 var smoothed = 0;
-var smoothingTime = 500;    // ms — EMA time constant
+var smoothingTime = 500; // ms — EMA time constant
 var lastTime = 0;
 var initialized = false;
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function clamp01(v) {
-    if (v !== v) return 0;  // NaN guard
+    if (v !== v) return 0; // NaN guard
     if (v < 0) return 0;
     if (v > 1) return 1;
     return v;
@@ -141,12 +141,11 @@ function evaluate() {
     // ── Determine target level ──
     var target;
     if (proximity <= 0) {
-        target = 1.0;                                       // pure ocean
-    } else if (coverage < OCEAN_COVERAGE_THRESHOLD
-            && proximity > COASTAL_PROX_THRESHOLD) {
-        target = COASTAL_LEVEL;                             // coastal
+        target = 1.0; // pure ocean
+    } else if (coverage < OCEAN_COVERAGE_THRESHOLD && proximity > COASTAL_PROX_THRESHOLD) {
+        target = COASTAL_LEVEL; // coastal
     } else {
-        target = 0.0;                                       // land
+        target = 0.0; // land
     }
 
     // ── EMA smoothing ──

@@ -53,15 +53,18 @@ Run the scripts in `gee/` and download CSVs to `data/raw/`. See `gee/README_EXPO
 ### 5. Start the System
 
 **Terminal 1: Start Node.js Server**
+
 ```bash
 npm start
 ```
 
 **MaxMSP: Open and Configure**
+
 1. Open `sonification/max_wav_osc.maxpat`
 2. Verify `udpreceive 7400` is receiving (numbers should change when the viewport changes)
 
 **Browser: Open Frontend**
+
 - Navigate to http://localhost:3000
 
 ### 6. Interact!
@@ -177,24 +180,29 @@ Additional recommended mappings (optional):
 ## Troubleshooting
 
 ### Server won't start / CSV schema mismatch
+
 - Re-export CSVs using `gee/*.js` and place them into `data/raw/`
 - Delete caches: `rm -rf data/cache`
 
 ### MaxMSP not receiving OSC
+
 - Check `udpreceive 7400`
 - Confirm the server is sending to the right host/port (`OSC_HOST`, `OSC_PORT`)
 - Use `POST /api/manual` to test OSC output
 
 ### WebSocket disconnected
+
 - The server sends a ping every 30 seconds; clients that don't respond are terminated automatically
 - Make sure Node server is running: `npm start`
 - Check console for errors
 
 ### Map not loading
+
 - Verify Mapbox token is set in `frontend/config.local.js`
 - Check browser console for errors
 
 ### No grid overlay
+
 - Run GEE export first for each continent
 - Place CSV files in `data/raw/` (e.g., `data/raw/africa_grid.csv`, `data/raw/asia_grid.csv`, etc.)
 - Each file should match the schema in `data/raw/SCHEMA.md`
@@ -212,26 +220,31 @@ Additional recommended mappings (optional):
 Sent to MaxMSP on port 7400 per viewport update.
 
 **Mode indicator (always sent first):**
+
 - `/mode` (string) - `"aggregated"` or `"per-grid"`, sent before data on every update
 
 **Viewport signals (sent after /mode, before data):**
+
 - `/proximity` (float 0–1) — Viewport zoom proximity. 0 = satellite/distant view, 1 = closest zoom. Based on map zoom level with linear interpolation between configurable thresholds (default: zoom 4–6). See `PROXIMITY_ZOOM_LOW` / `PROXIMITY_ZOOM_HIGH` in `.env.example`.
 - `/delta/lc` (11 floats) — Per-class land cover change since previous update, same class order as `/lc/*`. All zeros on first update.
 
 ### Aggregated Mode (always sent, 15 messages)
 
 **Aggregated stats (4):**
+
 - `/landcover` (int) - Dominant land cover class (10/20/30/40/50/60/70/80/90/95/100)
 - `/nightlight` (float 0-1) - Normalized viewport nightlight (based on `nightlight_p90`)
 - `/population` (float 0-1) - Normalized viewport population density
 - `/forest` (float 0-1) - Normalized viewport forest percentage
 
 **Landcover distribution (11):**
+
 - `/lc/10` … `/lc/100` (float 0-1) - Area fraction per ESA WorldCover class
 - Classes: 10 (Tree), 20 (Shrub), 30 (Grass), 40 (Crop), 50 (Urban), 60 (Bare), 70 (Snow), 80 (Water), 90 (Wetland), 95 (Mangrove), 100 (Moss)
 - Classes not present in viewport send `0.0`; all 11 are always sent
 
 **Land coverage:**
+
 - `/coverage` (float 0–1) — Ratio of land grid cells to theoretical grid cells in viewport. Sent after aggregated messages.
 
 ### Per-Grid Mode (with hysteresis, default center threshold 50)

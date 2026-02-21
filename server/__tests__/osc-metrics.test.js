@@ -2,7 +2,7 @@ const {
     getLcFractionsFromDistribution,
     computeProximityFromGridCount,
     computeProximityFromZoom,
-    computeDeltaMetrics
+    computeDeltaMetrics,
 } = require('../osc-metrics');
 
 describe('computeProximityFromGridCount', () => {
@@ -61,28 +61,22 @@ describe('getLcFractionsFromDistribution', () => {
 
     test('returns all zeros when total weight is empty', () => {
         const fracs = getLcFractionsFromDistribution({});
-        expect(fracs.every(v => v === 0)).toBe(true);
+        expect(fracs.every((v) => v === 0)).toBe(true);
     });
 });
 
 describe('computeDeltaMetrics', () => {
     test('first snapshot returns all-zero deltaLc', () => {
-        const result = computeDeltaMetrics(
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            null
-        );
+        const result = computeDeltaMetrics([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], null);
 
-        expect(result.deltaLc.every(v => v === 0)).toBe(true);
+        expect(result.deltaLc.every((v) => v === 0)).toBe(true);
         expect(result.snapshot.lcFractions[0]).toBeCloseTo(1, 6);
     });
 
     test('computes per-class differences from previous snapshot', () => {
         const prev = { lcFractions: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
 
-        const result = computeDeltaMetrics(
-            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-            prev
-        );
+        const result = computeDeltaMetrics([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], prev);
 
         expect(result.deltaLc[0]).toBeCloseTo(-1, 6);
         expect(result.deltaLc[5]).toBeCloseTo(1, 6);

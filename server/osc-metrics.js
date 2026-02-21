@@ -23,7 +23,7 @@ function getLcFractionsFromDistribution(distribution) {
     if (totalWeight <= 0) {
         return LC_CLASS_ORDER.map(() => 0);
     }
-    return LC_CLASS_ORDER.map(cls => clamp01(finiteOrZero(dist[cls]) / totalWeight));
+    return LC_CLASS_ORDER.map((cls) => clamp01(finiteOrZero(dist[cls]) / totalWeight));
 }
 
 /**
@@ -68,7 +68,9 @@ function computeProximityFromZoom(zoom, zoomLow, zoomHigh) {
 }
 
 function normalizeLcArray(values) {
-    return LC_CLASS_ORDER.map((_, index) => clamp01(Array.isArray(values) ? finiteOrZero(values[index]) : 0));
+    return LC_CLASS_ORDER.map((_, index) =>
+        clamp01(Array.isArray(values) ? finiteOrZero(values[index]) : 0)
+    );
 }
 
 function normalizeSnapshot(snapshot) {
@@ -94,7 +96,7 @@ function computeDeltaMetrics(currentLcFractions, previousSnapshot) {
     if (!prev) {
         return {
             ...createZeroDelta(),
-            snapshot: { lcFractions: current }
+            snapshot: { lcFractions: current },
         };
     }
 
@@ -107,5 +109,5 @@ module.exports = {
     computeProximityFromGridCount,
     computeProximityFromZoom,
     createZeroDelta,
-    computeDeltaMetrics
+    computeDeltaMetrics,
 };

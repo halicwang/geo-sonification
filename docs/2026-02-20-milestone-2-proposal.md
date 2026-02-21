@@ -34,7 +34,7 @@ The global grid was re-exported from Google Earth Engine at **0.5°×0.5°** res
 
 ### Color-coded grid overlay
 
-The frontend map now renders grid cells colored by dominant land cover type. Forest cells appear dark green, cropland is yellow, urban is grey, water is blue, and so on. Previously all cells were uniform grey. This gives users immediate visual context that pairs with the audio — you can see *and* hear the landscape shift as you pan.
+The frontend map now renders grid cells colored by dominant land cover type. Forest cells appear dark green, cropland is yellow, urban is grey, water is blue, and so on. Previously all cells were uniform grey. This gives users immediate visual context that pairs with the audio — you can see _and_ hear the landscape shift as you pan.
 
 ---
 
@@ -44,21 +44,21 @@ The frontend map now renders grid cells colored by dominant land cover type. For
 
 These are sent on every viewport update and drive the sound engine:
 
-| Address | Type | Description |
-|---------|------|-------------|
-| `/mode` | string | `"aggregated"` or `"per-grid"` — notifies Max of the current mode so it can handle transitions (e.g. crossfade). Always sent first. |
+| Address      | Type      | Description                                                                                                                                                                                                                                                                                                                       |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/mode`      | string    | `"aggregated"` or `"per-grid"` — notifies Max of the current mode so it can handle transitions (e.g. crossfade). Always sent first.                                                                                                                                                                                               |
 | `/proximity` | float 0–1 | How zoomed-in the user is. 0 = satellite view (hundreds of grid cells visible), 1 = street-level (few cells). Derived from grid cell count with linear interpolation between configurable thresholds (default: 50–800 cells). Forced to 0 when no grid data is present. Drives volume attenuation and listening mode transitions. |
-| `/delta/lc` | 11 floats | Per-class land cover change since the previous update, same class order as `/lc/*`. Tells Max how much the landscape composition shifted, enabling sound to respond to exploration movement rather than just static state. All zeros on first update. |
-| `/coverage` | float 0–1 | Ratio of land grid cells to theoretical total in the viewport. The key signal for ocean detection: when the user pans over open ocean, coverage drops to ≈ 0 because no land grid data exists there. |
+| `/delta/lc`  | 11 floats | Per-class land cover change since the previous update, same class order as `/lc/*`. Tells Max how much the landscape composition shifted, enabling sound to respond to exploration movement rather than just static state. All zeros on first update.                                                                             |
+| `/coverage`  | float 0–1 | Ratio of land grid cells to theoretical total in the viewport. The key signal for ocean detection: when the user pans over open ocean, coverage drops to ≈ 0 because no land grid data exists there.                                                                                                                              |
 
 ### Per-grid enrichments
 
 Sent in per-grid mode alongside existing `/grid` messages:
 
-| Address | Type | Description |
-|---------|------|-------------|
-| `/grid/lc` | 11 floats per cell | Full land cover distribution per grid cell, same class order as aggregated `/lc/*`. Provides continuous 11-dimensional composition instead of a single discrete class integer. |
-| `/grid/pos` | 2 floats per cell | Viewport-relative normalized position (x: 0 = west edge, 1 = east edge; y: 0 = south, 1 = north). Pre-computed by the server from cell center coordinates, ready for stereo panning or spatial placement in Max. |
+| Address     | Type               | Description                                                                                                                                                                                                      |
+| ----------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/grid/lc`  | 11 floats per cell | Full land cover distribution per grid cell, same class order as aggregated `/lc/*`. Provides continuous 11-dimensional composition instead of a single discrete class integer.                                   |
+| `/grid/pos` | 2 floats per cell  | Viewport-relative normalized position (x: 0 = west edge, 1 = east edge; y: 0 = south, 1 = north). Pre-computed by the server from cell center coordinates, ready for stereo panning or spatial placement in Max. |
 
 ### Message ordering
 
@@ -83,12 +83,12 @@ In per-grid mode, per-cell messages (`/grid/count`, `/viewport`, N × `/grid` + 
 - **OSC schema module** (`server/osc_schema.js`): single source of truth for all OSC addresses, class order, canonical message sequence, and packet builder functions. Both the server and the simulator import from it — no duplication.
 - **Per-client delta state** (`server/delta-state.js`): WebSocket clients get per-connection state. HTTP clients use `clientId` from the request body (with IP fallback), cleaned up after 5 minutes of inactivity. Independent from the existing per-IP mode hysteresis.
 - **OSC simulator** (`scripts/osc_simulator.js`): standalone Node.js script that sends realistic OSC data to Max without needing the browser or map. Six built-in scenarios:
-  - `static-forest` — pure forest, steady state
-  - `static-mixed` — blended composition (60% tree, 30% water, 10% crop)
-  - `gradual-transition` — smooth forest → urban over 10 seconds
-  - `abrupt-switch` — instant jump from forest to bare
-  - `zoom-sweep` — proximity sweeps from 1 (close) to 0 (distant)
-  - `world-tour` — simulated journey across contrasting biomes
+    - `static-forest` — pure forest, steady state
+    - `static-mixed` — blended composition (60% tree, 30% water, 10% crop)
+    - `gradual-transition` — smooth forest → urban over 10 seconds
+    - `abrupt-switch` — instant jump from forest to bare
+    - `zoom-sweep` — proximity sweeps from 1 (close) to 0 (distant)
+    - `world-tour` — simulated journey across contrasting biomes
 
 ---
 
@@ -98,7 +98,7 @@ In per-grid mode, per-cell messages (`/grid/count`, `/viewport`, N × `/grid` + 
 
 The sonification uses a **three-layer structure**:
 
-1. **Base + texture layer**: ambient loops produced in Ableton (organic synths, drones, noise textures), exported as loopable WAV files. Max handles loop playback and volume control. *This is the focus of this milestone.*
+1. **Base + texture layer**: ambient loops produced in Ableton (organic synths, drones, noise textures), exported as loopable WAV files. Max handles loop playback and volume control. _This is the focus of this milestone._
 2. **Icon layer**: short auditory icons (bird calls, car horns, wind gusts) triggered by data-driven logic. Infrastructure built; samples and wiring are a future goal.
 3. **Crossfade mixing**: server data (11 land cover channels + proximity) controls volume envelopes and trigger probabilities.
 
@@ -122,11 +122,11 @@ Weighted probabilistic triggering: on each metro bang, evaluates per-class weigh
 
 Three-level ocean detection based on `/coverage` and `/proximity`:
 
-| Condition | Target signal |
-|-----------|--------------|
-| `proximity == 0` (pure ocean, no grids) | 1.0 |
-| `coverage < 0.1` and `proximity > 0.7` (coastal) | 0.7 |
-| Otherwise (land) | 0.0 |
+| Condition                                        | Target signal |
+| ------------------------------------------------ | ------------- |
+| `proximity == 0` (pure ocean, no grids)          | 1.0           |
+| `coverage < 0.1` and `proximity > 0.7` (coastal) | 0.7           |
+| Otherwise (land)                                 | 0.0           |
 
 Combined with crossfade controller outputs for classes 70 (Snow/Ice) and 80 (Water) via `[maximum]`, so the Water bus responds to both land-cover water and open ocean.
 
@@ -140,13 +140,13 @@ Optional 4-voice granular synthesis module with round-robin polyphony, 3-phase e
 
 The crossfade controller always outputs 11 independent channels. In the Max patch, these are folded into **5 audio buses**:
 
-| Bus | ESA classes | Description |
-|-----|-------------|-------------|
-| **Tree** | 10, 20, 30, 90, 95, 100 | Natural vegetation (forest, shrub, grass, wetland, mangrove, moss) |
-| **Crop** | 40 | Agricultural land |
-| **Urban** | 50 | Built-up areas |
-| **Bare** | 60 | Desert, bare soil, sparse vegetation |
-| **Water** | 70, 80 + ocean detector | Snow/ice, permanent water bodies, and open ocean |
+| Bus       | ESA classes             | Description                                                        |
+| --------- | ----------------------- | ------------------------------------------------------------------ |
+| **Tree**  | 10, 20, 30, 90, 95, 100 | Natural vegetation (forest, shrub, grass, wetland, mangrove, moss) |
+| **Crop**  | 40                      | Agricultural land                                                  |
+| **Urban** | 50                      | Built-up areas                                                     |
+| **Bare**  | 60                      | Desert, bare soil, sparse vegetation                               |
+| **Water** | 70, 80 + ocean detector | Snow/ice, permanent water bodies, and open ocean                   |
 
 Fold-mapping is purely a Max patch wiring concern — as new audio assets are authored, individual channels can be unbundled from buses without any code changes.
 
@@ -167,13 +167,13 @@ The transition is **gradual, not abrupt**. There is no hard switch; proximity sm
 
 The concrete deliverable for this milestone is **5 ambient WAV files**, one per audio bus, authored in Ableton Live:
 
-| File | Bus | Sonic character |
-|------|-----|----------------|
-| `tree.wav` | Tree | Rainforest ambience — organic textures, humid atmosphere, layered natural drones |
-| `crop.wav` | Crop | Agricultural/pastoral ambience — open field, wind, gentle organic texture |
+| File        | Bus   | Sonic character                                                                         |
+| ----------- | ----- | --------------------------------------------------------------------------------------- |
+| `tree.wav`  | Tree  | Rainforest ambience — organic textures, humid atmosphere, layered natural drones        |
+| `crop.wav`  | Crop  | Agricultural/pastoral ambience — open field, wind, gentle organic texture               |
 | `urban.wav` | Urban | City ambience — low-frequency mechanical drone, distant traffic texture, industrial hum |
-| `bare.wav` | Bare | Desert/arid ambience — wind synthesis, dry air, sparse sand particle texture |
-| `water.wav` | Water | Ocean ambience — deep water movement, wave texture, subaquatic resonance |
+| `bare.wav`  | Bare  | Desert/arid ambience — wind synthesis, dry air, sparse sand particle texture            |
+| `water.wav` | Water | Ocean ambience — deep water movement, wave texture, subaquatic resonance                |
 
 ### Audio specifications
 
@@ -199,34 +199,33 @@ The following capabilities are part of the project's long-term vision. The infra
 - **Granulator integration**: 4-voice granular texture processing via `granulator.js` for adding ambient depth to the base layer or creating distant-view wash effects. The module is implemented; Max patch wiring is pending.
 - **Per-grid spatial panning**: when zoomed in far enough, position individual grid cell voices in the stereo field using `/grid/pos` coordinates. The server already computes and sends normalized viewport-relative positions; the Max-side spatialization has not yet been built.
 
-
 ---
 
 ## 9. Current OSC Message Reference
 
 ### Viewport-level (every update)
 
-| Address | Args | Range | Description |
-|---------|------|-------|-------------|
-| `/mode` | 1 string | `"aggregated"` / `"per-grid"` | Current server mode |
-| `/proximity` | 1 float | 0–1 | Zoom proximity (0 = far, 1 = close) |
-| `/delta/lc` | 11 floats | each typically -1 to +1 | Per-class land cover change |
-| `/landcover` | 1 int | 10–100 | Dominant ESA WorldCover class |
-| `/nightlight` | 1 float | 0–1 | Normalized VIIRS nightlight |
-| `/population` | 1 float | 0–1 | Normalized population density |
-| `/forest` | 1 float | 0–1 | Forest fraction (land-area denominator) |
-| `/lc/10` … `/lc/100` | 1 float each | 0–1 | Per-class land cover fraction (11 messages) |
-| `/coverage` | 1 float | 0–1 | Land data coverage ratio |
+| Address              | Args         | Range                         | Description                                 |
+| -------------------- | ------------ | ----------------------------- | ------------------------------------------- |
+| `/mode`              | 1 string     | `"aggregated"` / `"per-grid"` | Current server mode                         |
+| `/proximity`         | 1 float      | 0–1                           | Zoom proximity (0 = far, 1 = close)         |
+| `/delta/lc`          | 11 floats    | each typically -1 to +1       | Per-class land cover change                 |
+| `/landcover`         | 1 int        | 10–100                        | Dominant ESA WorldCover class               |
+| `/nightlight`        | 1 float      | 0–1                           | Normalized VIIRS nightlight                 |
+| `/population`        | 1 float      | 0–1                           | Normalized population density               |
+| `/forest`            | 1 float      | 0–1                           | Forest fraction (land-area denominator)     |
+| `/lc/10` … `/lc/100` | 1 float each | 0–1                           | Per-class land cover fraction (11 messages) |
+| `/coverage`          | 1 float      | 0–1                           | Land data coverage ratio                    |
 
 ### Per-grid mode (additional, when zoomed in)
 
-| Address | Args | Description |
-|---------|------|-------------|
-| `/grid/count` | 1 int | Number of grid cells in viewport |
-| `/viewport` | 4 floats | Bounding box: west, south, east, north |
-| `/grid` | 6 args | Per-cell: lon, lat, landcover, nightlight, population, forest |
-| `/grid/pos` | 2 floats | Per-cell viewport-relative position (x, y) |
-| `/grid/lc` | 11 floats | Per-cell land cover distribution |
+| Address       | Args      | Description                                                   |
+| ------------- | --------- | ------------------------------------------------------------- |
+| `/grid/count` | 1 int     | Number of grid cells in viewport                              |
+| `/viewport`   | 4 floats  | Bounding box: west, south, east, north                        |
+| `/grid`       | 6 args    | Per-cell: lon, lat, landcover, nightlight, population, forest |
+| `/grid/pos`   | 2 floats  | Per-cell viewport-relative position (x, y)                    |
+| `/grid/lc`    | 11 floats | Per-cell land cover distribution                              |
 
 ---
 
@@ -287,10 +286,10 @@ geo-sonification/
 
 ## 12. Risks and Mitigation
 
-| Risk | Mitigation |
-|------|-----------|
-| **Ambient loops sound monotonous over time** | Design loops with internal variation (evolving textures, subtle modulation). Keep loops at 1–2 minutes to maximize variety before repetition. |
-| **Crossfade transitions feel unnatural** | EMA smoothing (500 ms time constant) prevents sudden jumps. Tune smoothing constant if transitions feel too sluggish or too abrupt. |
-| **Volume balance between buses is uneven** | Normalize all WAV files to similar perceived loudness (LUFS). Fine-tune bus gain multipliers in Max. |
-| **Ocean regions feel empty** | Water bus provides a dedicated ambient loop even over open ocean (coverage-based detection). Three-level quantization (ocean / coastal / land) adds variety. |
-| **Latency or jitter during fast panning** | Server-side smoothing + Max-side EMA prevent audible artifacts. OSC simulator's `abrupt-switch` scenario tests worst-case behavior. |
+| Risk                                         | Mitigation                                                                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Ambient loops sound monotonous over time** | Design loops with internal variation (evolving textures, subtle modulation). Keep loops at 1–2 minutes to maximize variety before repetition.                |
+| **Crossfade transitions feel unnatural**     | EMA smoothing (500 ms time constant) prevents sudden jumps. Tune smoothing constant if transitions feel too sluggish or too abrupt.                          |
+| **Volume balance between buses is uneven**   | Normalize all WAV files to similar perceived loudness (LUFS). Fine-tune bus gain multipliers in Max.                                                         |
+| **Ocean regions feel empty**                 | Water bus provides a dedicated ambient loop even over open ocean (coverage-based detection). Three-level quantization (ocean / coastal / land) adds variety. |
+| **Latency or jitter during fast panning**    | Server-side smoothing + Max-side EMA prevent audible artifacts. OSC simulator's `abrupt-switch` scenario tests worst-case behavior.                          |

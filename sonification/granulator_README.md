@@ -70,22 +70,22 @@ For each voice (0, 1, 2, 3):
 
 - **Start/stop**: connect a `[toggle]` or `[bang]` to inlet 0
 - **Start range**: send the buffer duration (ms) to inlet 5
-  - Use `[info~ mybuf]` to get buffer length automatically
+    - Use `[info~ mybuf]` to get buffer length automatically
 - **Proximity**: route `/proximity` from your OSC input to inlet 7
 
 ### 6. Optional parameter controls
 
 Add `[number]` or `[flonum]` boxes for real-time parameter adjustment:
 
-| Inlet | Parameter | Default | Range |
-|-------|-----------|---------|-------|
-| 1 | Duration min (ms) | 500 | 1+ |
-| 2 | Duration max (ms) | 1000 | 1+ |
-| 3 | Interval min (ms) | 1000 | 1+ |
-| 4 | Interval max (ms) | 2000 | 1+ |
-| 5 | Start range (ms) | 10000 | 0+ |
-| 6 | Amplitude variation | 0 | 0–1 |
-| 7 | Proximity | 1 | 0–1 |
+| Inlet | Parameter           | Default | Range |
+| ----- | ------------------- | ------- | ----- |
+| 1     | Duration min (ms)   | 500     | 1+    |
+| 2     | Duration max (ms)   | 1000    | 1+    |
+| 3     | Interval min (ms)   | 1000    | 1+    |
+| 4     | Interval max (ms)   | 2000    | 1+    |
+| 5     | Start range (ms)    | 10000   | 0+    |
+| 6     | Amplitude variation | 0       | 0–1   |
+| 7     | Proximity           | 1       | 0–1   |
 
 ## Parameter Tuning Guide
 

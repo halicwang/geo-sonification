@@ -88,15 +88,28 @@ outlets = 11;
 // ─── Inlet / Outlet assist strings ──────────────────────────────────
 
 var LC_LABELS = [
-    "Tree (10)", "Shrub (20)", "Grass (30)", "Crop (40)",
-    "Urban (50)", "Bare (60)", "Snow/Ice (70)", "Water (80)",
-    "Wetland (90)", "Mangrove (95)", "Moss/Lichen (100)"
+    "Tree (10)",
+    "Shrub (20)",
+    "Grass (30)",
+    "Crop (40)",
+    "Urban (50)",
+    "Bare (60)",
+    "Snow/Ice (70)",
+    "Water (80)",
+    "Wetland (90)",
+    "Mangrove (95)",
+    "Moss/Lichen (100)",
 ];
 
 var i;
 for (i = 0; i < 11; i++) {
-    setinletassist(i, "/lc/" + LC_LABELS[i] + " float 0-1" +
-        (i < 10 ? " (store only)" : " (store + trigger frame)"));
+    setinletassist(
+        i,
+        "/lc/" +
+            LC_LABELS[i] +
+            " float 0-1" +
+            (i < 10 ? " (store only)" : " (store + trigger frame)")
+    );
     setoutletassist(i, "Smoothed volume: " + LC_LABELS[i] + " float 0-1");
 }
 setinletassist(11, "/proximity float 0-1 (attenuation)");
@@ -107,14 +120,14 @@ var NUM_CHANNELS = 11;
 var target = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 var smoothed = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 var proximity = 0;
-var smoothingTime = 500;    // ms — EMA time constant
+var smoothingTime = 500; // ms — EMA time constant
 var lastFrameTime = 0;
 var initialized = false;
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function clamp01(v) {
-    if (v !== v) return 0;  // NaN guard (NaN !== NaN)
+    if (v !== v) return 0; // NaN guard (NaN !== NaN)
     if (v < 0) return 0;
     if (v > 1) return 1;
     return v;

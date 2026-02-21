@@ -41,7 +41,7 @@ describe('validateBounds', () => {
         // e.g. viewport spanning from 170E to 170W
         const result = validateBounds([170, -10, -170, 10]);
         expect(result.valid).toBe(true);
-        expect(result.bounds[0]).toBe(170);  // west
+        expect(result.bounds[0]).toBe(170); // west
         expect(result.bounds[2]).toBe(-170); // east
     });
 

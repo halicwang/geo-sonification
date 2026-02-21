@@ -1,4 +1,9 @@
-const { normalizeLandcoverClass, getCellLcDistribution, VALID_LANDCOVER_CLASSES, WATER_CLASS } = require('../landcover');
+const {
+    normalizeLandcoverClass,
+    getCellLcDistribution,
+    VALID_LANDCOVER_CLASSES,
+    WATER_CLASS,
+} = require('../landcover');
 
 describe('normalizeLandcoverClass', () => {
     test('returns null for null/undefined/empty', () => {

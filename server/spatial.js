@@ -14,8 +14,20 @@
  */
 
 const { normalizeOscValues } = require('./normalize');
-const { VALID_LANDCOVER_CLASSES, WATER_CLASS, normalizeLandcoverClass, getCellLcDistribution } = require('./landcover');
-const { USE_LEGACY_AGGREGATION, MIN_LAND_AREA_KM2, landFractionWeight, GRID_SIZE, LON_BUCKETS, LAT_BUCKETS } = require('./config');
+const {
+    VALID_LANDCOVER_CLASSES,
+    WATER_CLASS,
+    normalizeLandcoverClass,
+    getCellLcDistribution,
+} = require('./landcover');
+const {
+    USE_LEGACY_AGGREGATION,
+    MIN_LAND_AREA_KM2,
+    landFractionWeight,
+    GRID_SIZE,
+    LON_BUCKETS,
+    LAT_BUCKETS,
+} = require('./config');
 const { NIGHTLIGHT_NO_DATA } = require('./data-loader');
 
 // ============ Constants ============
@@ -37,7 +49,11 @@ let normalizeParams = null;
  * Returns a valid ESA class (integer) or null if missing/invalid.
  */
 function getValidLandcover(cell) {
-    if (cell.landcover_class == null || cell.landcover_class === '' || isNaN(cell.landcover_class)) {
+    if (
+        cell.landcover_class == null ||
+        cell.landcover_class === '' ||
+        isNaN(cell.landcover_class)
+    ) {
         return null;
     }
     return VALID_LANDCOVER_CLASSES.includes(cell.landcover_class)
@@ -79,7 +95,9 @@ function buildSpatialIndex() {
         }
         spatialIndex.get(key).push(cell);
     }
-    console.log(`[Index] Built spatial index: ${spatialIndex.size} buckets (GRID_SIZE=${GRID_SIZE}°)`);
+    console.log(
+        `[Index] Built spatial index: ${spatialIndex.size} buckets (GRID_SIZE=${GRID_SIZE}°)`
+    );
 }
 
 /**
@@ -95,7 +113,10 @@ function queryGridsInBounds(bounds) {
 
     const crossesDateLine = west > east;
     const ranges = crossesDateLine
-        ? [{ west, east: 180 }, { west: -180, east }]
+        ? [
+              { west, east: 180 },
+              { west: -180, east },
+          ]
         : [{ west, east }];
 
     // Count theoretical grid cells (all possible 0.5° buckets in the viewport)
@@ -103,9 +124,9 @@ function queryGridsInBounds(bounds) {
     // the data query, so the two counts are perfectly consistent.
     for (const range of ranges) {
         const ixStart = Math.max(0, Math.floor((range.west + 180) / GRID_SIZE));
-        const ixEnd   = Math.min(LON_BUCKETS - 1, Math.ceil((range.east + 180) / GRID_SIZE) - 1);
+        const ixEnd = Math.min(LON_BUCKETS - 1, Math.ceil((range.east + 180) / GRID_SIZE) - 1);
         const iyStart = Math.max(0, Math.floor((south + 90) / GRID_SIZE));
-        const iyEnd   = Math.min(LAT_BUCKETS - 1, Math.ceil((north + 90) / GRID_SIZE) - 1);
+        const iyEnd = Math.min(LAT_BUCKETS - 1, Math.ceil((north + 90) / GRID_SIZE) - 1);
 
         for (let ix = ixStart; ix <= ixEnd; ix++) {
             const gw = ix * GRID_SIZE - 180;
@@ -130,9 +151,9 @@ function queryGridsInBounds(bounds) {
             // This is intentional — the fine-grained test below uses strict-less-than (<)
             // for the same edge, so the two are consistent. Do not change one without the other.
             const ixStart = Math.max(0, Math.floor((range.west + 180) / GRID_SIZE));
-            const ixEnd   = Math.min(LON_BUCKETS - 1, Math.ceil((range.east + 180) / GRID_SIZE) - 1);
+            const ixEnd = Math.min(LON_BUCKETS - 1, Math.ceil((range.east + 180) / GRID_SIZE) - 1);
             const iyStart = Math.max(0, Math.floor((south + 90) / GRID_SIZE));
-            const iyEnd   = Math.min(LAT_BUCKETS - 1, Math.ceil((north + 90) / GRID_SIZE) - 1);
+            const iyEnd = Math.min(LAT_BUCKETS - 1, Math.ceil((north + 90) / GRID_SIZE) - 1);
 
             for (let ix = ixStart; ix <= ixEnd; ix++) {
                 for (let iy = iyStart; iy <= iyEnd; iy++) {
@@ -144,13 +165,17 @@ function queryGridsInBounds(bounds) {
                         // Fine-grained intersection: open boundaries (strict < / >)
                         // to exclude cells that merely touch at an edge.
                         // Coupled with ceil()-1 above — see note.
-                        const gridWest  = cell.lon;
-                        const gridEast  = cell.lon + GRID_SIZE;
+                        const gridWest = cell.lon;
+                        const gridEast = cell.lon + GRID_SIZE;
                         const gridSouth = cell.lat;
                         const gridNorth = cell.lat + GRID_SIZE;
 
-                        if (gridWest < range.east && gridEast > range.west &&
-                            gridSouth < north && gridNorth > south) {
+                        if (
+                            gridWest < range.east &&
+                            gridEast > range.west &&
+                            gridSouth < north &&
+                            gridNorth > south
+                        ) {
                             gridsInView.push(cell);
                         }
                     }
@@ -159,16 +184,15 @@ function queryGridsInBounds(bounds) {
         }
     } else {
         // Fallback to O(N) filter if index not available
-        gridsInView = gridData.filter(g => {
-            const gridEast  = g.lon + GRID_SIZE;
+        gridsInView = gridData.filter((g) => {
+            const gridEast = g.lon + GRID_SIZE;
             const gridNorth = g.lat + GRID_SIZE;
 
             const latOverlap = g.lat < north && gridNorth > south;
             if (!latOverlap) return false;
 
             if (crossesDateLine) {
-                return (g.lon < 180 && gridEast > west) ||
-                       (g.lon < east && gridEast > -180);
+                return (g.lon < 180 && gridEast > west) || (g.lon < east && gridEast > -180);
             }
             return g.lon < east && gridEast > west;
         });
@@ -178,9 +202,19 @@ function queryGridsInBounds(bounds) {
 }
 
 /** Assemble the stats object returned to the frontend and OSC pipeline. */
-function buildStatsResult({ dominantLandcover, nightlightNorm, populationNorm, forestNorm,
-    avgForestPct, avgPopulationDensity, avgNightlightMean, avgNightlightP90,
-    gridCount, lcCounts, displayItems }) {
+function buildStatsResult({
+    dominantLandcover,
+    nightlightNorm,
+    populationNorm,
+    forestNorm,
+    avgForestPct,
+    avgPopulationDensity,
+    avgNightlightMean,
+    avgNightlightP90,
+    gridCount,
+    lcCounts,
+    displayItems,
+}) {
     return {
         dominantLandcover,
         nightlightNorm: nightlightNorm ?? 0,
@@ -192,7 +226,7 @@ function buildStatsResult({ dominantLandcover, nightlightNorm, populationNorm, f
         avgNightlightP90: avgNightlightP90 ?? 0,
         gridCount: gridCount ?? 0,
         landcoverDistribution: lcCounts ?? {},
-        landcoverBreakdown: displayItems ?? []
+        landcoverBreakdown: displayItems ?? [],
     };
 }
 
@@ -230,7 +264,7 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
         .map(([lc, w]) => ({
             class: Number(lc),
             count: w,
-            percentage: (w / totalWeight) * 100
+            percentage: (w / totalWeight) * 100,
         }))
         .sort((a, b) => b.percentage - a.percentage);
 
@@ -251,7 +285,7 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
         displayItems.push({
             class: null,
             count: otherItems.reduce((sum, item) => sum + item.count, 0),
-            percentage: otherTotalPercentage
+            percentage: otherTotalPercentage,
         });
     }
 
@@ -264,17 +298,19 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
         if (Math.abs(roundingDiff) > 0.1 && totalPercentage > 0) {
             for (const item of displayItems) {
                 const share = item.percentage / totalPercentage;
-                item.percentage = Math.max(0, Math.min(100, item.percentage + roundingDiff * share));
+                item.percentage = Math.max(
+                    0,
+                    Math.min(100, item.percentage + roundingDiff * share)
+                );
             }
         }
     }
 
     // Filter out items that rounded down to 0%
-    displayItems = displayItems.filter(item => item.percentage > 0);
+    displayItems = displayItems.filter((item) => item.percentage > 0);
 
     return { displayItems, dominantLandcover };
 }
-
 
 /**
  * Calculate viewport stats (legacy aggregation: simple average / grid-count).
@@ -282,12 +318,19 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
 function calculateLegacyStats(gridsInView) {
     const n = gridsInView.length;
     const avgForest = n > 0 ? gridsInView.reduce((s, g) => s + (g.forest_pct ?? 0), 0) / n : 0;
-    const avgPopulation = n > 0 ? gridsInView.reduce((s, g) => s + (g.population_density ?? 0), 0) / n : 0;
+    const avgPopulation =
+        n > 0 ? gridsInView.reduce((s, g) => s + (g.population_density ?? 0), 0) / n : 0;
     // Exclude NIGHTLIGHT_NO_DATA sentinel (no VIIRS data) from nightlight averages
-    const nlP90Cells = gridsInView.filter(g => (g.nightlight_p90 ?? NIGHTLIGHT_NO_DATA) >= 0);
-    const nlMeanCells = gridsInView.filter(g => (g.nightlight_mean ?? NIGHTLIGHT_NO_DATA) >= 0);
-    const avgNightlightP90 = nlP90Cells.length > 0 ? nlP90Cells.reduce((s, g) => s + g.nightlight_p90, 0) / nlP90Cells.length : 0;
-    const avgNightlightMean = nlMeanCells.length > 0 ? nlMeanCells.reduce((s, g) => s + g.nightlight_mean, 0) / nlMeanCells.length : 0;
+    const nlP90Cells = gridsInView.filter((g) => (g.nightlight_p90 ?? NIGHTLIGHT_NO_DATA) >= 0);
+    const nlMeanCells = gridsInView.filter((g) => (g.nightlight_mean ?? NIGHTLIGHT_NO_DATA) >= 0);
+    const avgNightlightP90 =
+        nlP90Cells.length > 0
+            ? nlP90Cells.reduce((s, g) => s + g.nightlight_p90, 0) / nlP90Cells.length
+            : 0;
+    const avgNightlightMean =
+        nlMeanCells.length > 0
+            ? nlMeanCells.reduce((s, g) => s + g.nightlight_mean, 0) / nlMeanCells.length
+            : 0;
 
     const lcCounts = {};
     let validCount = 0;
@@ -296,7 +339,7 @@ function calculateLegacyStats(gridsInView) {
         const pctSum = Object.values(cellDist).reduce((s, v) => s + v, 0);
         if (pctSum > 0) {
             for (const [cls, pct] of Object.entries(cellDist)) {
-                lcCounts[cls] = (lcCounts[cls] || 0) + (pct / pctSum);
+                lcCounts[cls] = (lcCounts[cls] || 0) + pct / pctSum;
             }
             validCount += 1;
         } else {
@@ -307,14 +350,29 @@ function calculateLegacyStats(gridsInView) {
         }
     });
 
-    const { displayItems, dominantLandcover } = buildLandcoverBreakdown(lcCounts, validCount > 0 ? validCount : 1);
-    const { nightlightNorm, populationNorm, forestNorm } = normalizeOscValues(avgNightlightP90, avgPopulation, avgForest, normalizeParams);
+    const { displayItems, dominantLandcover } = buildLandcoverBreakdown(
+        lcCounts,
+        validCount > 0 ? validCount : 1
+    );
+    const { nightlightNorm, populationNorm, forestNorm } = normalizeOscValues(
+        avgNightlightP90,
+        avgPopulation,
+        avgForest,
+        normalizeParams
+    );
 
     return buildStatsResult({
-        dominantLandcover, nightlightNorm, populationNorm, forestNorm,
-        avgForestPct: avgForest, avgPopulationDensity: avgPopulation,
-        avgNightlightMean, avgNightlightP90,
-        gridCount: gridsInView.length, lcCounts, displayItems
+        dominantLandcover,
+        nightlightNorm,
+        populationNorm,
+        forestNorm,
+        avgForestPct: avgForest,
+        avgPopulationDensity: avgPopulation,
+        avgNightlightMean,
+        avgNightlightP90,
+        gridCount: gridsInView.length,
+        lcCounts,
+        displayItems,
     });
 }
 
@@ -330,7 +388,7 @@ function calculateLegacyStats(gridsInView) {
 function calculateAreaWeightedStats(gridsInView) {
     // lcCounts: { classId: totalWeightedArea } for landcover distribution
     const lcCounts = {};
-    let validLandcoverWeight = 0;  // denominator for landcover percentages
+    let validLandcoverWeight = 0; // denominator for landcover percentages
 
     // Accumulators for weighted averages
     let sumLandAreaKm2 = 0;
@@ -338,9 +396,9 @@ function calculateAreaWeightedStats(gridsInView) {
     let sumPopulationTotal = 0;
     let sumNightlightMeanWeighted = 0;
     let sumNightlightP90Weighted = 0;
-    let sumNightlightLandArea = 0;  // separate weight for nightlight (excludes -1 sentinel cells)
+    let sumNightlightLandArea = 0; // separate weight for nightlight (excludes -1 sentinel cells)
 
-    gridsInView.forEach(g => {
+    gridsInView.forEach((g) => {
         const baseLandAreaKm2 = Number.isFinite(g.land_area_km2) ? g.land_area_km2 : 0;
         if (baseLandAreaKm2 <= 0) return;
         if (MIN_LAND_AREA_KM2 > 0 && baseLandAreaKm2 < MIN_LAND_AREA_KM2) return;
@@ -348,7 +406,9 @@ function calculateAreaWeightedStats(gridsInView) {
         // Compute coastal down-weight multiplier
         const lfRaw = Number.isFinite(g.land_fraction)
             ? g.land_fraction
-            : (Number.isFinite(g.cell_area_km2) && g.cell_area_km2 > 0 ? (baseLandAreaKm2 / g.cell_area_km2) : 0);
+            : Number.isFinite(g.cell_area_km2) && g.cell_area_km2 > 0
+              ? baseLandAreaKm2 / g.cell_area_km2
+              : 0;
         const wMult = landFractionWeight(lfRaw);
         if (!Number.isFinite(wMult) || wMult <= 0) return;
 
@@ -388,30 +448,52 @@ function calculateAreaWeightedStats(gridsInView) {
 
     // Weighted averages (divide accumulated sums by total weight)
     // Nightlight uses its own weight sum to exclude cells with -1 sentinel (no VIIRS data)
-    const avgNightlightMean = sumNightlightLandArea > 0 ? (sumNightlightMeanWeighted / sumNightlightLandArea) : 0;
+    const avgNightlightMean =
+        sumNightlightLandArea > 0 ? sumNightlightMeanWeighted / sumNightlightLandArea : 0;
     // NOTE: area-weighted mean of cell-level p90, not a true viewport percentile
-    const avgNightlightP90 = sumNightlightLandArea > 0 ? (sumNightlightP90Weighted / sumNightlightLandArea) : 0;
-    const avgPopulation = sumLandAreaKm2 > 0 ? (sumPopulationTotal / sumLandAreaKm2) : 0;
-    const avgForest = sumLandAreaKm2 > 0 ? (sumForestPctWeighted / sumLandAreaKm2) : 0;
+    const avgNightlightP90 =
+        sumNightlightLandArea > 0 ? sumNightlightP90Weighted / sumNightlightLandArea : 0;
+    const avgPopulation = sumLandAreaKm2 > 0 ? sumPopulationTotal / sumLandAreaKm2 : 0;
+    const avgForest = sumLandAreaKm2 > 0 ? sumForestPctWeighted / sumLandAreaKm2 : 0;
 
-    const { nightlightNorm, populationNorm, forestNorm } = normalizeOscValues(avgNightlightP90, avgPopulation, avgForest, normalizeParams);
+    const { nightlightNorm, populationNorm, forestNorm } = normalizeOscValues(
+        avgNightlightP90,
+        avgPopulation,
+        avgForest,
+        normalizeParams
+    );
 
     if (validLandcoverWeight <= 0) {
         return buildStatsResult({
-            dominantLandcover: null, nightlightNorm, populationNorm, forestNorm,
-            avgForestPct: avgForest, avgPopulationDensity: avgPopulation,
-            avgNightlightMean, avgNightlightP90,
-            gridCount: gridsInView.length
+            dominantLandcover: null,
+            nightlightNorm,
+            populationNorm,
+            forestNorm,
+            avgForestPct: avgForest,
+            avgPopulationDensity: avgPopulation,
+            avgNightlightMean,
+            avgNightlightP90,
+            gridCount: gridsInView.length,
         });
     }
 
-    const { displayItems, dominantLandcover } = buildLandcoverBreakdown(lcCounts, validLandcoverWeight);
+    const { displayItems, dominantLandcover } = buildLandcoverBreakdown(
+        lcCounts,
+        validLandcoverWeight
+    );
 
     return buildStatsResult({
-        dominantLandcover, nightlightNorm, populationNorm, forestNorm,
-        avgForestPct: avgForest, avgPopulationDensity: avgPopulation,
-        avgNightlightMean, avgNightlightP90,
-        gridCount: gridsInView.length, lcCounts, displayItems
+        dominantLandcover,
+        nightlightNorm,
+        populationNorm,
+        forestNorm,
+        avgForestPct: avgForest,
+        avgPopulationDensity: avgPopulation,
+        avgNightlightMean,
+        avgNightlightP90,
+        gridCount: gridsInView.length,
+        lcCounts,
+        displayItems,
     });
 }
 
@@ -422,9 +504,8 @@ function calculateAreaWeightedStats(gridsInView) {
 function calculateViewportStats(bounds) {
     const { gridsInView, theoreticalGridCount } = queryGridsInBounds(bounds);
 
-    const landCoverageRatio = theoreticalGridCount > 0
-        ? gridsInView.length / theoreticalGridCount
-        : 0;
+    const landCoverageRatio =
+        theoreticalGridCount > 0 ? gridsInView.length / theoreticalGridCount : 0;
 
     if (gridsInView.length === 0) {
         return { ...emptyStats(0), theoreticalGridCount, landCoverageRatio, gridsInView };
@@ -453,10 +534,13 @@ function getNormalizeParams() {
  */
 function validateBounds(bounds) {
     if (!bounds || !Array.isArray(bounds) || bounds.length !== 4) {
-        return { valid: false, error: 'Invalid bounds. Expected [west, south, east, north] array with 4 elements' };
+        return {
+            valid: false,
+            error: 'Invalid bounds. Expected [west, south, east, north] array with 4 elements',
+        };
     }
 
-    const parsed = bounds.map(v => {
+    const parsed = bounds.map((v) => {
         if (typeof v === 'string') {
             const trimmed = v.trim();
             if (trimmed === '') {
@@ -467,7 +551,7 @@ function validateBounds(bounds) {
         return v;
     });
 
-    if (parsed.some(v => !Number.isFinite(v))) {
+    if (parsed.some((v) => !Number.isFinite(v))) {
         return { valid: false, error: 'Bounds contain non-numeric values' };
     }
 
@@ -504,5 +588,5 @@ module.exports = {
     calculateViewportStats,
     validateBounds,
     getGridData,
-    getNormalizeParams
+    getNormalizeParams,
 };

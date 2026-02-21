@@ -86,14 +86,14 @@ setoutletassist(5, "Voice B fade (line~)");
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-var XFADE_MS = 1875;         // 1 bar at 128 BPM
-var STARTUP_FADE_MS = 10;    // anti-click ramp on start
-var STOP_FADE_MS = 20;       // anti-click ramp on stop
+var XFADE_MS = 1875; // 1 bar at 128 BPM
+var STARTUP_FADE_MS = 10; // anti-click ramp on start
+var STOP_FADE_MS = 20; // anti-click ramp on stop
 
 // ─── State ──────────────────────────────────────────────────────────
 
 var isPlaying = false;
-var activeVoice = 0;         // 0 = voice A, 1 = voice B
+var activeVoice = 0; // 0 = voice A, 1 = voice B
 
 // Saved outlet index for stopOutgoingTask callback
 var pendingStopOutlet = -1;
@@ -105,9 +105,15 @@ var stopBothTask = new Task(doStopBoth, this);
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
-function voiceSpeedOutlet(v) { return v * 2; }       // 0 or 2 (startloop/stop messages)
-function voicePosOutlet(v)   { return v * 2 + 1; }   // 1 or 3
-function voiceFadeOutlet(v)  { return v + 4; }        // 4 or 5
+function voiceSpeedOutlet(v) {
+    return v * 2;
+} // 0 or 2 (startloop/stop messages)
+function voicePosOutlet(v) {
+    return v * 2 + 1;
+} // 1 or 3
+function voiceFadeOutlet(v) {
+    return v + 4;
+} // 4 or 5
 
 // ─── Message handlers ───────────────────────────────────────────────
 

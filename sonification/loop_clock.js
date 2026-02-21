@@ -67,15 +67,15 @@ setoutletassist(0, "go / xfade / stop symbols");
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-var XFADE_MS = 1875;             // 1 bar at 128 BPM
-var MIN_EXPECTED_LEN = 120000;   // reject buffers shorter than 2 min
-var EXPECTED_LEN = 121875;       // 2:01.875 = expected WAV length
-var LEN_TOLERANCE = 500;         // ±ms tolerance for length mismatch warning
+var XFADE_MS = 1875; // 1 bar at 128 BPM
+var MIN_EXPECTED_LEN = 120000; // reject buffers shorter than 2 min
+var EXPECTED_LEN = 121875; // 2:01.875 = expected WAV length
+var LEN_TOLERANCE = 500; // ±ms tolerance for length mismatch warning
 
 // ─── State ──────────────────────────────────────────────────────────
 
 var bufLengths = [];
-var triggerMs = 0;               // min(bufLengths) - XFADE_MS
+var triggerMs = 0; // min(bufLengths) - XFADE_MS
 var isRunning = false;
 
 // ─── Task for crossfade scheduling ──────────────────────────────────
@@ -102,9 +102,15 @@ function start() {
     isRunning = true;
     outlet(0, "go");
     crossfadeTask.schedule(triggerMs);
-    post("loop_clock: started — triggerMs=" + triggerMs +
-         ", xfade=" + XFADE_MS + "ms, " +
-         bufLengths.length + " buffer(s) registered\n");
+    post(
+        "loop_clock: started — triggerMs=" +
+            triggerMs +
+            ", xfade=" +
+            XFADE_MS +
+            "ms, " +
+            bufLengths.length +
+            " buffer(s) registered\n"
+    );
 }
 
 function stop() {
@@ -136,16 +142,33 @@ function buflen(ms) {
 
     // Length validation
     if (minLen < MIN_EXPECTED_LEN) {
-        post("loop_clock: ERROR — buffer too short: " + minLen +
-             "ms (minimum " + MIN_EXPECTED_LEN + "ms)\n");
+        post(
+            "loop_clock: ERROR — buffer too short: " +
+                minLen +
+                "ms (minimum " +
+                MIN_EXPECTED_LEN +
+                "ms)\n"
+        );
     }
     if (maxLen - minLen > LEN_TOLERANCE) {
-        post("loop_clock: WARNING — buffer lengths differ by " +
-             (maxLen - minLen) + "ms (tolerance " + LEN_TOLERANCE + "ms)\n");
+        post(
+            "loop_clock: WARNING — buffer lengths differ by " +
+                (maxLen - minLen) +
+                "ms (tolerance " +
+                LEN_TOLERANCE +
+                "ms)\n"
+        );
     }
 
-    post("loop_clock: buflen " + ms + "ms registered (" +
-         bufLengths.length + " total), triggerMs=" + triggerMs + "\n");
+    post(
+        "loop_clock: buflen " +
+            ms +
+            "ms registered (" +
+            bufLengths.length +
+            " total), triggerMs=" +
+            triggerMs +
+            "\n"
+    );
 }
 
 // ─── Core tick ──────────────────────────────────────────────────────

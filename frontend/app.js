@@ -31,15 +31,15 @@ const MAPBOX_TOKEN = getMapboxToken();
 // HTTP API uses same-origin relative paths; WebSocket needs an explicit port.
 let WS_URL = null;
 let WS_PORT = 3001;
-let OSC_READY = false;  // Approximate; UDP has no handshake
-let GRID_SIZE = 0.5;    // Overridden by server /api/config
+let OSC_READY = false; // Approximate; UDP has no handshake
+let GRID_SIZE = 0.5; // Overridden by server /api/config
 const API_BASE = '';
 
 /** Parse WS port from ?ws_port= query param (used when /api/config is unavailable). */
 function fallbackWsPort() {
     const urlParams = new URLSearchParams(window.location.search);
     const wsPort = Number(urlParams.get('ws_port') || '3001');
-    return (Number.isInteger(wsPort) && wsPort >= 1 && wsPort <= 65535) ? wsPort : 3001;
+    return Number.isInteger(wsPort) && wsPort >= 1 && wsPort <= 65535 ? wsPort : 3001;
 }
 
 /** Build a WebSocket URL from the given port. */
@@ -178,19 +178,19 @@ function getClientId() {
 // ============ Initialize Map ============
 function initMap() {
     mapboxgl.accessToken = MAPBOX_TOKEN;
-    
+
     map = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/dark-v11',
-        center: [-55, -10],  // Amazon region
+        center: [-55, -10], // Amazon region
         zoom: 4,
         minZoom: 2,
-        maxZoom: 12
+        maxZoom: 12,
     });
-    
+
     map.addControl(new mapboxgl.NavigationControl(), 'top-left');
     map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
-    
+
     map.on('load', async () => {
         console.log('Map loaded');
 
@@ -198,7 +198,10 @@ function initMap() {
         try {
             await addGridLayer();
         } catch (err) {
-            console.warn('Grid layer failed to load (PMTiles missing?), continuing without overlay:', err);
+            console.warn(
+                'Grid layer failed to load (PMTiles missing?), continuing without overlay:',
+                err
+            );
         }
 
         // Set up viewport tracking
@@ -215,47 +218,56 @@ function initMap() {
         }
         onViewportChange();
     });
-    
+
     // Show coordinates on click (for debugging)
     map.on('click', 'grid-layer', (e) => {
         if (e.features.length > 0) {
             const props = e.features[0].properties;
             // Handle missing landcover_class (null/undefined) - show "No data" instead of defaulting to 10
-            const landcoverDisplay = (props.landcover_class != null)
-                ? (getLandcoverName(props.landcover_class) || 'Unknown')
-                : 'No data';
+            const landcoverDisplay =
+                props.landcover_class != null
+                    ? getLandcoverName(props.landcover_class) || 'Unknown'
+                    : 'No data';
 
             // Build per-cell land-only lc_pct_* breakdown (Water class 80 excluded)
             const lcClasses = [10, 20, 30, 40, 50, 60, 70, 90, 95, 100];
             const lcEntries = lcClasses
-                .map(cls => ({ cls, pct: Number(props[`lc_pct_${cls}`]) || 0 }))
-                .filter(e => e.pct > 0);
+                .map((cls) => ({ cls, pct: Number(props[`lc_pct_${cls}`]) || 0 }))
+                .filter((e) => e.pct > 0);
             const landTotal = lcEntries.reduce((sum, e) => sum + e.pct, 0);
 
             let lcBreakdownHtml = '';
             if (lcEntries.length > 0 && landTotal > 0) {
                 const top5 = lcEntries
-                    .map(e => ({ ...e, pct: (e.pct / landTotal) * 100 }))
-                    .filter(e => e.pct >= 0.5)
+                    .map((e) => ({ ...e, pct: (e.pct / landTotal) * 100 }))
+                    .filter((e) => e.pct >= 0.5)
                     .sort((a, b) => b.pct - a.pct)
                     .slice(0, 5);
                 if (top5.length > 0) {
-                    lcBreakdownHtml = '<br><small>' + top5.map(e =>
-                        `${escapeHtml(getLandcoverName(e.cls) || e.cls)}: ${e.pct.toFixed(1)}%`
-                    ).join('<br>') + '</small>';
+                    lcBreakdownHtml =
+                        '<br><small>' +
+                        top5
+                            .map(
+                                (e) =>
+                                    `${escapeHtml(getLandcoverName(e.cls) || e.cls)}: ${e.pct.toFixed(1)}%`
+                            )
+                            .join('<br>') +
+                        '</small>';
                 }
             }
 
             new mapboxgl.Popup()
                 .setLngLat(e.lngLat)
-                .setHTML(`
+                .setHTML(
+                    `
                     <strong>Grid: ${escapeHtml(props.grid_id)}</strong><br>
                     Land Cover: ${escapeHtml(landcoverDisplay)}${lcBreakdownHtml}
-                `)
+                `
+                )
                 .addTo(map);
         }
     });
-    
+
     // Change cursor on grid hover
     map.on('mouseenter', 'grid-layer', () => {
         map.getCanvas().style.cursor = 'pointer';
@@ -284,7 +296,10 @@ async function addGridLayer() {
     const PMTILES_URL = `${window.location.origin}/tiles/grids.pmtiles`;
 
     // Register the custom PMTiles source type (idempotent)
-    mapboxgl.Style.setSourceType(mapboxPmTiles.PmTilesSource.SOURCE_TYPE, mapboxPmTiles.PmTilesSource);
+    mapboxgl.Style.setSourceType(
+        mapboxPmTiles.PmTilesSource.SOURCE_TYPE,
+        mapboxPmTiles.PmTilesSource
+    );
 
     const header = await mapboxPmTiles.PmTilesSource.getHeader(PMTILES_URL);
 
@@ -292,7 +307,7 @@ async function addGridLayer() {
         type: mapboxPmTiles.PmTilesSource.SOURCE_TYPE,
         url: PMTILES_URL,
         minzoom: header.minZoom,
-        maxzoom: header.maxZoom
+        maxzoom: header.maxZoom,
     });
 
     // Grid fill layer (neutral overlay; data values shown in side panel)
@@ -303,15 +318,10 @@ async function addGridLayer() {
         'source-layer': 'grids',
         paint: {
             'fill-color': buildLandcoverFillColor(),
-            'fill-opacity': [
-                'interpolate', ['linear'], ['zoom'],
-                2, 0.4,
-                6, 0.55,
-                10, 0.7
-            ],
+            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.4, 6, 0.55, 10, 0.7],
             'fill-opacity-transition': { duration: 150, delay: 0 },
-            'fill-color-transition': { duration: 150, delay: 0 }
-        }
+            'fill-color-transition': { duration: 150, delay: 0 },
+        },
     });
 
     // Grid outline — zoom-dependent: hidden at globe, visible at region/city
@@ -322,20 +332,10 @@ async function addGridLayer() {
         'source-layer': 'grids',
         paint: {
             'line-color': 'rgba(255, 255, 255, 0.15)',
-            'line-width': [
-                'interpolate', ['linear'], ['zoom'],
-                2, 0,
-                5, 0.3,
-                8, 0.8
-            ],
-            'line-opacity': [
-                'interpolate', ['linear'], ['zoom'],
-                2, 0,
-                5, 0.5,
-                8, 1
-            ],
-            'line-opacity-transition': { duration: 150, delay: 0 }
-        }
+            'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0, 5, 0.3, 8, 0.8],
+            'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0, 5, 0.5, 8, 1],
+            'line-opacity-transition': { duration: 150, delay: 0 },
+        },
     });
 }
 
@@ -349,11 +349,13 @@ function onViewportChange() {
         // Send via WebSocket if connected
         if (ws && ws.readyState === WebSocket.OPEN) {
             try {
-                ws.send(JSON.stringify({
-                    type: 'viewport',
-                    bounds: boundsArray,
-                    zoom: map.getZoom()
-                }));
+                ws.send(
+                    JSON.stringify({
+                        type: 'viewport',
+                        bounds: boundsArray,
+                        zoom: map.getZoom(),
+                    })
+                );
             } catch (err) {
                 console.error('WebSocket send failed, falling back to HTTP:', err);
                 sendViewportHTTP(boundsArray);
@@ -375,12 +377,15 @@ async function sendViewportHTTP(bounds) {
             body: JSON.stringify({
                 bounds,
                 zoom: map.getZoom(),
-                clientId: getClientId()
-            })
+                clientId: getClientId(),
+            }),
         });
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            console.error(`HTTP viewport error ${response.status}:`, errData.error || response.statusText);
+            console.error(
+                `HTTP viewport error ${response.status}:`,
+                errData.error || response.statusText
+            );
             return;
         }
         const stats = await response.json();
@@ -423,13 +428,13 @@ async function refreshServerConfig() {
 
 // ============ WebSocket Connection ============
 /** Connect to server WS; auto-reconnects on close with exponential backoff. */
-let wsReconnectDelay = 1000;   // initial delay: 1s
+let wsReconnectDelay = 1000; // initial delay: 1s
 const WS_RECONNECT_MAX = 30000; // max delay: 30s
 
 function connectWebSocket() {
     const wsUrl = getWebSocketURL();
     ws = new WebSocket(wsUrl);
-    
+
     ws.onopen = async () => {
         console.log('WebSocket connected');
         wsReconnectDelay = 1000; // reset backoff on successful connection
@@ -444,7 +449,7 @@ function connectWebSocket() {
             onViewportChange();
         }
     };
-    
+
     ws.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
@@ -459,7 +464,7 @@ function connectWebSocket() {
             console.error('WebSocket message parse error:', err);
         }
     };
-    
+
     ws.onclose = () => {
         // Bump delay before status check so stale indicator triggers sooner
         wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX);
@@ -469,7 +474,7 @@ function connectWebSocket() {
         // Reconnect with exponential backoff
         setTimeout(connectWebSocket, wsReconnectDelay);
     };
-    
+
     ws.onerror = (err) => {
         console.error('WebSocket error:', err);
         updateConnectionStatus(false);
@@ -511,26 +516,31 @@ function updateUI(stats) {
     // Dynamic landcover breakdown list — single innerHTML write (no per-item createElement/appendChild)
     if (stats.landcoverBreakdown && stats.landcoverBreakdown.length > 0) {
         // Validate percentage sum (should be ~100%)
-        const totalPercent = stats.landcoverBreakdown.reduce((sum, item) => sum + item.percentage, 0);
+        const totalPercent = stats.landcoverBreakdown.reduce(
+            (sum, item) => sum + item.percentage,
+            0
+        );
         if (Math.abs(totalPercent - 100) > 1) {
             console.warn('Landcover percentages do not sum to 100:', totalPercent.toFixed(1));
         }
 
-        _els.landcoverList.innerHTML = stats.landcoverBreakdown.map(item => {
-            const isOther = item.class === null;
-            const displayName = isOther ? 'Other' : (getLandcoverName(item.class) || 'Unknown');
-            const swatchColor = isOther ? null : getLandcoverColor(item.class);
-            const formattedPercent = (item.percentage ?? 0).toFixed(1);
-            const otherClass = isOther ? ' landcover-other' : '';
+        _els.landcoverList.innerHTML = stats.landcoverBreakdown
+            .map((item) => {
+                const isOther = item.class === null;
+                const displayName = isOther ? 'Other' : getLandcoverName(item.class) || 'Unknown';
+                const swatchColor = isOther ? null : getLandcoverColor(item.class);
+                const formattedPercent = (item.percentage ?? 0).toFixed(1);
+                const otherClass = isOther ? ' landcover-other' : '';
 
-            return `<div class="landcover-item${otherClass}">
+                return `<div class="landcover-item${otherClass}">
                 <span class="landcover-name">
                     ${swatchColor ? `<span class="landcover-swatch" style="background:${escapeHtml(swatchColor)}"></span>` : ''}
                     ${escapeHtml(displayName)}
                 </span>
                 <span class="landcover-percent">${formattedPercent}%</span>
             </div>`;
-        }).join('');
+            })
+            .join('');
     } else {
         _els.landcoverList.innerHTML = `
             <div class="landcover-item empty">
@@ -589,7 +599,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         landcoverList: document.getElementById('landcover-list'),
         wsStatus: document.getElementById('ws-status'),
         wsText: document.getElementById('ws-text'),
-        toast: document.getElementById('toast')
+        toast: document.getElementById('toast'),
     };
 
     getClientId();
@@ -598,14 +608,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!MAPBOX_TOKEN) {
         showToast('Mapbox token not configured. Create config.local.js with your token', 10000);
         console.error('Mapbox token not configured.');
-        console.error('Create frontend/config.local.js with: window.MAPBOX_TOKEN = "your-token-here";');
+        console.error(
+            'Create frontend/config.local.js with: window.MAPBOX_TOKEN = "your-token-here";'
+        );
         console.error('Get a token at: https://account.mapbox.com/access-tokens/');
         return;
     }
-    
+
     // Load server config first to get correct WebSocket port
     await loadServerConfig();
-    
+
     initMap();
     connectWebSocket();
 });

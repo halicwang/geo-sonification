@@ -40,7 +40,7 @@ A `/proximity` signal (float, 0 to 1) encodes how zoomed-in the user is. A value
 
 ### 3.3 Land Cover Delta Signal
 
-The `/delta/lc` signal sends 11 float values representing the per-class change in land cover composition since the previous viewport update. This allows the sound engine to respond to exploration *movement* rather than only static position. When the user pans from forest into desert, the delta signal captures that shift as it happens, enabling the audio to react to the act of traversing the landscape.
+The `/delta/lc` signal sends 11 float values representing the per-class change in land cover composition since the previous viewport update. This allows the sound engine to respond to exploration _movement_ rather than only static position. When the user pans from forest into desert, the delta signal captures that shift as it happens, enabling the audio to react to the act of traversing the landscape.
 
 ### 3.4 Coverage Signal
 

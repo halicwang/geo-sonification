@@ -123,7 +123,7 @@ var grainTask = new Task(triggerGrain, this);
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function clamp01(v) {
-    if (v !== v) return 0;  // NaN guard
+    if (v !== v) return 0; // NaN guard
     if (v < 0) return 0;
     if (v > 1) return 1;
     return v;
@@ -136,7 +136,7 @@ function bang() {
     running = !running;
     if (running) {
         voiceIndex = 0;
-        grainTask.schedule(0);  // fire immediately
+        grainTask.schedule(0); // fire immediately
         post("granulator: started\n");
     } else {
         grainTask.cancel();

@@ -15,10 +15,10 @@ When the user pans/zooms, the server:
 1. Finds all 0.5×0.5 degree grid cells within the viewport
 2. Computes area-weighted averages across all cells
 3. Sends **one** set of OSC messages:
-   - `/landcover` (int, dominant class)
-   - `/nightlight` (float, 0-1)
-   - `/population` (float, 0-1)
-   - `/forest` (float, 0-1)
+    - `/landcover` (int, dominant class)
+    - `/nightlight` (float, 0-1)
+    - `/population` (float, 0-1)
+    - `/forest` (float, 0-1)
 
 Max receives a single snapshot describing the whole viewport. The sound represents a blended summary of the visible area.
 

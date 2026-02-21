@@ -17,11 +17,14 @@ function stableStringify(value) {
 }
 
 function calcPercentiles(data, field) {
-    const positive = data.map(d => d[field]).filter(v => v != null && !isNaN(v) && v > 0).sort((a, b) => a - b);
+    const positive = data
+        .map((d) => d[field])
+        .filter((v) => v != null && !isNaN(v) && v > 0)
+        .sort((a, b) => a - b);
     if (positive.length === 0) return { p1: 0, p99: 1 };
     return {
         p1: positive[Math.floor((positive.length - 1) * 0.01)] ?? positive[0],
-        p99: positive[Math.floor((positive.length - 1) * 0.99)] ?? positive[positive.length - 1]
+        p99: positive[Math.floor((positive.length - 1) * 0.99)] ?? positive[positive.length - 1],
     };
 }
 
@@ -34,7 +37,7 @@ function normalize(value, p1, p99, useLog = false) {
     const max = Math.max(rawMin, rawMax);
     const clamped = Math.min(max, Math.max(min, value));
 
-    let out = 0;
+    let out;
     if (useLog) {
         const logMin = Math.log1p(min);
         const logMax = Math.log1p(max);
@@ -54,7 +57,7 @@ function normalize(value, p1, p99, useLog = false) {
 
 function calcCsvFingerprint(csvPaths) {
     if (!csvPaths || csvPaths.length === 0) return '';
-    const parts = csvPaths.map(p => {
+    const parts = csvPaths.map((p) => {
         try {
             const stat = fs.statSync(p);
             // Include content hash of first+last 1KB for robustness against
@@ -67,10 +70,12 @@ function calcCsvFingerprint(csvPaths) {
                 const tailBuf = Buffer.alloc(readLen);
                 const tailPos = Math.max(0, stat.size - readLen);
                 fs.readSync(fd, tailBuf, 0, readLen, tailPos);
-                const contentSnippet = crypto.createHash('md5')
+                const contentSnippet = crypto
+                    .createHash('md5')
                     .update(headBuf)
                     .update(tailBuf)
-                    .digest('hex').slice(0, 8);
+                    .digest('hex')
+                    .slice(0, 8);
                 return `${path.basename(p)}:${stat.mtimeMs}:${stat.size}:${contentSnippet}`;
             } finally {
                 fs.closeSync(fd);
@@ -82,7 +87,12 @@ function calcCsvFingerprint(csvPaths) {
     return crypto.createHash('md5').update(parts.join('|')).digest('hex').slice(0, 12);
 }
 
-function isValidNormalizeCache(cached, expectedFingerprint, expectedAggregationVersion, expectedAggregationConfig) {
+function isValidNormalizeCache(
+    cached,
+    expectedFingerprint,
+    expectedAggregationVersion,
+    expectedAggregationConfig
+) {
     if (!cached || typeof cached !== 'object') return false;
     if (cached.csv_fingerprint !== expectedFingerprint) return false;
     if (cached.aggregation_version !== expectedAggregationVersion) return false;
@@ -104,8 +114,12 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
     try {
         await fsPromises.access(NORMALIZE_FILE);
         const cached = JSON.parse(await fsPromises.readFile(NORMALIZE_FILE, 'utf-8'));
-        if (isValidNormalizeCache(cached, currentFingerprint, aggregationVersion, aggregationConfig)) {
-            console.log(`[Normalize] Loaded params (fingerprint+aggregation matched) v=${aggregationVersion}`);
+        if (
+            isValidNormalizeCache(cached, currentFingerprint, aggregationVersion, aggregationConfig)
+        ) {
+            console.log(
+                `[Normalize] Loaded params (fingerprint+aggregation matched) v=${aggregationVersion}`
+            );
             return cached;
         }
         console.log('[Normalize] Cache invalid or CSV changed, recalculating...');
@@ -124,8 +138,8 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
         fields: {
             nightlight_p90: { ...calcPercentiles(data, 'nightlight_p90'), scale: 'log' },
             population_density: { ...calcPercentiles(data, 'population_density'), scale: 'log' },
-            forest_pct: { p1: 0, p99: 100, scale: 'linear' }
-        }
+            forest_pct: { p1: 0, p99: 100, scale: 'linear' },
+        },
     };
 
     try {
@@ -148,17 +162,34 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
  * @returns {{ nightlightNorm: number, populationNorm: number, forestNorm: number }}
  */
 function normalizeOscValues(avgNightlightP90, avgPopulation, avgForest, normalizeParams) {
-    let nightlightNorm = 0, populationNorm = 0, forestNorm = 0;
+    let nightlightNorm = 0,
+        populationNorm = 0,
+        forestNorm = 0;
     if (normalizeParams && normalizeParams.fields) {
         const nf = normalizeParams.fields;
         if (nf.nightlight_p90) {
-            nightlightNorm = normalize(avgNightlightP90, nf.nightlight_p90.p1, nf.nightlight_p90.p99, nf.nightlight_p90.scale === 'log');
+            nightlightNorm = normalize(
+                avgNightlightP90,
+                nf.nightlight_p90.p1,
+                nf.nightlight_p90.p99,
+                nf.nightlight_p90.scale === 'log'
+            );
         }
         if (nf.population_density) {
-            populationNorm = normalize(avgPopulation, nf.population_density.p1, nf.population_density.p99, nf.population_density.scale === 'log');
+            populationNorm = normalize(
+                avgPopulation,
+                nf.population_density.p1,
+                nf.population_density.p99,
+                nf.population_density.scale === 'log'
+            );
         }
         if (nf.forest_pct) {
-            forestNorm = normalize(avgForest, nf.forest_pct.p1, nf.forest_pct.p99, nf.forest_pct.scale === 'log');
+            forestNorm = normalize(
+                avgForest,
+                nf.forest_pct.p1,
+                nf.forest_pct.p99,
+                nf.forest_pct.scale === 'log'
+            );
         }
     }
     return { nightlightNorm, populationNorm, forestNorm };
@@ -169,5 +200,5 @@ module.exports = {
     normalize,
     normalizeOscValues,
     calcCsvFingerprint,
-    loadOrCalcNormalize
+    loadOrCalcNormalize,
 };

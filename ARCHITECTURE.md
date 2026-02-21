@@ -73,12 +73,12 @@ UDP 7400 (OSC from Node server)
 
 First-level `route` extracts four viewport-level summary values:
 
-| Address | Type | Range | Meaning |
-|---------|------|-------|---------|
-| `/landcover` | int | 10–100 | Dominant ESA WorldCover class code |
-| `/nightlight` | float | 0–1 | Normalized VIIRS nightlight intensity |
-| `/population` | float | 0–1 | Normalized population density |
-| `/forest` | float | 0–1 | Forest cover fraction |
+| Address       | Type  | Range  | Meaning                               |
+| ------------- | ----- | ------ | ------------------------------------- |
+| `/landcover`  | int   | 10–100 | Dominant ESA WorldCover class code    |
+| `/nightlight` | float | 0–1    | Normalized VIIRS nightlight intensity |
+| `/population` | float | 0–1    | Normalized population density         |
+| `/forest`     | float | 0–1    | Forest cover fraction                 |
 
 Unmatched messages continue to the next routing stages.
 
@@ -97,19 +97,19 @@ Unmatched messages continue to the next routing stages.
 
 Each `/lc/*` value is a float 0–1 representing the area fraction of that land cover class. Every channel fans out to three destinations: display, crossfade controller, and icon trigger.
 
-| Outlet | Class | Label |
-|--------|-------|-------|
-| 0 | 10 | Tree / Forest |
-| 1 | 20 | Shrubland |
-| 2 | 30 | Grassland |
-| 3 | 40 | Cropland |
-| 4 | 50 | Urban / Built-up |
-| 5 | 60 | Bare / Sparse |
-| 6 | 70 | Snow / Ice |
-| 7 | 80 | Water |
-| 8 | 90 | Herbaceous Wetland |
-| 9 | 95 | Mangroves |
-| 10 | 100 | Moss / Lichen |
+| Outlet | Class | Label              |
+| ------ | ----- | ------------------ |
+| 0      | 10    | Tree / Forest      |
+| 1      | 20    | Shrubland          |
+| 2      | 30    | Grassland          |
+| 3      | 40    | Cropland           |
+| 4      | 50    | Urban / Built-up   |
+| 5      | 60    | Bare / Sparse      |
+| 6      | 70    | Snow / Ice         |
+| 7      | 80    | Water              |
+| 8      | 90    | Herbaceous Wetland |
+| 9      | 95    | Mangroves          |
+| 10     | 100   | Moss / Lichen      |
 
 ---
 
@@ -140,10 +140,10 @@ Currently routed to `print` objects for Max console inspection. Reserved for fut
 
 `/proximity` (float 0–1) and `/coverage` (float 0–1) are broadcast via named `send`/`receive` pairs to three consumers:
 
-| Signal | Consumers |
-|--------|-----------|
+| Signal         | Consumers                                                                              |
+| -------------- | -------------------------------------------------------------------------------------- |
 | `geosoni_prox` | `crossfade_controller.js` inlet 11, `icon_trigger.js` inlet 11, `water_bus.js` inlet 0 |
-| `geosoni_cov` | `water_bus.js` inlet 1 |
+| `geosoni_cov`  | `water_bus.js` inlet 1                                                                 |
 
 ---
 
@@ -211,11 +211,11 @@ Produces a smoothed "ocean level" based on the absence of grid data (ocean has n
 
 ### Three levels
 
-| Condition | Target | Meaning |
-|-----------|--------|---------|
-| `proximity == 0` | 1.0 | Pure ocean — no grids at all |
-| `coverage < 0.1` AND `proximity > 0.7` | 0.7 | Coastal — mostly ocean, some land |
-| Otherwise | 0.0 | Land — sufficient data coverage |
+| Condition                              | Target | Meaning                           |
+| -------------------------------------- | ------ | --------------------------------- |
+| `proximity == 0`                       | 1.0    | Pure ocean — no grids at all      |
+| `coverage < 0.1` AND `proximity > 0.7` | 0.7    | Coastal — mostly ocean, some land |
+| Otherwise                              | 0.0    | Land — sufficient data coverage   |
 
 The target is EMA-smoothed with the same formula as the crossfade controller (default 500 ms). The output feeds into `[maximum 0.]` alongside the crossfade's class 70+80 sum, so the Water bus volume is whichever is greater: the land-cover-derived water percentage or the ocean detector level.
 
@@ -243,6 +243,7 @@ The target is EMA-smoothed with the same formula as the crossfade controller (de
 Single instance. Manages timing for all 5 buses simultaneously.
 
 **Inputs**:
+
 - `start` — begin playback, schedule first crossfade
 - `stop` — stop all playback
 - `buflen <ms>` — register a buffer length (from each loop_bus on load)
@@ -252,6 +253,7 @@ Single instance. Manages timing for all 5 buses simultaneously.
 **Tick cycle**: On start, outputs `"go"`. Every `triggerMs` thereafter, outputs `"xfade"`. On stop, outputs `"stop"`.
 
 **Output routing**:
+
 ```
 js_clock outlet 0 → [route go xfade stop]
                         │        │       │
@@ -308,13 +310,14 @@ AUDIO PATH (double-buffered crossfade):
 
 Controls two `groove~` objects (voice A and voice B) that alternate playback. Does not schedule timing — only responds to commands from `loop_clock.js`.
 
-| Command | Behavior |
-|---------|----------|
-| `start_playing` | Start voice A from 0 ms, fade in 10 ms (anti-click), silence voice B |
-| `xfade` | Start incoming voice from 0 ms, crossfade 1875 ms (1 bar @ 128 BPM), schedule stop of outgoing voice after fade |
-| `stop` | Fade both voices out in 20 ms, then stop groove~ objects |
+| Command         | Behavior                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| `start_playing` | Start voice A from 0 ms, fade in 10 ms (anti-click), silence voice B                                            |
+| `xfade`         | Start incoming voice from 0 ms, crossfade 1875 ms (1 bar @ 128 BPM), schedule stop of outgoing voice after fade |
+| `stop`          | Fade both voices out in 20 ms, then stop groove~ objects                                                        |
 
 Key constants:
+
 - `XFADE_MS = 1875` — crossfade duration
 - `STARTUP_FADE_MS = 10` — anti-click ramp on start
 - `STOP_FADE_MS = 20` — anti-click ramp on stop
@@ -375,26 +378,26 @@ Only classes with prepared icon samples are active: **10** (Tree), **40** (Crop)
 
 ## Named Send/Receive Bus Summary
 
-| Name | Direction | Purpose |
-|------|-----------|---------|
-| `geosoni_prox` | proximity → crossfade, icon_trigger, water_bus | Proximity signal distribution |
-| `geosoni_cov` | coverage → water_bus | Coverage signal for ocean detection |
-| `geosoni_buflen` | loop_bus instances → loop_clock | Buffer duration registration |
-| `geosoni_loop_go` | loop_clock → all loop_bus instances | Start playback command |
-| `geosoni_xfade` | loop_clock → all loop_bus instances | Crossfade command |
-| `geosoni_loop_stop` | loop_clock → all loop_bus instances | Stop playback command |
+| Name                | Direction                                      | Purpose                             |
+| ------------------- | ---------------------------------------------- | ----------------------------------- |
+| `geosoni_prox`      | proximity → crossfade, icon_trigger, water_bus | Proximity signal distribution       |
+| `geosoni_cov`       | coverage → water_bus                           | Coverage signal for ocean detection |
+| `geosoni_buflen`    | loop_bus instances → loop_clock                | Buffer duration registration        |
+| `geosoni_loop_go`   | loop_clock → all loop_bus instances            | Start playback command              |
+| `geosoni_xfade`     | loop_clock → all loop_bus instances            | Crossfade command                   |
+| `geosoni_loop_stop` | loop_clock → all loop_bus instances            | Stop playback command               |
 
 ---
 
 ## Timing Constants
 
-| Constant | Value | Location | Purpose |
-|----------|-------|----------|---------|
-| `XFADE_MS` | 1875 ms | loop_voice.js, loop_clock.js | Crossfade duration (1 bar @ 128 BPM) |
-| `STARTUP_FADE_MS` | 10 ms | loop_voice.js | Anti-click ramp on start |
-| `STOP_FADE_MS` | 20 ms | loop_voice.js | Anti-click ramp on stop |
-| `smoothingTime` | 500 ms | crossfade_controller.js, water_bus.js | EMA time constant |
-| `EXPECTED_LEN` | 121875 ms | loop_clock.js | Expected WAV duration (2:01.875) |
-| Metro interval | 100 ms | main patch (metro_icon) | Icon trigger evaluation rate |
-| Volume ramp | 20 ms | loop_bus (vol_pack) | Bus volume smoothing |
-| Master trim | 0.2 | main patch (trim_L/R) | −14 dB headroom for 5-bus sum |
+| Constant          | Value     | Location                              | Purpose                              |
+| ----------------- | --------- | ------------------------------------- | ------------------------------------ |
+| `XFADE_MS`        | 1875 ms   | loop_voice.js, loop_clock.js          | Crossfade duration (1 bar @ 128 BPM) |
+| `STARTUP_FADE_MS` | 10 ms     | loop_voice.js                         | Anti-click ramp on start             |
+| `STOP_FADE_MS`    | 20 ms     | loop_voice.js                         | Anti-click ramp on stop              |
+| `smoothingTime`   | 500 ms    | crossfade_controller.js, water_bus.js | EMA time constant                    |
+| `EXPECTED_LEN`    | 121875 ms | loop_clock.js                         | Expected WAV duration (2:01.875)     |
+| Metro interval    | 100 ms    | main patch (metro_icon)               | Icon trigger evaluation rate         |
+| Volume ramp       | 20 ms     | loop_bus (vol_pack)                   | Bus volume smoothing                 |
+| Master trim       | 0.2       | main patch (trim_L/R)                 | −14 dB headroom for 5-bus sum        |

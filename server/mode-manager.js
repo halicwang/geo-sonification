@@ -14,7 +14,7 @@ const { PER_GRID_THRESHOLD_ENTER, PER_GRID_THRESHOLD_EXIT } = require('./config'
 
 // ============ Constants ============
 
-const HTTP_MODE_TTL_MS = 5 * 60 * 1000;        // 5 min: stale entry expiry
+const HTTP_MODE_TTL_MS = 5 * 60 * 1000; // 5 min: stale entry expiry
 const HTTP_MODE_CLEANUP_INTERVAL_MS = 60 * 1000; // 1 min: sweep frequency
 
 // ============ HTTP Per-Client State ============
@@ -133,17 +133,21 @@ function getHttpClientKey(req) {
         }
     }
 
-    const headerClientId = normalizeClientId(req.get ? req.get('x-client-id') : req.headers['x-client-id']);
+    const headerClientId = normalizeClientId(
+        req.get ? req.get('x-client-id') : req.headers['x-client-id']
+    );
     if (headerClientId) {
         return `header-client:${headerClientId}`;
     }
 
     const xff = normalizeClientId(req.headers['x-forwarded-for']);
-    const ip = (typeof xff === 'string' && xff.trim() !== '')
-        ? xff.split(',')[0].trim()
-        : (req.ip || req.socket?.remoteAddress || 'unknown');
+    const ip =
+        typeof xff === 'string' && xff.trim() !== ''
+            ? xff.split(',')[0].trim()
+            : req.ip || req.socket?.remoteAddress || 'unknown';
 
-    const safeUa = normalizeClientId(req.get ? req.get('user-agent') : req.headers['user-agent']) || 'unknown';
+    const safeUa =
+        normalizeClientId(req.get ? req.get('user-agent') : req.headers['user-agent']) || 'unknown';
     return `${ip}|${safeUa}`;
 }
 
@@ -154,5 +158,5 @@ module.exports = {
     applyHysteresis,
     getHttpClientKey,
     PER_GRID_THRESHOLD_ENTER,
-    PER_GRID_THRESHOLD_EXIT
+    PER_GRID_THRESHOLD_EXIT,
 };

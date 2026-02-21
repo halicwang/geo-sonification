@@ -22,21 +22,21 @@ const OSC_ADDRESSES = Object.freeze({
     VIEWPORT: '/viewport',
     GRID: '/grid',
     GRID_POS: '/grid/pos',
-    GRID_LC: '/grid/lc'
+    GRID_LC: '/grid/lc',
 });
 
 const LC_ADDRESS_BY_CLASS = Object.freeze(
-    Object.fromEntries(LC_CLASS_ORDER.map(cls => [cls, `/lc/${cls}`]))
+    Object.fromEntries(LC_CLASS_ORDER.map((cls) => [cls, `/lc/${cls}`]))
 );
 
-const LC_ADDRESS_ORDER = Object.freeze(LC_CLASS_ORDER.map(cls => LC_ADDRESS_BY_CLASS[cls]));
+const LC_ADDRESS_ORDER = Object.freeze(LC_CLASS_ORDER.map((cls) => LC_ADDRESS_BY_CLASS[cls]));
 
 const AGGREGATED_OSC_ORDER = Object.freeze([
     OSC_ADDRESSES.LANDCOVER,
     OSC_ADDRESSES.NIGHTLIGHT,
     OSC_ADDRESSES.POPULATION,
     OSC_ADDRESSES.FOREST,
-    ...LC_ADDRESS_ORDER
+    ...LC_ADDRESS_ORDER,
 ]);
 
 const OSC_SEQUENCE_WITH_DELTA = Object.freeze([
@@ -44,7 +44,7 @@ const OSC_SEQUENCE_WITH_DELTA = Object.freeze([
     OSC_ADDRESSES.PROXIMITY,
     OSC_ADDRESSES.DELTA_LC,
     ...AGGREGATED_OSC_ORDER,
-    OSC_ADDRESSES.COVERAGE
+    OSC_ADDRESSES.COVERAGE,
 ]);
 
 function clamp01(value) {
@@ -82,28 +82,28 @@ function normalizeDeltaArray(deltaLc) {
 function buildModePacket(mode) {
     return {
         address: OSC_ADDRESSES.MODE,
-        args: [{ type: 's', value: normalizeMode(mode) }]
+        args: [{ type: 's', value: normalizeMode(mode) }],
     };
 }
 
 function buildProximityPacket(proximity) {
     return {
         address: OSC_ADDRESSES.PROXIMITY,
-        args: [{ type: 'f', value: clamp01(proximity) }]
+        args: [{ type: 'f', value: clamp01(proximity) }],
     };
 }
 
 function buildDeltaPacket(deltaLc) {
     return {
         address: OSC_ADDRESSES.DELTA_LC,
-        args: normalizeDeltaArray(deltaLc).map(value => ({ type: 'f', value }))
+        args: normalizeDeltaArray(deltaLc).map((value) => ({ type: 'f', value })),
     };
 }
 
 function buildCoveragePacket(ratio) {
     return {
         address: OSC_ADDRESSES.COVERAGE,
-        args: [{ type: 'f', value: clamp01(ratio) }]
+        args: [{ type: 'f', value: clamp01(ratio) }],
     };
 }
 
@@ -112,18 +112,27 @@ function buildAggregatedPackets({
     nightlightNorm,
     populationNorm,
     forestNorm,
-    lcFractions
+    lcFractions,
 }) {
     const safeFractions = normalizeLcFractionArray(lcFractions);
     return [
-        { address: OSC_ADDRESSES.LANDCOVER, args: [{ type: 'i', value: clampLandcoverClass(landcoverClass) }] },
-        { address: OSC_ADDRESSES.NIGHTLIGHT, args: [{ type: 'f', value: clamp01(nightlightNorm) }] },
-        { address: OSC_ADDRESSES.POPULATION, args: [{ type: 'f', value: clamp01(populationNorm) }] },
+        {
+            address: OSC_ADDRESSES.LANDCOVER,
+            args: [{ type: 'i', value: clampLandcoverClass(landcoverClass) }],
+        },
+        {
+            address: OSC_ADDRESSES.NIGHTLIGHT,
+            args: [{ type: 'f', value: clamp01(nightlightNorm) }],
+        },
+        {
+            address: OSC_ADDRESSES.POPULATION,
+            args: [{ type: 'f', value: clamp01(populationNorm) }],
+        },
         { address: OSC_ADDRESSES.FOREST, args: [{ type: 'f', value: clamp01(forestNorm) }] },
         ...LC_CLASS_ORDER.map((cls, index) => ({
             address: LC_ADDRESS_BY_CLASS[cls],
-            args: [{ type: 'f', value: safeFractions[index] }]
-        }))
+            args: [{ type: 'f', value: safeFractions[index] }],
+        })),
     ];
 }
 
@@ -141,5 +150,5 @@ module.exports = {
     buildProximityPacket,
     buildDeltaPacket,
     buildCoveragePacket,
-    buildAggregatedPackets
+    buildAggregatedPackets,
 };

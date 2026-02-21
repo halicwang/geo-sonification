@@ -1,66 +1,66 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geo-Sonification | Interactive Sound Map</title>
-    
-    <!-- Mapbox GL JS -->
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.css" rel="stylesheet">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Geo-Sonification | Interactive Sound Map</title>
 
-    <!-- PMTiles vector source for Mapbox GL -->
-    <script src="https://cdn.jsdelivr.net/npm/mapbox-pmtiles@1.0.56/dist/mapbox-pmtiles.umd.min.js"></script>
-    
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <!-- Full-screen Mapbox map (layers added by app.js) -->
-    <div id="map"></div>
+        <!-- Mapbox GL JS -->
+        <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.js"></script>
+        <link href="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.css" rel="stylesheet" />
 
-    <!-- Floating info panel: stats updated in real time by updateUI() -->
-    <div id="info-panel">
-        <h2>Geo-Sonification</h2>
-        <p class="subtitle">Interactive Sound Map</p>
-        
-        <div class="stats-section">
-            <p class="vintage">Data vintage: 2020–2021</p>
-            <div class="stat-row">
-                <span class="stat-label">Zoom:</span>
-                <span id="zoom-level" class="stat-value">—</span>
+        <!-- PMTiles vector source for Mapbox GL -->
+        <script src="https://cdn.jsdelivr.net/npm/mapbox-pmtiles@1.0.56/dist/mapbox-pmtiles.umd.min.js"></script>
+
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <!-- Full-screen Mapbox map (layers added by app.js) -->
+        <div id="map"></div>
+
+        <!-- Floating info panel: stats updated in real time by updateUI() -->
+        <div id="info-panel">
+            <h2>Geo-Sonification</h2>
+            <p class="subtitle">Interactive Sound Map</p>
+
+            <div class="stats-section">
+                <p class="vintage">Data vintage: 2020–2021</p>
+                <div class="stat-row">
+                    <span class="stat-label">Zoom:</span>
+                    <span id="zoom-level" class="stat-value">—</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Grids in View:</span>
+                    <span id="grid-count" class="stat-value">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">OSC Mode:</span>
+                    <span id="osc-mode" class="stat-value">—</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Land Type:</span>
+                    <span id="land-type" class="stat-value">—</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Land Cover:</span>
+                </div>
+                <p class="stat-note">By land area</p>
+                <div id="landcover-list" class="landcover-list">
+                    <!-- Dynamically generated -->
+                </div>
             </div>
-            <div class="stat-row">
-                <span class="stat-label">Grids in View:</span>
-                <span id="grid-count" class="stat-value">0</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">OSC Mode:</span>
-                <span id="osc-mode" class="stat-value">—</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Land Type:</span>
-                <span id="land-type" class="stat-value">—</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Land Cover:</span>
-            </div>
-            <p class="stat-note">By land area</p>
-            <div id="landcover-list" class="landcover-list">
-                <!-- Dynamically generated -->
+
+            <div class="connection-status">
+                <span id="ws-status" class="status-dot disconnected"></span>
+                <span id="ws-text">Connecting...</span>
             </div>
         </div>
-        
-        <div class="connection-status">
-            <span id="ws-status" class="status-dot disconnected"></span>
-            <span id="ws-text">Connecting...</span>
-        </div>
-    </div>
-    
-    <!-- Toast: temporary notifications (e.g. connection errors) -->
-    <div id="toast" class="toast hidden"></div>
 
-    <!-- config.local.js sets window.MAPBOX_TOKEN; must load before app.js -->
-    <script src="config.local.js"></script>
-    <script src="app.js"></script>
-</body>
+        <!-- Toast: temporary notifications (e.g. connection errors) -->
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- config.local.js sets window.MAPBOX_TOKEN; must load before app.js -->
+        <script src="config.local.js"></script>
+        <script src="app.js"></script>
+    </body>
 </html>

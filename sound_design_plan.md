@@ -21,6 +21,7 @@ The base + texture layers are authored by the user in Ableton and exported as lo
 ### Phase 1 Scope
 
 Only **3 representative land cover types** have dedicated audio assets for the first milestone:
+
 - **Tree** (rainforest): organic LFO synthesis + humid white noise + bird/insect icons
 - **Urban** (city): low-frequency drone + mechanical texture + car horn/city icons
 - **Bare** (desert): wind synthesis + sand particle texture + wind gust icons
@@ -62,6 +63,7 @@ New messages follow these ordering constraints on every viewport update:
 4. **All existing messages after that retain their current sending order unchanged** — aggregated messages, per-grid messages, everything else stays exactly as implemented today
 
 This means:
+
 - In aggregated mode: `/mode` → `/proximity` → `/delta/*` → existing 15 aggregated messages
 - In per-grid mode: `/mode` → `/proximity` → `/delta/*` → then whatever the current per-grid implementation sends (do NOT rearrange it)
 
@@ -109,6 +111,7 @@ rate = clamp(rate_raw / DELTA_RATE_CEILING, 0, 1)
 On the first viewport update for a client (no previous snapshot), send all-zero deltas: `/delta/lc` all 0.0, `/delta/magnitude` 0.0, `/delta/rate` 0.0.
 
 ### Files to modify
+
 - `server/osc.js` — new `sendDeltaToMax()` function
 - `server/index.js` — integrate delta calculation into `processViewport()`
 - `server/config.js` — new config constants (`DT_MIN_MS`, `DT_MAX_MS`, `DELTA_RATE_CEILING`)
@@ -125,6 +128,7 @@ Send a `/proximity` message (1 float, 0–1) on every viewport update. 0 = satel
 ### Calculation approach
 
 Base it on the number of grid cells in the current viewport. Fewer cells = closer. Mapping:
+
 - Grid count ≥ `PROXIMITY_UPPER` (default 800) → proximity = 0
 - Grid count ≤ `PROXIMITY_LOWER` (default 50) → proximity = 1
 - Linear interpolation between thresholds
@@ -142,6 +146,7 @@ If the viewport contains zero grid cells (ocean-only area, data gap, or extreme 
 `/proximity` is sent **immediately after `/mode`**, before `/delta/*`, before all other messages. See the Global OSC Message Ordering Rule above.
 
 ### Files to modify
+
 - `server/osc.js` — new `sendProximityToMax()` function
 - `server/index.js` — integrate into `processViewport()`
 - `server/config.js` — `PROXIMITY_UPPER`, `PROXIMITY_LOWER` constants
@@ -160,6 +165,7 @@ Create `scripts/osc_simulator.js` — a standalone Node.js script that sends sim
 Before building the simulator, extract a **pure, side-effect-free module** from the existing `server/osc.js`:
 
 Create `server/osc_schema.js` (or `server/osc_messages.js`) containing:
+
 - The land cover class order array (10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100)
 - OSC address constants (`/mode`, `/proximity`, `/delta/lc`, `/delta/magnitude`, `/delta/rate`, `/landcover`, `/nightlight`, `/population`, `/forest`, `/lc/10` through `/lc/100`)
 - The canonical message send sequence/ordering
@@ -187,6 +193,7 @@ Then refactor `server/osc.js` to import from this shared module instead of defin
 - Graceful exit on Ctrl+C
 
 ### Files to create/modify
+
 - `server/osc_schema.js` — new shared schema module (extracted from osc.js)
 - `server/osc.js` — refactored to import from osc_schema.js
 - `scripts/osc_simulator.js` — the simulator itself
@@ -212,14 +219,15 @@ The server sends 11 `/lc/*` messages in rapid succession on each viewport update
 
 - Inlets 0–9: only store the incoming value as the new target. Do NOT output or run smoothing.
 - Inlet 10 (`/lc/100`): store its target, then trigger `updateFrame()` which:
-  1. Computes dt since last frame
-  2. Applies exponential moving average to ALL 11 channels using the same dt
-  3. Multiplies all values by a proximity-based attenuation factor
-  4. Outputs all 11 smoothed volumes through outlets 0–10
+    1. Computes dt since last frame
+    2. Applies exponential moving average to ALL 11 channels using the same dt
+    3. Multiplies all values by a proximity-based attenuation factor
+    4. Outputs all 11 smoothed volumes through outlets 0–10
 
 Smoothing time constant: configurable, default ~500ms. Implemented as EMA with `alpha = 1 - exp(-dt / smoothingTime)`.
 
 ### Inlet definitions
+
 - inlet 0: land cover class 10 (Tree) percentage (float 0–1) — stores target only
 - inlet 1: land cover class 20 (Shrub) percentage — stores target only
 - inlet 2: land cover class 30 (Grass) percentage — stores target only
@@ -234,12 +242,15 @@ Smoothing time constant: configurable, default ~500ms. Implemented as EMA with `
 - inlet 11: proximity value (float 0–1) — stores value for attenuation calculation
 
 ### Outlet definitions
+
 - outlet 0–10: smoothed volume for each corresponding land cover class (float 0–1, attenuated by proximity)
 
 ### Important note on downstream usage
+
 The crossfade controller outputs all 11 independent channels. In Phase 1, the user will fold these into 3 audio buses in the Max patch (see "Phase 1 Fold-Mapping Strategy" in Sound Design Overview). **The JS script must not implement any fold-mapping logic** — it always outputs 11 channels.
 
 ### Notes
+
 - This runs inside Max's `js` object, **not Node.js**. Use Max js API: `inlets`, `outlets`, `bang()`, `msg_float()`, `msg_int()`, `setinletassist()`, `setoutletassist()`, etc.
 - Include clear header comments documenting every inlet and outlet
 - If unsure about Max js API specifics, note assumptions in comments so the user can verify
@@ -255,12 +266,13 @@ Create `sonification/icon_trigger.js` — a Max `js` object script.
 - Receive current 11 land cover percentages (stored as state, not triggering output)
 - Receive `/proximity` value
 - On metro bang (inlet 12), evaluate trigger conditions and probabilistically trigger icon playback:
-  - Higher land cover percentage → higher trigger probability for that type's icons
-  - Lower proximity (zoom out) → all icon probabilities trend toward zero
-  - Minimum interval between triggers of the same icon type (configurable, default 3 seconds) to prevent rapid-fire
-  - On trigger, output: icon category number (which land cover type) and a random intensity value (0–1)
+    - Higher land cover percentage → higher trigger probability for that type's icons
+    - Lower proximity (zoom out) → all icon probabilities trend toward zero
+    - Minimum interval between triggers of the same icon type (configurable, default 3 seconds) to prevent rapid-fire
+    - On trigger, output: icon category number (which land cover type) and a random intensity value (0–1)
 
 ### Inlet definitions
+
 - inlet 0: land cover class 10 (Tree) percentage
 - inlet 1: land cover class 20 (Shrub) percentage
 - inlet 2: land cover class 30 (Grass) percentage
@@ -276,19 +288,23 @@ Create `sonification/icon_trigger.js` — a Max `js` object script.
 - inlet 12: bang — clock tick to evaluate trigger conditions (connect to a metro in Max)
 
 ### Outlet definitions
+
 - outlet 0: icon category (int — land cover class code: 10, 20, 30, etc.)
 - outlet 1: trigger intensity (float 0–1)
 
 ### Phase 1 scope
+
 - Only 3 icon types are active: Tree (10), Urban (50), Bare (60). Others are structurally supported but will not trigger until icon samples are added
 - Architecture must support all 11 types without code changes — just adding samples
 
 ### Notes on delta-driven drama
+
 - The icon_trigger script itself does NOT receive `/delta` data. Its trigger logic is based only on land cover percentages, proximity, and cooldown timing.
 - However, the user's aesthetic goal is "stable texture when static, narrative arc when moving." To achieve this, the user can multiply the icon trigger output intensity (outlet 1) by `/delta/magnitude` in the Max patch wiring. This way, icons become more pronounced during viewport changes and quiet during stillness — without adding complexity to the JS script itself.
 - This is a Max patch-level routing decision, not a code task. Document this recommended wiring in the header comments of the script.
 
 ### Notes
+
 - Max `js` environment, not Node.js
 - Inlets 0–11 only store state. Only inlet 12 (bang) triggers evaluation and potential output
 - Clear header comments for all inlets and outlets, including the delta multiplication recommendation
@@ -319,6 +335,7 @@ sonification/samples/
 ### samples/README.md content
 
 Document the following requirements:
+
 - Ambience files: WAV format, 44100Hz or 48000Hz, stereo, seamlessly loopable, recommended length 1–2 minutes
 - Icon samples: WAV format, mono or stereo, short duration (0.5–5 seconds), multiple files per subdirectory (randomly selected on trigger)
 - Naming: ambience files use lowercase land cover type name (tree.wav, urban.wav, etc.); icon files can be freely named but must be in the correct type subdirectory
@@ -328,6 +345,7 @@ Document the following requirements:
 ### .gitignore additions
 
 Add to `.gitignore`:
+
 ```
 sonification/samples/ambience/*.wav
 sonification/samples/icons/**/*.wav
@@ -348,9 +366,9 @@ Create `sonification/granulator.js` — a Max `js` object script. This is an opt
 - Read from a specified Max `buffer~` object
 - Use Max js `Task` object for timed triggering (replacing Max `metro`)
 - On each trigger, randomly generate:
-  - Grain start time: random within range 0 to (buffer length − max grain duration)
-  - Grain duration: random within configurable min–max range (default 500–1000ms)
-  - Trigger interval: random within configurable min–max range (default 1000–2000ms)
+    - Grain start time: random within range 0 to (buffer length − max grain duration)
+    - Grain duration: random within configurable min–max range (default 500–1000ms)
+    - Trigger interval: random within configurable min–max range (default 1000–2000ms)
 - **4-voice polyphony rotation**: cycle a counter through 4 outlet channels (0→1→2→3→0→...) so that a currently playing grain is never interrupted
 
 ### Envelope generation
@@ -361,10 +379,12 @@ Create `sonification/granulator.js` — a Max `js` object script. This is an opt
 - Output as a Max `line~` compatible list (e.g., `0, 1 333, 1 333, 0 333` for a 1000ms grain)
 
 ### Outlet definitions (8 outlets)
+
 - outlet 0–3: grain playback messages for 4 voices, each a list (start_ms, end_ms, duration_ms) for the corresponding `play~` object
 - outlet 4–7: envelope messages for 4 voices, each a `line~` compatible list for the corresponding `line~` object
 
 ### Inlet definitions (8 inlets)
+
 - inlet 0: bang to start/stop the granulator (toggle)
 - inlet 1: grain duration minimum (ms)
 - inlet 2: grain duration maximum (ms)
@@ -384,7 +404,8 @@ Create `sonification/granulator.js` — a Max `js` object script. This is an opt
 ### Companion documentation
 
 Create `sonification/granulator_README.md` with:
-- Text-based wiring diagram for Max (buffer~ → js → 4× play~ → 4× line~ → 4× *~ → output)
+
+- Text-based wiring diagram for Max (buffer~ → js → 4× play~ → 4× line~ → 4× \*~ → output)
 - Step-by-step wiring instructions (~15 minutes to complete)
 - Parameter tuning guide (short grains + fast interval = dense chatter; long grains + slow interval = sparse ambient wash)
 
@@ -397,6 +418,7 @@ Create `sonification/granulator_README.md` with:
 Add to the "OSC Messages" section:
 
 **New messages (sent on every viewport update):**
+
 ```
 /mode              (string, existing, always first)
 /proximity         (float 0–1, new — immediately after /mode)
@@ -407,6 +429,7 @@ Add to the "OSC Messages" section:
 ```
 
 **Message descriptions:**
+
 - `/proximity` (float 0–1) — Viewport zoom proximity. 0 = satellite/distant view, 1 = closest zoom. Based on grid cell count with configurable thresholds (default: 50–800). Forced to 0 when gridCount is 0.
 - `/delta/lc` (11 floats) — Per-class land cover change since previous update, same class order as `/lc/*`
 - `/delta/magnitude` (float 0–1) — Overall change magnitude: `0.5 * sum(|current_i - prev_i|)`. 0 = minimal, 1 = dramatic shift
@@ -421,9 +444,9 @@ Add a new dated entry recording:
 - Phase 1 scope: 3 representative types (Tree, Urban, Bare), expandable to 11
 - Phase 1 fold-mapping strategy: 11 channels folded into 3 audio buses in Max patch wiring (natural vegetation → Tree bus, urban → Urban bus, barren/ice/water → Bare bus). Fold-mapping is purely a Max wiring concern, not in server or JS code.
 - New OSC messages: `/proximity` and `/delta` series, with design rationale
-  - `/proximity`: enables gradual close-up → distant transition (clear soundscape → reverb wash). Forced to 0 when no grid data present.
-  - `/delta`: enables sound to respond to the *rate and magnitude of change*, not just static state. Formula: magnitude = 0.5 * L1 distance of land cover vectors; rate = magnitude / clamped_dt
-- Global message ordering: /mode → /proximity → /delta/* → existing messages (existing order untouched)
+    - `/proximity`: enables gradual close-up → distant transition (clear soundscape → reverb wash). Forced to 0 when no grid data present.
+    - `/delta`: enables sound to respond to the _rate and magnitude of change_, not just static state. Formula: magnitude = 0.5 \* L1 distance of land cover vectors; rate = magnitude / clamped_dt
+- Global message ordering: /mode → /proximity → /delta/\* → existing messages (existing order untouched)
 - Close-up vs. distant listening experience design
 - Crossfade controller: frame-based smoothing triggered by last /lc message to ensure consistent per-channel behavior
 - Icon trigger: delta-driven drama achieved via Max patch multiplication, not in JS script
@@ -473,14 +496,15 @@ The 8 tasks are grouped into 3 independently verifiable milestones. Each milesto
 
 **Tasks**: 6 → 2 → 1 → 3 (in order)
 
-| Step | Task | What it delivers |
-|------|------|-----------------|
-| A.1 | Task 6 — Sample directory structure | `sonification/samples/` tree with README and `.gitignore` rules |
-| A.2 | Task 2 — `/proximity` OSC message | Grid-count-based zoom proximity signal (0–1), sent after `/mode` |
-| A.3 | Task 1 — `/delta` OSC messages + schema extraction | `/delta/lc`, `/delta/magnitude`, `/delta/rate`; shared `osc_schema.js` module; per-client delta state |
-| A.4 | Task 3 — OSC simulator | Standalone script with 6 scenarios, imports from `osc_schema.js` |
+| Step | Task                                               | What it delivers                                                                                      |
+| ---- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| A.1  | Task 6 — Sample directory structure                | `sonification/samples/` tree with README and `.gitignore` rules                                       |
+| A.2  | Task 2 — `/proximity` OSC message                  | Grid-count-based zoom proximity signal (0–1), sent after `/mode`                                      |
+| A.3  | Task 1 — `/delta` OSC messages + schema extraction | `/delta/lc`, `/delta/magnitude`, `/delta/rate`; shared `osc_schema.js` module; per-client delta state |
+| A.4  | Task 3 — OSC simulator                             | Standalone script with 6 scenarios, imports from `osc_schema.js`                                      |
 
 **Verification**: Run each simulator scenario (`node scripts/osc_simulator.js <scenario>`). In Max, wire `udpreceive 7400` → `route` → `print` and confirm:
+
 - Message ordering: `/mode` → `/proximity` → `/delta/*` → existing 15 aggregated messages
 - `/proximity` ranges 0–1, responds to zoom sweep scenario
 - `/delta/magnitude` spikes on `abrupt-switch`, ramps on `gradual-transition`
@@ -490,12 +514,13 @@ The 8 tasks are grouped into 3 independently verifiable milestones. Each milesto
 
 **Tasks**: 4 → 5 (in order)
 
-| Step | Task | What it delivers |
-|------|------|-----------------|
-| B.1 | Task 4 — Crossfade controller | Frame-based smoothed 11-channel volume output with proximity attenuation |
-| B.2 | Task 5 — Icon trigger | Probabilistic icon triggering based on land cover %, proximity, and cooldown |
+| Step | Task                          | What it delivers                                                             |
+| ---- | ----------------------------- | ---------------------------------------------------------------------------- |
+| B.1  | Task 4 — Crossfade controller | Frame-based smoothed 11-channel volume output with proximity attenuation     |
+| B.2  | Task 5 — Icon trigger         | Probabilistic icon triggering based on land cover %, proximity, and cooldown |
 
 **Verification**: Feed simulator data into Max (run `gradual-transition` and `zoom-sweep` scenarios). Wire crossfade controller outlets to `meter~` or `number~` objects and confirm:
+
 - 11 outputs transition smoothly (no abrupt jumps) during `gradual-transition`
 - All outputs attenuate toward zero during `zoom-sweep` as proximity → 0
 - Icon trigger fires appropriately at high proximity, goes silent at low proximity
@@ -505,12 +530,13 @@ The 8 tasks are grouped into 3 independently verifiable milestones. Each milesto
 
 **Tasks**: 8, then optionally 7
 
-| Step | Task | What it delivers |
-|------|------|-----------------|
-| C.1 | Task 8 — README.md and DEVLOG.md updates | Complete documentation of new OSC messages, sound design decisions, architecture |
-| C.2 | Task 7 — Granulator *(optional)* | JS-based granular synthesis module with 4-voice polyphony and proximity modulation |
+| Step | Task                                     | What it delivers                                                                   |
+| ---- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| C.1  | Task 8 — README.md and DEVLOG.md updates | Complete documentation of new OSC messages, sound design decisions, architecture   |
+| C.2  | Task 7 — Granulator _(optional)_         | JS-based granular synthesis module with 4-voice polyphony and proximity modulation |
 
 **Verification**:
+
 - Review README OSC message table for accuracy against actual implementation
 - DEVLOG entry covers all design decisions listed in Task 8
-- *(If Task 7 implemented)* Test granulator with a loaded `buffer~` — confirm 4-voice cycling, envelope output, and proximity-driven parameter shifts
+- _(If Task 7 implemented)_ Test granulator with a loaded `buffer~` — confirm 4-voice cycling, envelope output, and proximity-driven parameter shifts

@@ -12,6 +12,7 @@ Only rows with `land_area_km2 > 0` are exported. By default, the scripts also ap
 If `reduceRegion` occasionally fails on large / high-latitude cells, increase `TILE_SCALE` (slower but more reliable).
 
 Forest / land area accuracy:
+
 - `AREA_METHOD = 'fast'` is the current default with `AREA_SCALE = 1000` (fast, may miss small patches).
 - Switch to `AREA_METHOD = 'fractional'` to preserve small patches via `reduceResolution(sum)` on `pixelArea` (slower).
 - Alternatively, decrease `AREA_SCALE` to `250` or `100` for more detail (slower).
@@ -21,11 +22,13 @@ Forest / land area accuracy:
 Must match `data/raw/SCHEMA.md`, `scripts/check_csv_schema.js`, and `server/data-loader.js`.
 
 **V1** (required columns only — old CSVs still accepted):
+
 ```
 grid_id,lon,lat,landcover_class,forest_pct,forest_area_km2,population_total,land_area_km2,nightlight_mean,nightlight_p90,cell_area_km2,land_fraction
 ```
 
 **V2** (with continuous landcover percentages — current GEE scripts):
+
 ```
 grid_id,lon,lat,landcover_class,lc_pct_10,lc_pct_20,lc_pct_30,lc_pct_40,lc_pct_50,lc_pct_60,lc_pct_70,lc_pct_80,lc_pct_90,lc_pct_95,lc_pct_100,forest_pct,forest_area_km2,population_total,land_area_km2,nightlight_mean,nightlight_p90,cell_area_km2,land_fraction
 ```
@@ -53,7 +56,7 @@ Current resolution is 0.5°×0.5° (~78k cells globally). For even finer resolut
 ## Run prerequisites (before starting Node)
 
 1. **Confirm CSV files + headers + resolution**: all 7 CSVs in `data/raw/` must exist, match `data/raw/SCHEMA.md`, and have lon/lat resolution consistent with server `GRID_SIZE` (default `0.5`). If you still have old `loss_*` / `forest2000_*` CSVs, do **not** start the server—re-export with the GEE scripts above and replace the files in `data/raw/`.
-   - Validate: `npm run check:csv` (from project root)
+    - Validate: `npm run check:csv` (from project root)
 2. **Clear caches**: `rm -rf data/cache`, then start the Node server.
 
 The Node server validates required files, CSV headers, and grid resolution at startup. If any check fails, startup exits with a clear error.

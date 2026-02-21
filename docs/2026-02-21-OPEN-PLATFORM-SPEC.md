@@ -173,6 +173,17 @@ const cells = polygonToCells(
 **Configurable:** Via `DEFAULT_H3_RESOLUTION` in `config.js`.
 **Dynamic adjustment:** Resolution can be auto-selected based on map zoom level — zoom 3–5 uses res 3, zoom 6–8 uses res 4, zoom 9–11 uses res 5, and so on.
 
+**User-facing scale labels:** H3 resolution numbers (3, 4, 5, 7) are meaningless to non-GIS users. All UI surfaces that expose resolution selection (import wizard, config API, console) must display a human-readable label alongside the numeric value:
+
+| Resolution | Label | Description |
+| ---------- | ----- | ----------- |
+| 3 | Province / State | ~60 km edge, ~12,400 km² — one hex covers a small country or large province |
+| 4 | Metro area (default) | ~23 km edge, ~1,770 km² — one hex covers a metropolitan region |
+| 5 | City | ~8 km edge, ~253 km² — one hex covers a city or district |
+| 7 | Neighborhood | ~1.2 km edge, ~5.2 km² — one hex covers a neighborhood or campus |
+
+These labels are defined in a `H3_RESOLUTION_LABELS` constant in `config.js` and served via `/api/config` for frontend consumption.
+
 ### 4.4 CellEncoder Abstract Interface
 
 Reserved for future replacement with Quadkey or other encoding schemes:
@@ -385,6 +396,40 @@ Automatic processing logic:
 2. Remaining numeric columns are auto-registered as channels (column name = channel name)
 3. Each row's `(lat, lon)` is encoded to a cellId via `CellEncoder.encode()`
 4. Multiple rows within the same cellId are aggregated using a configurable operator (mean / sum / max / last)
+
+### 5.7 Import Validation and Preview
+
+Importing arbitrary CSVs with zero feedback is a recipe for silent data corruption. The import pipeline includes a **preview step** that analyzes the file and returns a structured report *before* committing data to the spatial index. The user (or calling system) reviews the preview and either confirms or adjusts parameters.
+
+**Preview report contents:**
+
+| Check | What It Detects | Response |
+| ----- | --------------- | -------- |
+| Column role detection | Auto-assigns `lat`, `lon`, `timestamp`, `alt` by column name; remaining numeric columns flagged as candidate channels | User can override role assignments (e.g., reassign `x` → `lon`, `y` → `lat`) |
+| Non-numeric columns | String or mixed-type columns that cannot be channels | Listed in preview; excluded from channel registration with a warning |
+| Missing values | Rows with `null` / empty / `NaN` in lat, lon, or channel columns | Count reported; rows with missing lat/lon are dropped; missing channel values use `NaN` (excluded from aggregation) |
+| Coordinate sanity | lat outside [-90, 90], lon outside [-180, 180], or lat/lon columns appear swapped (e.g., lon values in lat range) | Warning with suggested swap; if > 50% of rows fail range check, import is blocked with an error |
+| Coordinate system hint | Coordinates that look like projected (UTM, state plane) rather than WGS84 — detected by value magnitude (e.g., lat > 90 suggests non-WGS84) | Error: "Coordinates do not appear to be WGS84. Please convert to WGS84 (EPSG:4326) before importing." |
+| Resolution preview | Shows approximate hex scale for the selected H3 resolution | Human-readable label (see §4.3 scale hints) so the user understands spatial granularity |
+| Row/cell summary | Total rows parsed, unique H3 cells generated, rows per cell (min/mean/max) | Helps user judge whether resolution is appropriate for their data density |
+
+**Column mapping and unit declaration (optional overrides):**
+
+By default, auto-detection handles most CSVs. For advanced use, the preview response includes a `columnMapping` object that the user can modify before confirming:
+
+```jsonc
+{
+  "columnMapping": {
+    "latitude":  { "role": "lat" },
+    "longitude": { "role": "lon" },
+    "pm25":      { "role": "channel", "unit": "μg/m³", "normalization": "log", "range": [0, 500] },
+    "temp_c":    { "role": "channel", "unit": "°C",    "normalization": "linear", "range": [-40, 50] },
+    "station_id": { "role": "ignore" }
+  }
+}
+```
+
+When `range` is explicitly provided, values are normalized to [0, 1] using the declared range and normalization method. When omitted, the system infers range from the data (p1/p99 percentile for `linear`, observed min/max for `log`).
 
 ---
 

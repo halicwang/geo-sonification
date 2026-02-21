@@ -148,7 +148,7 @@ Authentication, observability, and supply chain concerns are out of scope for Ph
 
 ## 4. Phase 1.5: Runtime Data Import (Upload CSV, Render Immediately)
 
-**Goal:** Allow third-party data to be imported without restarting the server — uploading a CSV immediately ingests it into the spatial index, and the frontend (once Phase 2 is complete) renders new hexagonal grids in real time.
+**Goal:** Allow third-party data to be imported without restarting the server — uploading a CSV immediately ingests it into the spatial index, and the frontend (once Phase 2 is complete) renders new hexagonal grids in real time. The import pipeline includes a preview/validation step so that data quality issues are caught *before* data enters the system, not after.
 
 ### 4.1 Why This Phase Is Needed
 
@@ -189,9 +189,14 @@ Channel names are automatically namespaced by source: the internal key is `sourc
 
 ```
 server/
-├── import-manager.js               # Runtime import pipeline: validate, parse, encode, inject, notify
+├── import-manager.js               # Runtime import pipeline: preview, validate, confirm, encode, inject, notify
+├── import-validator.js              # CSV validation: column detection, type checks, coordinate sanity, range inference
 ├── __tests__/
-│   └── import-manager.test.js
+│   ├── import-manager.test.js
+│   └── import-validator.test.js
+frontend/
+├── import.html                      # Import wizard page (upload → review → adjust → confirm)
+├── import.js                        # Wizard logic (calls preview/confirm API, renders preview report)
 data/
 ├── imports/                         # Uploaded data file storage directory
 │   └── manifest.json                # Import metadata record
@@ -203,61 +208,122 @@ data/
 
 | File | Change | Notes |
 | ---- | ------ | ----- |
-| `server/index.js` | Add `POST /api/import` endpoint (multipart file upload); scan `data/imports/manifest.json` on startup to reload | New route |
+| `server/index.js` | Add `POST /api/import/preview` and `POST /api/import/confirm` endpoints; serve `/import` wizard page; scan `data/imports/manifest.json` on startup to reload | New routes |
+| `server/config.js` | Add `H3_RESOLUTION_LABELS` constant (human-readable scale labels per resolution) | Used by preview API and wizard |
 | `server/spatial.js` | Add `addCells(records)` method to support runtime data append to spatial index | Existing `Map` structure naturally supports append; primarily interface wrapping |
 | `server/channel-registry.js` | Add `registerRuntime(adapter)` method to support runtime channel addition; trigger WebSocket notification | Extends Phase 1 registry |
 | `server/osc_schema.js` | Add `/ch/reload` message address (notifies Max that the channel list has changed) | Backward-compatible |
 
-### 4.6 API Design
+### 4.6 API Design: Two-Step Import (Preview → Confirm)
+
+The import pipeline is split into two API calls to prevent silent data corruption. Step 1 analyzes the file and returns a preview report; Step 2 commits with (optionally adjusted) parameters. See OPEN-PLATFORM-SPEC.md §5.7 for the full validation specification.
+
+**Step 1 — Preview:**
 
 ```
-POST /api/import
+POST /api/import/preview
 Content-Type: multipart/form-data
 
 Parameters:
   file:        CSV file (required)
-  adapter:     Adapter ID, default "csv-generic" (optional)
   resolution:  H3 resolution, defaults to DEFAULT_H3_RESOLUTION (optional)
-  aggregate:   Aggregation operator "mean" | "sum" | "max" | "last", default "mean" (optional)
 
 Response (200):
 {
-  "status": "ok",
-  "source": "air_quality",           // Derived from filename
-  "channels": ["air_quality.pm25", "air_quality.temperature", "air_quality.humidity"],
-  "cellCount": 1247,
-  "resolution": 4,
-  "warnings": []                     // Non-fatal warnings (e.g., column type coercion, empty rows skipped)
+  "status": "preview",
+  "previewId": "abc123",              // Temporary ID to reference this preview in Step 2
+  "source": "air_quality",            // Derived from filename
+  "totalRows": 5420,
+  "columnMapping": {                  // Auto-detected column roles (user can override in Step 2)
+    "latitude":  { "role": "lat" },
+    "longitude": { "role": "lon" },
+    "pm25":      { "role": "channel", "unit": null, "normalization": "linear", "range": [2.1, 487.3] },
+    "temp_c":    { "role": "channel", "unit": null, "normalization": "linear", "range": [-12.5, 41.2] },
+    "station_id": { "role": "ignore", "reason": "non-numeric" }
+  },
+  "resolution": { "value": 4, "label": "Metro area (~23 km edge, ~1,770 km²)" },
+  "cellCount": 1247,                  // Unique H3 cells generated
+  "rowsPerCell": { "min": 1, "mean": 4.3, "max": 38 },
+  "warnings": [                       // Non-fatal issues
+    { "type": "missing_values", "column": "pm25", "count": 12, "action": "excluded from aggregation" },
+    { "type": "empty_rows", "count": 3, "action": "skipped" }
+  ],
+  "errors": []                        // Fatal issues — if non-empty, Step 2 will reject
 }
 
 Response (400):
 {
   "status": "error",
-  "message": "CSV must contain 'lat' and 'lon' columns"
+  "message": "CSV must contain 'lat' and 'lon' (or 'latitude' and 'longitude') columns"
 }
 ```
 
-### 4.7 Complete Import Flow
+**Step 2 — Confirm:**
 
-1. Vendor uploads CSV via `POST /api/import`
-2. Server parses with `csv-generic` adapter (identifies `lat`/`lon` columns; remaining numeric columns auto-register as channels)
-3. Each row's `(lat, lon)` is encoded to a `cellId` via `H3Encoder`
-4. Multiple rows within the same `cellId` are merged using the aggregation operator
-5. Generated `DataRecord`s are appended to the spatial index
-6. New channels are registered in the channel registry
-7. CSV file is saved to `data/imports/`; metadata written to `manifest.json`
-8. A `channel_update` event is sent to all connected frontends via WebSocket
-9. `/ch/register` and `/ch/reload` are sent to Max via OSC
-10. Frontend receives notification, re-requests `/api/config` for the latest channel list, and refreshes rendering
+```
+POST /api/import/confirm
+Content-Type: application/json
 
-### 4.8 Effort Estimate
+Parameters:
+{
+  "previewId": "abc123",
+  "columnMapping": { ... },           // Optional: override auto-detected mappings
+  "resolution": 5,                    // Optional: override resolution from preview
+  "aggregate": "mean"                 // Optional: aggregation operator (default "mean")
+}
 
-- `import-manager.js` (import pipeline + persistence + reload): ~200 lines
-- `POST /api/import` endpoint + multipart handling: ~80 lines
+Response (200):
+{
+  "status": "ok",
+  "source": "air_quality",
+  "channels": ["air_quality.pm25", "air_quality.temp_c"],
+  "cellCount": 1247,
+  "resolution": 5,
+  "warnings": []
+}
+```
+
+The preview file is kept in a temporary upload area and deleted after confirmation (or after a timeout, default 30 minutes). The two-step pattern also works headlessly — automated pipelines can call preview, check for zero errors, and immediately call confirm without user interaction.
+
+### 4.7 Import Wizard (Minimal Frontend)
+
+The backend two-step API is usable via `curl`, but for the "vendor drops in a CSV" use case, a minimal import wizard page (`/import`) is needed. This is deliberately scoped as a simple, functional page — not the full Phase 3 console.
+
+**Wizard flow:**
+
+1. **Upload**: drag-and-drop or file picker → calls `POST /api/import/preview`
+2. **Review**: displays the preview report — detected columns with role badges (lat/lon/channel/ignore), warnings highlighted in yellow, errors in red, resolution selector with human-readable scale labels (see OPEN-PLATFORM-SPEC.md §4.3)
+3. **Adjust** (optional): user can reassign column roles (dropdown: lat / lon / channel / ignore), set normalization method per channel (linear / log / percentile), override value range
+4. **Confirm**: calls `POST /api/import/confirm` → success message with channel count and cell count
+
+**Implementation scope:** Plain HTML + vanilla JS (consistent with the project's no-build-tool frontend). Approximately one HTML page + one JS file. The wizard is intentionally minimal — no drag-and-drop bus mapping, no audio preview. Those belong in the Phase 3 console.
+
+### 4.8 Complete Import Flow
+
+1. User opens `/import` wizard (or calls API directly)
+2. File uploaded via `POST /api/import/preview`
+3. Server parses first N rows (default: all, cap at resource limits), auto-detects column roles, runs validation checks
+4. Preview report returned — user reviews warnings, adjusts column mapping and resolution if needed
+5. User confirms via `POST /api/import/confirm` (or API caller posts confirm with overrides)
+6. Server re-parses full file with confirmed settings; each row's `(lat, lon)` encoded to `cellId` via `H3Encoder`
+7. Multiple rows within the same `cellId` merged using the aggregation operator
+8. Generated `DataRecord`s appended to the spatial index
+9. New channels registered in the channel registry
+10. CSV file saved to `data/imports/`; metadata written to `manifest.json`
+11. A `channel_update` event sent to all connected frontends via WebSocket
+12. `/ch/register` and `/ch/reload` sent to Max via OSC
+13. Frontend receives notification, re-requests `/api/config` for the latest channel list, and refreshes rendering
+
+### 4.9 Effort Estimate
+
+- `import-manager.js` (two-step pipeline: preview state management + confirm + persistence + reload): ~250 lines
+- `import-validator.js` (column detection, type checks, coordinate sanity, range inference): ~180 lines
+- `POST /api/import/preview` + `POST /api/import/confirm` endpoints + multipart handling: ~120 lines
+- `import.html` + `import.js` (import wizard frontend): ~200 lines
 - `spatial.js` runtime append method: ~60 lines
 - `channel-registry.js` runtime update + notification: ~50 lines
-- Tests: ~120 lines
-- **Total: ~510 lines, of which ~420 new and ~90 modified**
+- Tests (import-manager + import-validator): ~200 lines
+- **Total: ~1060 lines, of which ~920 new and ~140 modified**
 
 ---
 
@@ -587,22 +653,22 @@ The fire adapter's channels are designed to drive both ambient background tensio
 | ----- | -------- | ------------- | ---- | ------------- |
 | 0: H3 Encoding Layer | ~290 lines | ~30 lines | Very low (pure addition) | None (requires `h3-js` dependency approval) |
 | 1: Adapters + Registry | ~960 lines | ~200 lines | Medium (refactors core data flow) | Phase 0 |
-| 1.5: Runtime Import | ~420 lines | ~90 lines | Medium (runtime state mutation) | Phase 1 |
+| 1.5: Runtime Import + Import Wizard | ~920 lines | ~140 lines | Medium (runtime state mutation + validation logic) | Phase 1 |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1 |
 | 3: Config + Console | ~650 lines | ~100 lines | Low (new feature) | Phase 1 |
 | 4: Real-time Stream + USGS Earthquake + FIRMS Fire | ~1120 lines | ~120 lines | Medium (real-time state + external dependency + AOI management) | Phase 1 + Phase 1.5 |
 
-**Total: ~3820 lines of new code, ~740 lines modified.**
+**Total: ~4320 lines of new code, ~790 lines modified.**
 
 Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depends on Phase 1.5 (runtime spatial index append capability). **Phase 0 + Phase 1 is the critical path.**
 
 **`spatial.js` modification ordering:** Phases 1, 1.5, and 4 all modify `spatial.js`. To avoid merge conflicts, apply changes in order: Phase 1 adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does *not* modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
 
-**Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~2560 lines).
+**Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~3010 lines).
 
-**Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3510 lines; frontend still uses old rendering, but OSC/sound updates in real time).
+**Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3960 lines; frontend still uses old rendering, but OSC/sound updates in real time).
 
-**All phases complete:** ~3820 lines new + ~740 lines modified.
+**All phases complete:** ~4320 lines new + ~790 lines modified.
 
 ---
 

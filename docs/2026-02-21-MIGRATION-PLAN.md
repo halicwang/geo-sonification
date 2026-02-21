@@ -7,6 +7,87 @@
 
 ---
 
+## 0. End-State Architecture Overview
+
+> See OPEN-PLATFORM-SPEC.md §1.5 for the full layer-by-layer description. The diagram is reproduced here so migration plan readers can see the target architecture without switching documents.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        DATA SOURCES                             │
+│  CSV  │  GeoJSON  │  KML/GPX (future)  │  REST API / WebSocket │
+└───┬───┴─────┬─────┴─────────┬──────────┴──────────┬────────────┘
+    │         │               │                     │
+    ▼         ▼               ▼                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ADAPTER LAYER  (server/adapters/)            │
+│  worldcover.js │ csv-generic.js │ geojson-generic.js │ usgs.js │
+│                                                                 │
+│  • Raw format parsing          • WGS84 coordinate conversion    │
+│  • Channel manifest declaration • DataRecord[] production       │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ DataRecord[]
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                H3 ENCODING LAYER  (server/grid/)                │
+│  CellEncoder interface  →  H3Encoder implementation             │
+│  latLngToCell() │ polygonToCells() │ cellToParent()             │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ H3-encoded DataRecord[]
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               SPATIAL INDEX  (server/spatial.js)                │
+│  Map<cellId, Map<sourceId, DataRecord>>                         │
+│  queryByH3(bounds, res) → CellSnapshot[]                        │
+│  addCells(records) — runtime append for imports & streams       │
+└──────────┬──────────────────────────────────────┬───────────────┘
+           │                                      │
+           ▼                                      ▼
+┌────────────────────┐               ┌────────────────────────────┐
+│  CHANNEL REGISTRY  │               │  TIME WINDOW               │
+│  (channel-         │               │  (time-window.js)          │
+│   registry.js)     │               │  Sliding window aggregation│
+│  Namespaced keys   │               │  for stream adapters       │
+│  Index assignment   │               │  Event expiry & cleanup    │
+└────────┬───────────┘               └──────────┬─────────────────┘
+         │                                      │
+         └──────────────┬───────────────────────┘
+                        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  OSC ENGINE  (server/osc.js)                    │
+│  /lc/* (compat) │ /ch/* (generic) │ /bus/* (fold-mapped)        │
+│  /alert/* (alerts) │ /adapter/* (errors)                        │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ UDP
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               MAX/MSP AUDIO RENDERER                            │
+│  crossfade_controller.js │ icon_trigger.js │ loop_voice.js      │
+│  5 audio buses → stereo sum → dac~                              │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│               ALERT ENGINE  (server/alert-engine.js)            │
+│  Rule evaluation from CellSnapshot channel values               │
+│  State machine: idle → active → cooldown → idle                 │
+│  Fires /alert/* OSC on threshold crossing                       │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│               FRONTEND  (frontend/)                             │
+│  Mapbox GL │ H3 hex rendering │ Channel metadata display        │
+│  WebSocket ←→ Server (viewport updates, channel_update)         │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│               CONTROL PLANE  (REST API)                         │
+│  GET /api/sources │ GET /api/channels │ GET /api/streams        │
+│  POST /api/import │ DELETE /api/sources/:id                     │
+│  POST /api/audio-mapping/reload                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 1. Current Coupling Analysis
 
 The following locations in the existing codebase hardcode WorldCover's 11 classes or the 0.5-degree grid:
@@ -162,14 +243,60 @@ Phase 1a introduces the adapter framework, and Phase 1.5 adds `POST /api/import`
 
 Authentication, observability, and supply chain concerns are out of scope for Phase 1a. See OPEN-PLATFORM-SPEC.md §9 for the full non-functional requirements roadmap.
 
+### 3.5.5 Audio-Mapping Reload API (Hot-Reload Without Restart)
+
+**Motivation:** Phase 3 (web console) is deferred, and `audio_mapping.json` can currently only be changed by hand-editing followed by a server restart. A minimal reload endpoint enables CI/CD-driven config deployment and faster iteration during development — without requiring the full web console.
+
+**New Files:**
+
+```
+server/
+├── audio-mapping.js            # Load, validate JSON schema, emit OSC /bus/reload
+├── __tests__/
+│   └── audio-mapping.test.js
+```
+
+**Modified Files:**
+
+| File | Change | Notes |
+| ---- | ------ | ----- |
+| `server/index.js` | Add `POST /api/audio-mapping/reload` route | Delegates to `audio-mapping.js` |
+| `server/osc_schema.js` | Add `/bus/reload` address (promoted from Future Work §8.2) | Backward-compatible, extend-only |
+| `server/config.js` | Add `AUDIO_MAPPING_PATH` constant (default: `./audio_mapping.json`) | New config entry |
+
+**Endpoint spec:**
+
+```
+POST /api/audio-mapping/reload
+
+Response (200):
+{
+  "status": "ok",
+  "buses": 5,
+  "channels": ["worldcover.tree", "worldcover.urban", ...]
+}
+
+Response (400):
+{
+  "status": "error",
+  "message": "Invalid audio_mapping.json: buses[2].foldMethod must be one of 'sum', 'max', 'weighted'"
+}
+```
+
+**Behavior:** Reads `audio_mapping.json` from disk, validates against the schema defined in OPEN-PLATFORM-SPEC.md §7.1, replaces the in-memory bus configuration, and sends `/bus/reload` OSC to notify Max. Invalid JSON returns 400 without changing the running configuration.
+
+**Effort:** ~80 lines (`audio-mapping.js`), ~30 lines (route + config changes), ~60 lines (tests). **Total: ~170 lines.**
+
 ### 3.6 Effort Estimate
 
 - Adapter framework + WorldCover adapter: ~300 lines
 - csv-generic adapter: ~150 lines
 - Channel registry: ~200 lines (includes namespace key generation and bare-name reverse lookup for backward-compat OSC)
-- Tests: ~250 lines
+- Audio-mapping reload module + endpoint: ~110 lines (see §3.5.5)
+- Audio-mapping tests: ~60 lines
+- Tests (adapter + registry): ~250 lines
 - Existing file modifications: ~120 lines (primarily splitting and thin wrappers)
-- **Total: ~1020 lines, of which ~900 new and ~120 modified**
+- **Total: ~1190 lines, of which ~1070 new and ~120 modified**
 
 ### 3.7 Definition of Done (Phase 1a)
 
@@ -178,6 +305,7 @@ Authentication, observability, and supply chain concerns are out of scope for Ph
 - [ ] `csv-generic` adapter ingests a test CSV with `(lat, lon, pm25, temp)` columns and registers 2 channels in the registry
 - [ ] `npm test` + `npm run lint` pass
 - [ ] Existing frontend demo works identically (manual smoke test — navigate to 3 different viewports, confirm visual and auditory output unchanged)
+- [ ] `POST /api/audio-mapping/reload` returns 200 with validated bus config; invalid JSON returns 400 with descriptive error, running config unchanged; Max receives `/bus/reload` OSC after successful reload
 
 ---
 
@@ -226,9 +354,20 @@ The current `spatial.js` (627 lines) has hidden responsibilities that make addin
 
 ### 3b.4 Effort Estimate
 
+**If recommended module split is performed (see §3b.2.5):**
+
+- `spatial.js` split into `spatial-index.js` (~130 lines), `viewport-aggregator.js` (~280 lines), `spatial.js` facade (~120 lines): ~530 lines reorganized across 3 files
+- New `queryByH3()` logic in `spatial-index.js`: ~200 lines
+- Validation script (`scripts/validate-h3-migration.js`): ~60 lines
+- **Total: ~260 lines new code, ~590 lines modified/reorganized** (530 reorganized + 60 validation script)
+
+**If split is skipped:**
+
 - `spatial.js` H3 index and `queryByH3()`: ~200 lines of changes
 - Validation script (`scripts/validate-h3-migration.js`): ~60 lines
-- **Total: ~260 lines, of which ~200 new/modified in spatial.js and ~60 new in scripts**
+- **Total: ~260 lines of changes within the existing `spatial.js`, but with higher integration risk**
+
+> **Note:** The §9 effort summary uses the split-included estimate. If the split is skipped, the new-code count stays the same (~260 lines) but the modified-code count drops from ~590 to ~60, at the cost of higher coupling within the existing 627-line `spatial.js`. The split is a recommendation, not a requirement — the Definition of Done below measures outcomes, not module structure.
 
 ### 3b.5 Definition of Done (Phase 1b)
 
@@ -240,9 +379,9 @@ The current `spatial.js` (627 lines) has hidden responsibilities that make addin
 
 ---
 
-## 4. Phase 1.5: Runtime Data Import (Upload CSV via API)
+## 4. Phase 1.5: Runtime Data Import (CSV + GeoJSON via API)
 
-**Goal:** Allow third-party data to be imported without restarting the server — uploading a CSV via `POST /api/import` immediately ingests it into the spatial index, and the frontend (once Phase 2 is complete) renders new hexagonal grids in real time. For the course demo, a curl-friendly API is sufficient — no frontend wizard is needed.
+**Goal:** Allow third-party data to be imported without restarting the server — uploading a CSV or GeoJSON file via `POST /api/import` immediately ingests it into the spatial index, and the frontend (once Phase 2 is complete) renders new hexagonal grids in real time. For the course demo, a curl-friendly API is sufficient — no frontend wizard is needed.
 
 ### 4.1 Why This Phase Is Needed
 
@@ -287,13 +426,35 @@ Channel names are automatically namespaced by source: the internal key is `sourc
 server/
 ├── import-manager.js               # Runtime import pipeline: validate, encode, inject, notify
 ├── import-validator.js              # CSV validation: column detection, type checks, coordinate sanity, range inference
+├── adapters/
+│   └── geojson-generic.js          # GeoJSON FeatureCollection adapter (Point/LineString/Polygon)
 ├── __tests__/
 │   ├── import-manager.test.js
-│   └── import-validator.test.js
+│   ├── import-validator.test.js
+│   └── geojson-generic-adapter.test.js
 data/
 ├── imports/                         # Uploaded data file storage directory
 │   └── manifest.json                # Import metadata record
 ```
+
+### 4.4.5 GeoJSON Import Support
+
+OPEN-PLATFORM-SPEC §8 lists GeoJSON as P0 (same priority as CSV). Phase 1.5 includes GeoJSON import alongside CSV via the same `POST /api/import` endpoint.
+
+**New file:** `server/adapters/geojson-generic.js` (~120 lines)
+
+**Logic:**
+
+1. Detect `.geojson` file extension in `import-manager.js`; route to the GeoJSON adapter
+2. Parse `FeatureCollection` (or single `Feature`) from uploaded file
+3. Extract geometry coordinates per geometry type:
+   - **Point** → direct `latLngToCell(lat, lon, res)` — one cell per point
+   - **LineString** → distance-sampled points every `IMPORT_LINE_SAMPLE_METERS` (default: 250m), each encoded to H3, cell-deduplicated (reuses rasterization rules from OPEN-PLATFORM-SPEC §8.1)
+   - **Polygon** → `polygonToCells(boundary, res)` interior fill (reuses rasterization rules from OPEN-PLATFORM-SPEC §8.1)
+4. Extract `properties` as channels: numeric properties are auto-registered as channels; non-numeric properties are ignored with a warning
+5. Produce `DataRecord[]` and feed into the same H3 encoding + spatial index pipeline as CSV
+
+**Test:** `server/__tests__/geojson-generic-adapter.test.js` (~60 lines) — test with a FeatureCollection containing Point, LineString, and Polygon geometries; verify channel auto-detection from properties.
 
 ### 4.5 Modified Files
 
@@ -306,6 +467,7 @@ data/
 | `server/spatial.js` | Add `addCells(records)` method to support runtime data append to spatial index | Existing `Map` structure naturally supports append; primarily interface wrapping |
 | `server/channel-registry.js` | Add `registerRuntime(adapter)` method to support runtime channel addition; trigger WebSocket notification | Extends Phase 1a registry |
 | `server/osc_schema.js` | Add `/ch/reload` message address (notifies Max that the channel list has changed) | Backward-compatible |
+| `server/import-manager.js` | Detect `.geojson` extension and route to `geojson-generic` adapter | Extension-based routing alongside CSV |
 
 ### 4.6 API Design: Single-Step Import with Preview Stub
 
@@ -394,12 +556,13 @@ Three read/delete endpoints for inspecting and managing runtime state:
 - `spatial.js` runtime append method: ~60 lines
 - `channel-registry.js` runtime update + notification: ~50 lines
 - Control plane endpoints (`GET /api/sources`, `GET /api/channels`, `DELETE /api/sources/:id`): ~30 lines
-- Tests (import-manager + import-validator): ~180 lines
-- **Total: ~800 lines, of which ~730 new and ~70 modified**
+- `geojson-generic.js` (FeatureCollection parsing + geometry-to-H3 encoding): ~120 lines (see §4.4.5)
+- Tests (import-manager + import-validator + geojson-generic): ~240 lines
+- **Total: ~980 lines, of which ~910 new and ~70 modified**
 
 ### 4.9 Definition of Done (Phase 1.5)
 
-- [ ] `POST /api/import` (single-step) accepts a CSV file via curl, returns 200 with source/channels/cellCount. `POST /api/import/preview` stub also returns 200 with the same preview-format response (per §4.6 — contract stability for future two-step split in §8.4). DoD does NOT require full two-step preview/confirm workflow.
+- [ ] `POST /api/import` (single-step) accepts a CSV file via curl, returns 200 with source/channels/cellCount. Also accepts a `.geojson` file with Point/LineString/Polygon geometries, returns 200 with source/channels/cellCount. `POST /api/import/preview` stub also returns 200 with the same preview-format response (per §4.6 — contract stability for future two-step split in §8.4). DoD does NOT require full two-step preview/confirm workflow.
 - [ ] Imported data survives server restart (`manifest.json` written to `data/imports/`; data reloaded on next startup)
 - [ ] `GET /api/sources` lists both builtin and imported sources
 - [ ] `GET /api/channels` returns full registry with correct indices (per Channel Index Policy §3.4.5)
@@ -677,6 +840,109 @@ These mappings can be freely adjusted by the user once Phase 3 (audio config con
 
 ---
 
+## 7.5. Phase 4.5: Alert Rule Engine
+
+**Goal:** Add a declarative, JSON-configurable alert rule engine that evaluates channel thresholds with hysteresis, cooldown, and deduplication — enabling the "monitoring platform" narrative (see Motivation in OPEN-PLATFORM-SPEC.md). Alert state transitions emit OSC messages for Max-side auditory alerts.
+
+**Prerequisites:** Phase 1a only (channel registry provides channel values for rule evaluation). Phase 4 is **NOT** a prerequisite — the alert engine evaluates `CellSnapshot` channel values generically. Static data (CSV/GeoJSON imports via Phase 1.5) can trigger alerts during viewport navigation; Phase 4's time-window data is just another data source that feeds channel values, not a precondition.
+
+> **When Phase 4 lands:** The stream scheduler's data-change callback also feeds `CellSnapshot`s into the alert engine — no alert engine changes needed. This means real-time earthquake events automatically trigger alert rules that were previously only evaluated on viewport navigation.
+
+### 7.5.1 Rule Schema
+
+Rules are declarative and JSON-configurable, following the same pattern as `audio_mapping.json`:
+
+```jsonc
+// alert_rules.json
+{
+  "rules": [
+    {
+      "ruleId": "high_magnitude_quake",
+      "channel": "usgs_earthquake.quake_mag",
+      "enterThreshold": 0.7,    // Normalized value that triggers the alert
+      "exitThreshold": 0.5,     // Hysteresis: alert clears when value drops below this
+      "severity": "critical",   // "info" | "warning" | "critical"
+      "cooldownMs": 30000,      // Minimum time between re-fires for the same cell
+      "dedupKey": "cellId"      // One active alert per (ruleId, cellId) pair
+    },
+    {
+      "ruleId": "pm25_warning",
+      "channel": "air_quality.pm25",
+      "enterThreshold": 0.6,
+      "exitThreshold": 0.4,
+      "severity": "warning",
+      "cooldownMs": 60000,
+      "dedupKey": "cellId"
+    }
+  ]
+}
+```
+
+### 7.5.2 State Machine
+
+Per `(ruleId, cellId)` pair: `idle` → `active` → `cooldown` → `idle`.
+
+- **idle → active:** Channel value crosses `enterThreshold` upward. Fires `/alert/fire`.
+- **active → cooldown:** Channel value drops below `exitThreshold`. Fires `/alert/clear`. Enters cooldown for `cooldownMs`.
+- **cooldown → idle:** Cooldown timer expires. Alert can re-fire if threshold is still exceeded.
+
+Hysteresis prevents oscillation at boundary values (enter at 0.7, exit at 0.5 — value must drop significantly before the alert can re-fire).
+
+**Dedup:** Same cell + same rule = one active alert. Prevents alert storms from high-frequency data sources updating the same cell repeatedly.
+
+**Acknowledgment:** `/alert/ack` allows downstream consumers (Max or future UI) to acknowledge an active alert, resetting its visual/audio indicator without clearing the rule state. Explicit payload schemas enable testable unit/integration verification without relying on auditory confirmation.
+
+### 7.5.3 New Files
+
+```
+server/
+├── alert-engine.js              # Rule evaluation, state machine, cooldown/dedup management
+├── __tests__/
+│   └── alert-engine.test.js
+alert_rules.json                 # Default alert rules configuration (hand-editable)
+```
+
+### 7.5.4 Modified Files
+
+| File | Change | Notes |
+| ---- | ------ | ----- |
+| `server/osc_schema.js` | Add `/alert/fire`, `/alert/clear`, `/alert/mute`, `/alert/ack` addresses with payload schemas | Extend-only, backward-compatible |
+| `server/osc.js` | Add `sendAlertFire()`, `sendAlertClear()`, `sendAlertMute()`, `sendAlertAck()` dispatch functions | New OSC push paths |
+| `server/config.js` | Add `ALERT_RULES_PATH` constant (default: `./alert_rules.json`), `ALERT_MAX_ACTIVE` (default: 1000) | New config entries |
+| `server/index.js` | Initialize alert engine at startup; wire into viewport-processor post-aggregation callback | New startup logic |
+| `server/viewport-processor.js` | After aggregation, pass `CellSnapshot[]` to alert engine for rule evaluation | Hook point for static/imported data alerts during navigation |
+
+### 7.5.5 OSC Addresses (Extend-Only)
+
+| Address | Payload | Trigger |
+| ------- | ------- | ------- |
+| `/alert/fire` | `ruleId(s) cellId(s) severity(s) value(f) timestamp(i)` | Channel crosses `enterThreshold` upward |
+| `/alert/clear` | `ruleId(s) cellId(s) timestamp(i)` | Channel drops below `exitThreshold` |
+| `/alert/mute` | `ruleId(s) duration(i)` | User/API mutes a rule |
+| `/alert/ack` | `ruleId(s) cellId(s) timestamp(i)` | Downstream consumer acknowledges alert |
+
+### 7.5.6 Effort Estimate
+
+- `alert-engine.js` (rule evaluation + state machine + cooldown/dedup + config loader): ~200 lines
+- OSC dispatch functions in `osc.js`: ~50 lines
+- Tests (state machine transitions, cooldown timing, dedup, hysteresis, OSC output verification): ~120 lines
+- Existing file modifications (`osc_schema.js`, `config.js`, `index.js` hookup, `viewport-processor.js` hook): ~50 lines
+- **Total: ~420 lines, of which ~370 new and ~50 modified**
+
+### 7.5.7 Definition of Done (Phase 4.5)
+
+- [ ] Alert engine loads rules from `alert_rules.json` at startup
+- [ ] State machine transitions correctly: idle → active (on `enterThreshold` crossing) → cooldown (on `exitThreshold` crossing) → idle (after `cooldownMs`)
+- [ ] Hysteresis works: value oscillating between 0.5 and 0.7 with `exitThreshold`=0.5, `enterThreshold`=0.7 does not cause rapid re-fires
+- [ ] Dedup works: same `(ruleId, cellId)` pair produces at most one active alert
+- [ ] Cooldown works: after alert clears, re-fire is suppressed for `cooldownMs`
+- [ ] `/alert/fire` OSC is sent with correct payload (`ruleId`, `cellId`, `severity`, `value`, `timestamp`) — verified by unit test with mock UDP transport
+- [ ] `/alert/clear` OSC is sent when value drops below `exitThreshold`
+- [ ] Invalid `alert_rules.json` is rejected at startup with a descriptive error (server still starts with alerting disabled)
+- [ ] `npm test` + `npm run lint` pass
+
+---
+
 ## 8. Future Work
 
 The following sections preserve designs that have been deferred from the course timeline. They are retained as a portfolio reference and implementation guide for post-course development.
@@ -711,7 +977,7 @@ Deferred from course scope. Prerequisite: Phase 1a. The `audio_mapping.json` con
 > - `/bus/register {index} {busName}` — sent at startup and after bus config change (foldMethod, volume range as optional trailing args)
 > - `/bus/reload` — sent when bus configuration changes at runtime (analogous to `/ch/reload`)
 >
-> These are extend-only additions. Max-side handling is optional — `/bus/register` can be silently ignored until a future Max patch decides to use bus names.
+> These are extend-only additions. Max-side handling is optional — `/bus/register` can be silently ignored until a future Max patch decides to use bus names. **Note:** `/bus/reload` is implemented in Phase 1a (§3.5.5) via the audio-mapping reload API. Phase 3 builds on this foundation.
 
 **Goal:** Move audio mapping from hardcoded Max patch wiring to a configuration file, and provide a web console for real-time adjustment.
 
@@ -787,40 +1053,9 @@ Deferred from course scope. Prerequisite: Phase 1.5.
 - **Import wizard frontend:** `frontend/import.html` + `frontend/import.js` (~200 lines) — drag-and-drop upload, preview report display with column role badges, resolution selector with scale labels, adjust/confirm flow.
 - **Cross-resolution queries:** Add `cellToParent()` branch to `queryByH3()` (~80 lines in `spatial.js`) — implements SPEC §4.3 rules 1–4 for mixed-resolution data sources.
 
-### 8.5 Alert Rule Engine
+### 8.5 Alert Rule Engine — Promoted to Phase 4.5
 
-Deferred from course scope. Prerequisite: Phase 1a + Phase 4.
-
-A minimal alert model that supports the "monitoring platform" narrative (see Motivation). Rules are declarative and JSON-configurable, following the same pattern as `audio_mapping.json`.
-
-**Rule schema:**
-```jsonc
-{
-  "ruleId": "high_magnitude_quake",
-  "channel": "usgs_earthquake.quake_mag",
-  "enterThreshold": 0.7,    // Normalized value that triggers the alert
-  "exitThreshold": 0.5,     // Hysteresis: alert clears when value drops below this
-  "severity": "critical",   // "info" | "warning" | "critical"
-  "cooldownMs": 30000,      // Minimum time between re-fires for the same cell
-  "dedupKey": "cellId"      // One active alert per (ruleId, cellId) pair
-}
-```
-
-**State machine per (ruleId, cellId):** `idle` → `active` → `cooldown` → `idle`. Hysteresis prevents oscillation at boundary values (enter at 0.7, exit at 0.5 — value must drop significantly before the alert can re-fire).
-
-**Dedup:** Same cell + same rule = one active alert. Prevents alert storms from high-frequency data sources updating the same cell repeatedly.
-
-**New OSC addresses (extend-only) with payload schemas:**
-- `/alert/fire  ruleId(s) cellId(s) severity(s) value(f) timestamp(i)`
-- `/alert/clear  ruleId(s) cellId(s) timestamp(i)`
-- `/alert/mute  ruleId(s) duration(i)`
-- `/alert/ack  ruleId(s) cellId(s) timestamp(i)`
-
-`/alert/ack` allows downstream consumers (Max or future UI) to acknowledge an active alert, resetting its visual/audio indicator without clearing the rule state. Explicit payload schemas enable testable unit/integration verification without relying on auditory confirmation.
-
-**Config file:** `alert_rules.json` (hand-editable, like `audio_mapping.json`). Loaded at startup, reloaded on file change.
-
-**Estimated effort:** ~300–400 lines (rule engine + state machine + OSC dispatch + config loader + tests).
+The alert rule engine design has been promoted from Future Work to a formal phase. See §7.5 (Phase 4.5: Alert Rule Engine) for the complete specification including rule schema, state machine design, OSC addresses, effort estimate, and Definition of Done.
 
 ---
 
@@ -829,37 +1064,43 @@ A minimal alert model that supports the "monitoring platform" narrative (see Mot
 | Phase | New Code | Modified Code | Risk | Prerequisites |
 | ----- | -------- | ------------- | ---- | ------------- |
 | 0: H3 Encoding Layer | ~290 lines | ~30 lines | Very low (pure addition) | None (requires `h3-js` dependency approval) |
-| 1a: Adapters + Registry | ~900 lines | ~120 lines | Medium (refactors core data flow) | Phase 0 |
-| 1b: spatial.js H3 Migration | ~200 lines | ~60 lines | **High** (parallel index structure) | Phase 1a |
-| 1.5: Runtime Import (simplified) | ~730 lines | ~70 lines | Medium (runtime state mutation + validation logic) | Phase 1a |
+| 1a: Adapters + Registry + Audio-Mapping Reload | ~1070 lines | ~120 lines | Medium (refactors core data flow) | Phase 0 |
+| 1b: spatial.js H3 Migration | ~260 lines | ~590 lines | **High** (parallel index structure + recommended module split) | Phase 1a |
+| 1.5: Runtime Import (CSV + GeoJSON) | ~910 lines | ~70 lines | Medium (runtime state mutation + validation logic) | Phase 1a |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1b |
 | 4: Stream + USGS Earthquake | ~730 lines | ~80 lines | Medium (real-time state + external dependency) | Phase 1a + Phase 1.5 |
+| 4.5: Alert Rule Engine | ~370 lines | ~50 lines | Low-medium (state machine + config parsing) | Phase 1a |
 
-**In-scope total: ~3230 lines of new code, ~560 lines modified.**
+**In-scope total: ~4010 lines of new code, ~1140 lines modified.** The modified total includes ~530 lines of reorganized code from the Phase 1b spatial.js module split — these are existing lines being moved across files, not net new logic. If the split is skipped (see §3b.4), the modified total drops to ~610.
 
 > **Disclaimer:** Line counts are complexity proxies, not schedule predictors. Actual calendar time depends on debugging, Max integration testing, and iteration cycles. Use these numbers for relative sizing between phases, not for setting deadlines.
 
 **`spatial.js` modification ordering:** Phases 1b, 1.5, and 4 all modify `spatial.js`. Apply changes in order: Phase 1b adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does *not* modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
 
-**Shortest path to "CSV upload → hex grid → sound":** Phase 0 → 1a → 1b → 1.5 → 2 (~2500 lines new).
+**Shortest path to "CSV upload → hex grid → sound":** Phase 0 → 1a → 1b → 1.5 → 2 (~2910 lines new).
 
-**Shortest path to "real-time earthquake → sound":** Phase 0 → 1a → 1.5 → 4 (~2650 lines new; **Phase 1b not required** — stream scheduler encodes H3 directly).
+**Shortest path to "real-time earthquake → sound":** Phase 0 → 1a → 1.5 → 4 (~3000 lines new; **Phase 1b not required** — stream scheduler encodes H3 directly).
 
-> **Note:** Phase 1b is required for Phase 2 (frontend needs `queryByH3()`), but not for Phase 4 (stream scheduler encodes H3 cell IDs directly and injects via `addCells()`).
+**Shortest path to "real-time earthquake → alert sound":** Phase 0 → 1a → 4.5 → 1.5 → 4 (~3370 lines new).
+
+**Earliest alert capability:** Phase 0 → 1a → 4.5 (~1730 lines new). Alert rules evaluate WorldCover static data during viewport navigation immediately — no streaming or import pipeline needed.
+
+> **Note:** Phase 1b is required for Phase 2 (frontend needs `queryByH3()`), but not for Phase 4 (stream scheduler encodes H3 cell IDs directly and injects via `addCells()`). Phase 4.5 depends only on Phase 1a (channel registry) and can be slotted in at any point after 1a.
 
 ---
 
 ## 10. Suggested Timeline (Aligned with Course Schedule)
 
 - **This week:** Phase 0 — pure addition, changes only touch config and type definitions (no runtime logic modified), safe to run in parallel with the milestone demo.
-- **After the next milestone:** Phase 1a — independently demoable (adapter pattern + channel registry, no spatial.js risk).
+- **After the next milestone:** Phase 1a — independently demoable (adapter pattern + channel registry + audio-mapping reload, no spatial.js risk).
+- **Immediately after Phase 1a:** Phase 4.5 — Alert rule engine. Only depends on the channel registry from Phase 1a. Lightweight addition (~420 lines) that enables alert capability for both static and imported data. Can be demonstrated with WorldCover data immediately (e.g., alert when a cell's forest coverage drops below threshold during viewport navigation).
 - **If time permits:** Phase 1b — spatial.js H3 migration. Can defer if Phase 2 is not needed for demo.
-- **Phase 1.5:** Runtime import — opens the CSV data path.
+- **Phase 1.5:** Runtime import — opens the CSV + GeoJSON data path.
 - **Before end of course:** Phase 2 OR Phase 4, depending on desired showcase:
   - **Choose Phase 2** → Showcase "hexagonal map + multi-source data visualization" (strong visual impact; requires Phase 1b)
-  - **Choose Phase 4** → Showcase "real-time earthquake data driving sound changes" (strong auditory impact; **does not require Phase 1b**)
+  - **Choose Phase 4** → Showcase "real-time earthquake data driving sound changes + alert triggering" (strong auditory impact; **does not require Phase 1b**; alert engine from Phase 4.5 fires on earthquake threshold crossing)
   - If time permits, do both.
-- **After the course ends:** Everything in Future Work (§8).
+- **After the course ends:** Remaining Future Work (§8).
 
 ### 10.1 Showcase Narratives and Product Verification Mainlines
 
@@ -867,20 +1108,20 @@ The two closed loops below serve a dual purpose: **demo scripts** for course pre
 
 > **Test environment note:** Timing benchmarks (2s, 500ms, 200ms) assume local development (server + Max on same machine, localhost network). CI or remote environments may need relaxed thresholds — these numbers are smoke-test targets, not SLA guarantees.
 
-**Closed Loop A — "From Spreadsheet to Soundscape" (visual emphasis, Phases 0 → 1a → 1b → 1.5 → 2)**
+**Closed Loop A — "From Spreadsheet to Soundscape" (visual emphasis, Phases 0 → 1a → 4.5 → 1b → 1.5 → 2)**
 
-- Demo flow: `POST /api/import` via curl with a CSV → server validates and ingests → hex grid appears on map → pan/zoom viewport → ambient sound changes in real time.
-- Audience sees: hexagonal grid fills in, colors shift as the viewport moves across regions.
-- Audience hears: tonal gradient reflecting data values across the viewport — smooth crossfades between zones.
-- Core message: *"Any tabular geodata becomes an audible landscape in under a minute."*
-- **Verification criteria:** (1) API returns 200 with valid source/channels/cellCount, (2) hex grid appears within 2s of import, (3) panning produces audible change within 500ms, (4) no browser console errors.
+- Demo flow: `POST /api/import` via curl with a CSV → server validates and ingests → hex grid appears on map → pan/zoom viewport → ambient sound changes in real time → navigate into a high-PM2.5 zone → alert engine fires `/alert/fire` → percussive alert sounds.
+- Audience sees: hexagonal grid fills in, colors shift as the viewport moves across regions; alert indicator flashes when entering a threshold-crossing zone.
+- Audience hears: tonal gradient reflecting data values across the viewport — smooth crossfades between zones, punctuated by a sharp alert tone when a cell exceeds the configured threshold.
+- Core message: *"Any tabular geodata becomes an audible landscape in under a minute — and you hear the anomaly before you see it."*
+- **Verification criteria:** (1) API returns 200 with valid source/channels/cellCount, (2) hex grid appears within 2s of import, (3) panning produces audible change within 500ms, (4) alert engine fires `/alert/fire` when navigating into a cell exceeding `enterThreshold`, (5) no browser console errors.
 
-**Closed Loop B — "Live Earthquake Alert" (auditory emphasis, Phases 0 → 1a → 1.5 → 4)**
+**Closed Loop B — "Live Earthquake Alert" (auditory emphasis, Phases 0 → 1a → 4.5 → 1.5 → 4)**
 
-- Demo flow: USGS adapter is running → earthquake event arrives → new cells appear on map → OSC message fires → alert sound triggers in Max.
+- Demo flow: USGS adapter is running → earthquake event arrives → new cells appear on map → alert engine evaluates magnitude against threshold → `/alert/fire` OSC fires → alert sound triggers in Max.
 - Audience sees: new hex cells pulse onto the map at the epicenter location.
-- Audience hears: immediate percussive alert when magnitude crosses threshold, ambient low rumble conveying depth.
+- Audience hears: immediate percussive alert driven by `/alert/fire` when magnitude crosses threshold (Phase 4.5 alert engine), ambient low rumble conveying depth.
 - Core message: *"You hear the earthquake before you see the dashboard notification."*
-- **Verification criteria:** (1) `GET /api/streams` shows USGS adapter as `"running"`, (2) new earthquake cell appears within one poll interval, (3) OSC message fires for the new cell, (4) alert sound triggers in Max within 200ms of OSC receipt.
+- **Verification criteria:** (1) `GET /api/streams` shows USGS adapter as `"running"`, (2) new earthquake cell appears within one poll interval, (3) OSC message fires for the new cell, (4) alert engine fires `/alert/fire` for cells exceeding `enterThreshold`, (5) alert sound triggers in Max within 200ms of OSC receipt.
 
 See §9 "Shortest path" calculations for the engineering effort behind each loop.

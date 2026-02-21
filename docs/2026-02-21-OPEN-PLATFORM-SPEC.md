@@ -34,6 +34,103 @@ Geo-Sonification is an **auditory monitoring layer for geographic situational aw
 
 ---
 
+## 1.5 System Architecture Overview
+
+The following diagram shows the end-state data flow after all migration phases are complete. Layers are shown top-to-bottom from data ingestion to audio rendering, with the control plane and frontend shown separately.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        DATA SOURCES                             │
+│  CSV  │  GeoJSON  │  KML/GPX (future)  │  REST API / WebSocket │
+└───┬───┴─────┬─────┴─────────┬──────────┴──────────┬────────────┘
+    │         │               │                     │
+    ▼         ▼               ▼                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ADAPTER LAYER  (server/adapters/)            │
+│  worldcover.js │ csv-generic.js │ geojson-generic.js │ usgs.js │
+│                                                                 │
+│  • Raw format parsing          • WGS84 coordinate conversion    │
+│  • Channel manifest declaration • DataRecord[] production       │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ DataRecord[]
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                H3 ENCODING LAYER  (server/grid/)                │
+│  CellEncoder interface  →  H3Encoder implementation             │
+│  latLngToCell() │ polygonToCells() │ cellToParent()             │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ H3-encoded DataRecord[]
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               SPATIAL INDEX  (server/spatial.js)                │
+│  Map<cellId, Map<sourceId, DataRecord>>                         │
+│  queryByH3(bounds, res) → CellSnapshot[]                        │
+│  addCells(records) — runtime append for imports & streams       │
+└──────────┬──────────────────────────────────────┬───────────────┘
+           │                                      │
+           ▼                                      ▼
+┌────────────────────┐               ┌────────────────────────────┐
+│  CHANNEL REGISTRY  │               │  TIME WINDOW               │
+│  (channel-         │               │  (time-window.js)          │
+│   registry.js)     │               │  Sliding window aggregation│
+│  Namespaced keys   │               │  for stream adapters       │
+│  Index assignment   │               │  Event expiry & cleanup    │
+└────────┬───────────┘               └──────────┬─────────────────┘
+         │                                      │
+         └──────────────┬───────────────────────┘
+                        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  OSC ENGINE  (server/osc.js)                    │
+│  /lc/* (compat) │ /ch/* (generic) │ /bus/* (fold-mapped)        │
+│  /alert/* (alerts) │ /adapter/* (errors)                        │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ UDP
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               MAX/MSP AUDIO RENDERER                            │
+│  crossfade_controller.js │ icon_trigger.js │ loop_voice.js      │
+│  5 audio buses → stereo sum → dac~                              │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│               ALERT ENGINE  (server/alert-engine.js)            │
+│  Rule evaluation from CellSnapshot channel values               │
+│  State machine: idle → active → cooldown → idle                 │
+│  Fires /alert/* OSC on threshold crossing                       │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│               FRONTEND  (frontend/)                             │
+│  Mapbox GL │ H3 hex rendering │ Channel metadata display        │
+│  WebSocket ←→ Server (viewport updates, channel_update)         │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│               CONTROL PLANE  (REST API)                         │
+│  GET /api/sources │ GET /api/channels │ GET /api/streams        │
+│  POST /api/import │ DELETE /api/sources/:id                     │
+│  POST /api/audio-mapping/reload                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Layer summary:**
+
+| Layer | Responsibility | Key Modules |
+| ----- | -------------- | ----------- |
+| Data Sources | External data in various formats | CSV, GeoJSON, KML/GPX (future), REST API, WebSocket |
+| Adapter Layer | Format parsing, WGS84 conversion, channel declaration, DataRecord production | `server/adapters/*` |
+| H3 Encoding | Coordinate-to-cell encoding, parent/child resolution, viewport enumeration | `server/grid/*` |
+| Spatial Index | Cell storage, viewport queries, runtime data append | `server/spatial.js` |
+| Channel Registry | Namespaced index assignment, OSC channel mapping | `server/channel-registry.js` |
+| Time Window | Sliding window aggregation for stream adapters | `server/time-window.js` |
+| OSC Engine | Protocol dispatch to Max/MSP (compat + generic + alert addresses) | `server/osc.js`, `server/osc_schema.js` |
+| Alert Engine | Threshold evaluation, state machine, cooldown/dedup | `server/alert-engine.js` |
+| Max/MSP Renderer | Synthesis, crossfade, icon triggers, spatialization | `sonification/*` |
+| Frontend | Map visualization, hex rendering, channel metadata | `frontend/*` |
+| Control Plane | REST API for runtime state inspection and management | `server/index.js` endpoints |
+
+---
+
 ## 2. Coordinate Reference System
 
 **Sole internal CRS: WGS84 (EPSG:4326)**
@@ -652,8 +749,8 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 
 | Format | Priority | Phase | Notes |
 | ------ | -------- | ----- | ----- |
-| CSV (lat/lon + arbitrary numeric columns) | P0 | 1 | Lowest barrier, immediate support |
-| GeoJSON | P0 | 1 | Internal canonical format, direct consumption |
+| CSV (lat/lon + arbitrary numeric columns) | P0 | 1.5 | Lowest barrier, immediate support via `POST /api/import` |
+| GeoJSON (FeatureCollection with Point/LineString/Polygon) | P0 | 1.5 | FeatureCollection parsing + geometry rasterization via §8.1 rules; numeric `properties` auto-registered as channels |
 | KML | P1 | Future | OGC standard, WGS84 natively — only need Point/LineString/Polygon coordinate extraction. Key for Fog of World / Google Earth ecosystem interop. |
 | GPX | P1 | Future | Similar XML structure to KML — `<trkpt lat="" lon="">` elements. Key for track-based apps (FR24, Strava, etc.). |
 | API adapter (HTTP poll / WebSocket) | P2 | 4 | Integration with real-time data sources (earthquakes, air quality, flights, etc.) |
@@ -757,5 +854,5 @@ Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining
 | Native Resolution | The H3 resolution at which a data source's cells were originally encoded; stored per DataRecord for cross-resolution queries |
 | AOI | Area of Interest — a spatial bounding box used to filter stream adapter data requests to a specific region |
 | Fold-mapper | The server's role in computing bus values from channels; Max receives pre-folded results (Design Goal 5) |
-| Alert Rule | A declarative threshold + hysteresis + cooldown definition that triggers an auditory alert when a channel crosses a boundary (Future Work — see migration plan §8.5) |
+| Alert Rule | A declarative threshold + hysteresis + cooldown definition that triggers an auditory alert when a channel crosses a boundary (see migration plan §7.5 — Phase 4.5) |
 | Control Plane | REST endpoints for inspecting and managing runtime state (`/api/sources`, `/api/channels`, `/api/streams`) as distinct from data-plane endpoints (`/api/import`, WebSocket viewport) |

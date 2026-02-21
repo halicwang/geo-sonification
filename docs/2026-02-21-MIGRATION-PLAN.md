@@ -334,13 +334,15 @@ frontend/
 
 ---
 
-## 7. Phase 4: Real-time Data Stream Pipeline + USGS Earthquake Integration
+## 7. Phase 4: Real-time Data Stream Pipeline + USGS Earthquake + FIRMS Fire Integration
 
-**Goal:** Build real-time data stream infrastructure and use USGS Earthquake as the first live data source, validating both the adapter plugin system and the streaming pipeline.
+**Goal:** Build real-time data stream infrastructure with two live data sources — USGS Earthquake (global pull) and NASA FIRMS fire hotspots (AOI-scoped pull) — validating both the adapter plugin system and the streaming pipeline, including the AOI subscription strategy.
 
 ### 7.1 Why Combine "Second Data Source" and "Real-time Streaming"
 
 The original plan treated USGS Earthquake as a static GeoJSON one-time import to validate the plugin system. But USGS Earthquake is inherently a continuously updating event stream (new earthquakes every minute) — making it static is an artificial downgrade. Building the stream pipeline and the second data source together validates two things in one pass: whether the adapter interface is truly generic, and whether the real-time pipeline is reliable.
+
+> **Platform positioning:** This platform integrates and sonifies *authoritative, processed data feeds* — it does not perform raw signal processing or detection algorithms. For example, fire detection from satellite imagery (VIIRS/MODIS threshold algorithms, cloud masking, etc.) is the responsibility of upstream remote sensing pipelines. This platform consumes their outputs (e.g., NASA FIRMS hotspot feeds) and transforms them into auditory situational awareness. The same principle applies to all stream adapters: earthquakes come from USGS processed catalogs, air quality from sensor network APIs, etc.
 
 ### 7.2 Real-time Stream Architecture
 
@@ -382,6 +384,8 @@ Data-change-triggered pushes only send affected channel values (incremental), av
 
 **Per-client viewport caching:** To support data-change push, the server must cache each WebSocket client's current viewport (`lastViewport`). When new stream data arrives, each client's `lastViewport` is checked to determine whether an incremental push is needed. This is a new per-connection state requirement — add a `lastViewport` field to the existing per-client state (alongside `createDeltaState()` etc.).
 
+**AOI / subscription strategy (see OPEN-PLATFORM-SPEC.md §5.4):** Stream adapters with `aoiStrategy: "global"` (e.g., USGS earthquakes) fetch all events regardless of client viewports — the scheduler runs one poll cycle per interval. Stream adapters with `aoiStrategy: "aoi"` (e.g., NASA FIRMS) only fetch data within the union bounding box of all connected clients' viewports. The `aoi-manager.js` module tracks per-client viewports (updated on each WebSocket viewport message), computes the merged AOI with a configurable expansion margin (`AOI_MARGIN_DEG`), and debounces AOI changes (`AOI_DEBOUNCE_SEC`) to avoid thrashing the upstream API. When no clients are connected, AOI-scoped adapters pause polling automatically.
+
 ### 7.4 Stream Adapter Interface (extends Phase 1's DataAdapter)
 
 ```js
@@ -422,7 +426,43 @@ module.exports = {
 
 USGS provides multiple feed granularities: `all_hour` (last 1 hour), `all_day` (last 24 hours), `significant_month` (last 30 days significant earthquakes). The adapter can select based on configuration.
 
-### 7.6 Sliding Time Window Design
+### 7.6 NASA FIRMS Fire Hotspot Adapter (Second Stream Adapter)
+
+NASA FIRMS provides near real-time active fire detections via a REST API that supports bounding-box spatial queries. Adding it as the second stream adapter validates that the streaming pipeline generalizes beyond USGS earthquakes — specifically, it exercises the AOI-scoped subscription strategy (see OPEN-PLATFORM-SPEC.md §5.4), since fire hotspot volumes globally (~300K detections/day) require spatial filtering.
+
+```js
+// server/adapters/firms-fire.js
+module.exports = {
+    id: 'firms-fire',
+    name: 'NASA FIRMS Active Fire',
+    temporalType: 'stream',
+    aoiStrategy: 'aoi',
+    pollIntervalMs: 10 * 60_000,       // 10 minutes (FIRMS NRT update cadence)
+    windowMs: 24 * 60 * 60_000,        // Retain last 24 hours
+    windowAggregate: 'max',
+    channels: [
+        { name: 'fire_count',     label: 'Active Fire Count',    range: [0, 100], unit: 'count', normalization: 'log',    group: 'metric' },
+        { name: 'fire_intensity', label: 'Fire Radiative Power', range: [0, 500], unit: 'MW',    normalization: 'log',    group: 'metric' },
+        { name: 'fire_newness',   label: 'Time Since Detection', range: [0, 1],   unit: 'ratio', normalization: 'linear', group: 'metric' },
+    ],
+    async fetch(encoder, precision, aoi) {
+        // GET https://firms.modaps.eosdis.nasa.gov/api/area/csv/{MAP_KEY}/VIIRS_SNPP_NRT/{aoi}/{dayRange}
+        // Parse CSV response → for each hotspot:
+        //   encode (latitude, longitude) → cellId
+        //   fire_intensity = frp (fire radiative power, MW)
+        //   fire_newness = 1 - (now - acq_datetime) / windowMs  (0 = oldest in window, 1 = just detected)
+        //   fire_count accumulated during aggregation step
+    },
+};
+```
+
+**Why FIRMS as the second adapter (not first):** USGS earthquakes are simpler (global pull, lower volume, GeoJSON response). FIRMS introduces AOI-scoped fetching, CSV parsing, and higher event volumes — making it a good second-step validation of the streaming pipeline's flexibility.
+
+**API key requirement:** FIRMS API requires a free MAP_KEY (obtainable at https://firms.modaps.eosdis.nasa.gov/api/area/). This is declared in `requiredConfig: { mapKey: 'string' }` and validated at adapter registration. The key is stored in `.env` (not committed).
+
+**Alternative data source:** Copernicus EFFIS provides similar fire data for Europe. A future `effis-fire` adapter can reuse the same channel schema (`fire_count`, `fire_intensity`, `fire_newness`).
+
+### 7.7 Sliding Time Window Design
 
 ```js
 // time-window.js core data structure
@@ -447,21 +487,25 @@ USGS provides multiple feed granularities: `all_hour` (last 1 hour), `all_day` (
 
 **Memory safeguards:** Add `MAX_EVENTS_PER_CELL` (default: 1000) and `MAX_STREAM_CELLS` (default: 50000) configuration in `config.js`. When a cell exceeds `MAX_EVENTS_PER_CELL`, the oldest events are evicted regardless of window expiry. When total active cells exceed `MAX_STREAM_CELLS`, the least-recently-updated cells are evicted. These limits prevent unbounded memory growth from high-frequency or wide-window data sources.
 
-### 7.7 New Files
+### 7.8 New Files
 
 ```
 server/
 ├── stream-scheduler.js              # Poll scheduler: manages lifecycle of multiple stream adapters
 ├── time-window.js                   # Sliding time window: event storage, expiry cleanup, aggregation
+├── aoi-manager.js                   # AOI tracking: per-client viewport → merged bounding box for AOI-scoped adapters
 ├── adapters/
-│   └── usgs-earthquake.js           # USGS earthquake stream adapter
+│   ├── usgs-earthquake.js           # USGS earthquake stream adapter
+│   └── firms-fire.js                # NASA FIRMS fire hotspot stream adapter
 ├── __tests__/
 │   ├── stream-scheduler.test.js
 │   ├── time-window.test.js
-│   └── usgs-earthquake.test.js
+│   ├── aoi-manager.test.js
+│   ├── usgs-earthquake.test.js
+│   └── firms-fire.test.js
 ```
 
-### 7.8 Modified Files
+### 7.9 Modified Files
 
 | File | Change | Notes |
 | ---- | ------ | ----- |
@@ -469,9 +513,9 @@ server/
 | `server/spatial.js` | `queryByH3()` results merge static data with time-window aggregated data | Query logic extension |
 | `server/osc_schema.js` | Add `/adapter/error` address (adapter ID + error message); used by stream scheduler to notify Max of adapter failures | New address, backward-compatible |
 | `server/osc.js` | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push; add `sendAdapterError()` for `/adapter/error` dispatch | New push paths |
-| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS` | New config entries |
+| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS`, `DEFAULT_AOI_STRATEGY`, `AOI_MARGIN_DEG`, `AOI_DEBOUNCE_SEC` | New config entries |
 
-### 7.9 New API Endpoints
+### 7.10 New API Endpoints
 
 ```
 GET /api/streams
@@ -495,15 +539,15 @@ POST /api/streams/:id/pause     # Pause polling
 POST /api/streams/:id/resume    # Resume polling
 ```
 
-### 7.10 Stream Scheduler Error Recovery
+### 7.11 Stream Scheduler Error Recovery
 
 - **Transient failure** (network timeout, 5xx): exponential backoff starting at `pollIntervalMs`, capped at 5 minutes, up to `maxRetries` (default: 10) consecutive failures.
 - **`maxRetries` exceeded:** adapter status transitions to `"error"`, polling stops, error is reported via `GET /api/streams` and logged. Manual `POST /api/streams/:id/resume` required to restart.
 - **Permanent failure** (4xx, malformed response): log, set status `"error"`, stop polling.
 - **Server startup with unreachable network:** stream adapters start in `"error"` status and retry on manual resume.
-- All error states are visible via `GET /api/streams` (the `"error"` status already defined in §7.9).
+- All error states are visible via `GET /api/streams` (the `"error"` status already defined in §7.10).
 
-### 7.11 Sound Mapping Suggestions (USGS Earthquake → Max)
+### 7.12 Sound Mapping Suggestions (USGS Earthquake → Max)
 
 | Channel | Suggested Mapping | Sound Effect |
 | ------- | ----------------- | ------------ |
@@ -513,15 +557,27 @@ POST /api/streams/:id/resume    # Resume polling
 
 These mappings can be freely adjusted by the user once Phase 3 (audio config console) is complete. During Phase 4, a hardwired demo in the Max patch is sufficient.
 
-### 7.12 Effort Estimate
+**Sound Mapping Suggestions (FIRMS Fire → Max):**
+
+| Channel | Suggested Mapping | Sound Effect |
+| ------- | ----------------- | ------------ |
+| `fire_count` | Background texture density + urgency | More fires in cell = denser, more agitated granular texture |
+| `fire_intensity` | Icon trigger intensity + filter brightness | Higher FRP = brighter, more piercing alert tone |
+| `fire_newness` | Temporal envelope / attack sharpness | Fresh detection = sharp attack; aging detections = softer, sustained |
+
+The fire adapter's channels are designed to drive both ambient background tension (tracking overall fire activity density) and discrete auditory icons (alerting to new high-intensity detections).
+
+### 7.13 Effort Estimate
 
 - `stream-scheduler.js` (scheduler + lifecycle management): ~150 lines
 - `time-window.js` (sliding window + aggregation + expiry): ~180 lines
-- `usgs-earthquake.js` (adapter + HTTP fetch + parsing): ~120 lines
+- `aoi-manager.js` (viewport tracking + AOI merge + debounce): ~100 lines
+- `usgs-earthquake.js` (adapter + HTTP fetch + GeoJSON parsing): ~120 lines
+- `firms-fire.js` (adapter + HTTP fetch + CSV parsing + AOI param): ~140 lines
 - `osc.js` incremental push: ~80 lines
-- Tests (three modules): ~250 lines
-- Existing file modifications: ~100 lines
-- **Total: ~880 lines, of which ~780 new and ~100 modified**
+- Tests (five modules): ~350 lines
+- Existing file modifications: ~120 lines
+- **Total: ~1240 lines, of which ~1120 new and ~120 modified**
 
 ---
 
@@ -534,9 +590,9 @@ These mappings can be freely adjusted by the user once Phase 3 (audio config con
 | 1.5: Runtime Import | ~420 lines | ~90 lines | Medium (runtime state mutation) | Phase 1 |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1 |
 | 3: Config + Console | ~650 lines | ~100 lines | Low (new feature) | Phase 1 |
-| 4: Real-time Stream + USGS Earthquake | ~780 lines | ~100 lines | Medium (real-time state + external dependency) | Phase 1 + Phase 1.5 |
+| 4: Real-time Stream + USGS Earthquake + FIRMS Fire | ~1120 lines | ~120 lines | Medium (real-time state + external dependency + AOI management) | Phase 1 + Phase 1.5 |
 
-**Total: ~3480 lines of new code, ~720 lines modified.**
+**Total: ~3820 lines of new code, ~740 lines modified.**
 
 Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depends on Phase 1.5 (runtime spatial index append capability). **Phase 0 + Phase 1 is the critical path.**
 
@@ -544,9 +600,9 @@ Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depen
 
 **Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~2560 lines).
 
-**Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3160 lines; frontend still uses old rendering, but OSC/sound updates in real time).
+**Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3510 lines; frontend still uses old rendering, but OSC/sound updates in real time).
 
-**All phases complete:** ~3480 lines new + ~720 lines modified.
+**All phases complete:** ~3820 lines new + ~740 lines modified.
 
 ---
 

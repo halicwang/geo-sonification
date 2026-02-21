@@ -15,7 +15,7 @@ Geo-Sonification is an **auditory monitoring layer for geographic situational aw
 **Primary scenario — Air quality monitoring:** An operations center monitors regional PM2.5 levels from a network of sensors (e.g., PurpleAir). Each sensor reading is encoded to an H3 cell and fed into the platform via the adapter pipeline. As the operator pans the map, ambient tonal shifts reflect the spatial gradient of pollution levels across the viewport. When any cell crosses an AQI threshold, an auditory icon fires immediately — no dashboard tab-switching or visual scanning required. Land cover data provides a semantic context layer (urban, forest, water) so the operator hears both the environmental baseline and the anomaly.
 
 **Additional use cases:**
-- **Wildfire event alerting** — real-time hotspot streams trigger earcon alerts as fire fronts advance into the viewport; ambient intensity tracks active fire density.
+- **Wildfire situational monitoring** — ingest authoritative fire hotspot data (NASA FIRMS near real-time active fire detections, Copernicus EFFIS) as point events (lat/lon + time + fire radiative power + detection confidence). Each hotspot is encoded to an H3 cell and aggregated within a sliding time window (e.g., 6–24 hours). Per-cell metrics — active fire count, peak intensity (FRP), and recency of latest detection — drive auditory icon triggers and ambient tension. The platform does *not* perform fire detection from raw satellite imagery (that is the job of upstream remote sensing pipelines such as VIIRS/MODIS); it monitors and sonifies the processed, authoritative outputs of those pipelines.
 - **Maritime patrol** — AIS vessel density sonified as continuous texture; anomalous clustering or route deviation triggers alerts.
 - **Power grid outage monitoring** — outage event feeds mapped to H3 cells; auditory cues track affected area expansion and restoration.
 - **Accessibility** — non-visual exploration of geographic data for visually impaired users.
@@ -286,9 +286,55 @@ The `stream-scheduler` manages the lifecycle of all stream adapters:
 - On permanent failure (4xx, malformed data): log the error, emit an OSC `/adapter/error` message, and continue operating with stale data.
 - On adapter crash: the channel registry keeps the last known values; the adapter can be restarted without affecting other adapters.
 
+**Example: NASA FIRMS Fire Hotspot Adapter**
+
+NASA FIRMS (Fire Information for Resource Management System) provides near real-time active fire detections from VIIRS and MODIS sensors. The FIRMS API supports spatial filtering by bounding box, making it a natural fit for the `"aoi"` subscription strategy (§5.4). A FIRMS stream adapter would declare:
+
+```javascript
+{
+    id: 'firms-fire',
+    name: 'NASA FIRMS Active Fire',
+    temporalType: 'stream',
+    aoiStrategy: 'aoi',                // Spatial filtering — only fetch fires within viewport AOI
+    pollIntervalMs: 10 * 60_000,       // 10 minutes (aligned with FIRMS NRT update cadence)
+    windowMs: 24 * 60 * 60_000,        // Retain last 24 hours
+    windowAggregate: 'max',            // Per-cell: max FRP
+    channels: [
+        { name: 'fire_count',     label: 'Active Fire Count',    range: [0, 100], unit: 'count', normalization: 'log',    group: 'metric' },
+        { name: 'fire_intensity', label: 'Fire Radiative Power', range: [0, 500], unit: 'MW',    normalization: 'log',    group: 'metric' },
+        { name: 'fire_newness',   label: 'Time Since Detection', range: [0, 1],   unit: 'ratio', normalization: 'linear', group: 'metric' },
+    ],
+}
+```
+
+Copernicus EFFIS provides similar fire data for Europe and can be integrated as an alternative or complementary adapter with the same channel schema.
+
 Phase 1 only implements `static` adapters. Phase 4 introduces `stream` adapters with full lifecycle management. `timeseries` adapters are reserved for future extension.
 
-### 5.4 WorldCover Adapter (Existing System Refactor)
+### 5.4 AOI / Subscription Strategy for Stream Adapters
+
+Stream data sources with global coverage (fire hotspots, flight tracks, vessel positions) can produce high event volumes. Ingesting everything without spatial filtering causes memory and bandwidth pressure. The platform provides two strategies, selectable per stream adapter via the `aoiStrategy` field:
+
+**Strategy A — Global pull, viewport-scoped aggregation (`"global"`):**
+The stream adapter fetches all events within its time window (or up to `MAX_STREAM_CELLS`). Aggregation to H3 cells happens globally, but OSC output only includes cells within each client's current viewport. This is simple to implement (one fetch schedule regardless of client count) but memory-intensive for high-volume sources. Suitable for moderate-volume sources like USGS earthquakes (thousands of events per day globally).
+
+**Strategy B — AOI-scoped pull (`"aoi"`):**
+The stream adapter accepts an Area of Interest (bounding box or polygon) and only requests events within that region from the upstream API. The AOI tracks each client's viewport (with debounce and a configurable expansion margin to reduce thrashing). When multiple clients have overlapping viewports, the scheduler merges their AOIs into a union bounding box to avoid duplicate requests. Suitable for high-volume sources like NASA FIRMS (~300K detections/day globally) where full ingestion is impractical.
+
+**Default recommendation:** Use `"global"` for sources with < 10K events/day. Use `"aoi"` for sources with > 10K events/day or where the upstream API supports spatial filtering (FIRMS and most real-time APIs do).
+
+```javascript
+/**
+ * @typedef {Object} StreamAdapter
+ * @property {"global" | "aoi"} [aoiStrategy] - Spatial filtering strategy (default: "global")
+ * @property {number} [aoiMarginDeg] - AOI expansion margin in degrees (default: 1.0, only used when aoiStrategy is "aoi")
+ * @property {number} [aoiDebounceSec] - Debounce delay before updating AOI after viewport change (default: 5)
+ */
+```
+
+Configuration in `config.js`: `DEFAULT_AOI_STRATEGY`, `AOI_MARGIN_DEG`, `AOI_DEBOUNCE_SEC`.
+
+### 5.5 WorldCover Adapter (Existing System Refactor)
 
 The existing `data-loader.js` + `landcover.js` + `normalize.js` are refactored into the first adapter:
 
@@ -321,7 +367,7 @@ module.exports = {
 };
 ```
 
-### 5.5 Minimum Column Set for CSV Import
+### 5.6 Minimum Column Set for CSV Import
 
 When users import custom CSV data, the system requires:
 

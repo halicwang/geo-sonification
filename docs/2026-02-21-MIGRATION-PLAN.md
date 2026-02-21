@@ -103,10 +103,10 @@ scripts/
 | ---- | ------ | ------ |
 | `server/data-loader.js` | Internal logic migrated to `adapters/worldcover.js`; this file becomes a thin wrapper calling the adapter | External interface unchanged |
 | `server/landcover.js` | ESA metadata migrated to `adapters/worldcover.js`; this file retains lookup functions needed by the frontend | Frontend API unchanged |
-| `server/osc_schema.js` | Add `/ch/register` (with optional `group` arg) and `/ch/{index}` addresses; retain all existing `/lc/*` addresses | Backward-compatible |
+| `server/osc_schema.js` | Add `/ch/register` (with optional `group` arg), `/ch/meta` (optional display metadata — see SPEC §6.3), and `/ch/{index}` addresses; retain all existing `/lc/*` addresses | Backward-compatible |
 | `server/osc.js` | `sendAggregatedToMax()` reads channel list from registry; sends both `/lc/*` (compat) and `/ch/*` (new) | Max requires no changes |
 | `server/delta-state.js` | Channel count changes from hardcoded 11 to registry-driven | Internal change |
-| `server/spatial.js` | Add `queryByH3(bounds, resolution)` method alongside existing `queryByBounds()` | Gradual replacement |
+| `server/spatial.js` | Add `queryByH3(bounds, resolution)` method alongside existing `queryByBounds()`. Returns `CellSnapshot[]` (merged from multiple `DataRecord`s per cell — see SPEC §3.2). Internal index structure: `Map<cellId, Map<sourceId, DataRecord>>`. Cross-resolution sources resolved via parent-lookup (see SPEC §4.3): for each viewport cell, `cellToParent(cell, source.nativeRes)` finds the stored data — no `cellToChildren()` enumeration | Gradual replacement |
 | `server/index.js` | Load adapters and initialize registry at startup; route handlers call registry | Pipeline unchanged |
 
 ### 3.3 Key Design Constraints
@@ -117,7 +117,7 @@ scripts/
 
 ### 3.4 Additional Considerations
 
-**`spatial.js` refactor complexity.** The current `lon_buckets / lat_buckets` bucket-based spatial index and the H3 `Map<cellId, DataRecord>` lookup are fundamentally different data structures. Adding `queryByH3()` is not simply adding a method — it requires building a parallel index structure (H3 cell ID → data mapping). Estimate `spatial.js` changes separately from other modifications; the actual modified line count is likely higher than the overall ~200 line estimate suggests.
+**`spatial.js` refactor complexity.** The current `lon_buckets / lat_buckets` bucket-based spatial index and the H3 `Map<cellId, Map<sourceId, DataRecord>>` lookup are fundamentally different data structures. Adding `queryByH3()` is not simply adding a method — it requires building a parallel index structure (H3 cell ID → data mapping). Estimate `spatial.js` changes separately from other modifications; the actual modified line count is likely higher than the overall ~200 line estimate suggests.
 
 **Data re-indexing step.** Migrating from 0.5-degree grid IDs to H3 cell IDs requires all CSV data to be re-processed. This should be an explicit step in Phase 1:
 1. The WorldCover adapter's `ingest()` reads the raw CSV and encodes each row to an H3 cell ID.
@@ -167,24 +167,26 @@ Vendor uploads CSV ──→ POST /api/import ──→ csv-generic adapter pars
 
 ### 4.2 Key Design Decisions
 
-**Multi-source channel merge strategy:** The same H3 cell may simultaneously contain WorldCover data and vendor CSV data. The two channel sets remain independent and do not overwrite each other. For example:
+**Multi-source channel merge strategy:** The same H3 cell may simultaneously contain WorldCover data and vendor CSV data. Each source's data is stored as a separate `DataRecord` (with bare channel keys — see SPEC §3.1). The query layer merges them into a `CellSnapshot` (see SPEC §3.2) by prefixing channel keys with `sourceId.`:
 
 ```js
-// Merged result for cell "85283473fffffff"
+// CellSnapshot (merged view) for cell "85283473fffffff"
+// Produced by queryByH3() merging DataRecords from multiple sources
 {
   "cellId": "85283473fffffff",
   "channels": {
-    // From worldcover adapter
+    // From worldcover DataRecord (bare keys: tree, urban, bare → prefixed at merge)
     "worldcover.tree": 0.42, "worldcover.urban": 0.15, "worldcover.bare": 0.03,
-    // From vendor-uploaded air_quality.csv
+    // From air_quality DataRecord (bare keys: pm25, temperature → prefixed at merge)
     "air_quality.pm25": 0.65, "air_quality.temperature": 0.38
-  }
+  },
+  "sources": ["worldcover", "air_quality"]
 }
 ```
 
 Channel names are automatically namespaced by source: the internal key is `sourceId.channelName` (see OPEN-PLATFORM-SPEC.md §6.2). When a user uploads `air_quality.csv`, its columns become `air_quality.pm25`, `air_quality.temperature`, etc. This eliminates same-name collisions structurally — no reject-and-rename workflow needed. The only remaining conflict case is uploading a file with the **same source ID** as an existing import (e.g., re-uploading `air_quality.csv`), which **replaces** the previous import for that source (with a confirmation warning in the API response).
 
-**Data persistence:** Uploaded CSVs are saved to the `data/imports/` directory, with metadata recorded in `data/imports/manifest.json` (filename, adapter ID, import timestamp, resolution). On server restart, all previously imported data is automatically reloaded.
+**Data persistence:** Uploaded CSVs are saved to the `data/imports/` directory, with metadata recorded in `data/imports/manifest.json` (filename, adapter ID, import timestamp, resolution, sourceId). On server restart, all previously imported data is automatically reloaded. `manifest.json` includes a `manifestVersion` field (integer, incremented on each write). Writes use **atomic rename**: write to `manifest.json.tmp`, then `fs.renameSync()` to `manifest.json`. This prevents corruption from crashes mid-write. On startup, if `manifest.json` is missing but `manifest.json.tmp` exists, recover from the tmp file.
 
 ### 4.3 New Dependency
 
@@ -214,7 +216,7 @@ data/
 | File | Change | Notes |
 | ---- | ------ | ----- |
 | `server/index.js` | Add `POST /api/import/preview` and `POST /api/import/confirm` endpoints; serve `/import` wizard page; scan `data/imports/manifest.json` on startup to reload | New routes |
-| `server/config.js` | Add `H3_RESOLUTION_LABELS` constant (human-readable scale labels per resolution) | Used by preview API and wizard |
+| `server/config.js` | Add `H3_RESOLUTION_LABELS` constant (human-readable scale labels per resolution), `IMPORT_PREVIEW_ROWS` (default: 50,000), `IMPORT_LINE_SAMPLE_METERS` (default: 250) | Used by preview API, wizard, and KML/GPX rasterization |
 | `server/spatial.js` | Add `addCells(records)` method to support runtime data append to spatial index | Existing `Map` structure naturally supports append; primarily interface wrapping |
 | `server/channel-registry.js` | Add `registerRuntime(adapter)` method to support runtime channel addition; trigger WebSocket notification | Extends Phase 1 registry |
 | `server/osc_schema.js` | Add `/ch/reload` message address (notifies Max that the channel list has changed) | Backward-compatible |
@@ -231,14 +233,17 @@ Content-Type: multipart/form-data
 
 Parameters:
   file:        CSV file (required)
+  sourceId:    Source identifier (optional; sanitized: lowercase, underscores, max 64 chars;
+               default: derived from filename sans extension)
   resolution:  H3 resolution, defaults to DEFAULT_H3_RESOLUTION (optional)
 
 Response (200):
 {
   "status": "preview",
   "previewId": "abc123",              // Temporary ID to reference this preview in Step 2
-  "source": "air_quality",            // Derived from filename
-  "totalRows": 5420,
+  "source": "air_quality",            // From explicit sourceId param, or sanitized filename
+  "sampledRows": 5420,               // Rows actually parsed in preview (capped at IMPORT_PREVIEW_ROWS)
+  "totalRowsEstimate": 5420,         // Estimated total rows (from file size heuristic; exact if file <= IMPORT_PREVIEW_ROWS)
   "columnMapping": {                  // Auto-detected column roles (user can override in Step 2)
     "latitude":  { "role": "lat" },
     "longitude": { "role": "lon" },
@@ -308,7 +313,7 @@ The backend two-step API is usable via `curl`, but for the "vendor drops in a CS
 
 1. User opens `/import` wizard (or calls API directly)
 2. File uploaded via `POST /api/import/preview`
-3. Server parses first N rows (default: all, cap at resource limits), auto-detects column roles, runs validation checks
+3. Server parses a sample of the first `IMPORT_PREVIEW_ROWS` rows (default: 50,000), auto-detects column roles, runs validation checks. Returns `sampledRows` and `totalRowsEstimate`
 4. Preview report returned — user reviews warnings, adjusts column mapping and resolution if needed
 5. User confirms via `POST /api/import/confirm` (or API caller posts confirm with overrides)
 6. Server re-parses full file with confirmed settings; each row's `(lat, lon)` encoded to `cellId` via `H3Encoder`
@@ -317,7 +322,7 @@ The backend two-step API is usable via `curl`, but for the "vendor drops in a CS
 9. New channels registered in the channel registry
 10. CSV file saved to `data/imports/`; metadata written to `manifest.json`
 11. A `channel_update` event sent to all connected frontends via WebSocket
-12. `/ch/register` and `/ch/reload` sent to Max via OSC
+12. `/ch/register`, `/ch/meta`, and `/ch/reload` sent to Max via OSC
 13. Frontend receives notification, re-requests `/api/config` for the latest channel list, and refreshes rendering
 
 ### 4.9 Effort Estimate
@@ -386,6 +391,7 @@ frontend/
 - **GPX:** Extract coordinates from `<wpt>` (waypoint), `<trkpt>` (track point), and `<rtept>` (route point) elements. GPX uses `lat`/`lon` attributes (WGS84 natively).
 - Both formats produce `DataRecord[]` with H3-encoded cells, feeding into the same spatial index and channel registry as CSV imports.
 - KML `<ExtendedData>` and GPX `<extensions>` fields with numeric values are auto-registered as channels (same logic as CSV's "remaining numeric columns" rule).
+- **Rasterization rules (see SPEC §8.1):** Point geometry → direct `latLngToCell()`. LineString / GPX track → distance-sampled points every `IMPORT_LINE_SAMPLE_METERS` (default: 250m, configurable in `config.js`), each encoded to H3, cell-deduplicated. Polygon → `polygonToCells(boundary, res)` interior fill; holes ignored in this phase.
 
 ### 5b.2 New Dependency
 
@@ -503,7 +509,7 @@ Data-change-triggered pushes only send affected channel values (incremental), av
 
 **Per-client viewport caching:** To support data-change push, the server must cache each WebSocket client's current viewport (`lastViewport`). When new stream data arrives, each client's `lastViewport` is checked to determine whether an incremental push is needed. This is a new per-connection state requirement — add a `lastViewport` field to the existing per-client state (alongside `createDeltaState()` etc.).
 
-**AOI / subscription strategy (see OPEN-PLATFORM-SPEC.md §5.4):** Stream adapters with `aoiStrategy: "global"` (e.g., USGS earthquakes) fetch all events regardless of client viewports — the scheduler runs one poll cycle per interval. Stream adapters with `aoiStrategy: "aoi"` (e.g., NASA FIRMS) only fetch data within the union bounding box of all connected clients' viewports. The `aoi-manager.js` module tracks per-client viewports (updated on each WebSocket viewport message), computes the merged AOI with a configurable expansion margin (`AOI_MARGIN_DEG`), and debounces AOI changes (`AOI_DEBOUNCE_SEC`) to avoid thrashing the upstream API. When no clients are connected, AOI-scoped adapters pause polling automatically.
+**AOI / subscription strategy (see OPEN-PLATFORM-SPEC.md §5.4):** Stream adapters with `aoiStrategy: "global"` (e.g., USGS earthquakes) fetch all events regardless of client viewports — the scheduler runs one poll cycle per interval. Stream adapters with `aoiStrategy: "aoi"` (e.g., NASA FIRMS) only fetch data within the union bounding box of all connected clients' viewports. The `aoi-manager.js` module tracks per-client viewports (updated on each WebSocket viewport message), computes the merged AOI with a configurable expansion margin (`AOI_MARGIN_DEG`), and debounces AOI changes (`AOI_DEBOUNCE_SEC`) to avoid thrashing the upstream API. When no clients are connected, AOI-scoped adapters pause polling automatically. **AOI size cap:** When the merged union bbox exceeds `MAX_AOI_AREA_KM2` (default: 10,000,000 km²), fall back to the most-recently-active client's viewport only. See SPEC §5.4 for the bucketed AOI roadmap.
 
 ### 7.4 Stream Adapter Interface (extends Phase 1's DataAdapter)
 
@@ -577,7 +583,7 @@ module.exports = {
 
 **Why FIRMS as the second adapter (not first):** USGS earthquakes are simpler (global pull, lower volume, GeoJSON response). FIRMS introduces AOI-scoped fetching, CSV parsing, and higher event volumes — making it a good second-step validation of the streaming pipeline's flexibility.
 
-**API key requirement:** FIRMS API requires a free MAP_KEY (obtainable at https://firms.modaps.eosdis.nasa.gov/api/area/). This is declared in `requiredConfig: { mapKey: 'string' }` and validated at adapter registration. The key is stored in `.env` (not committed).
+**API key requirement:** FIRMS API requires a free MAP_KEY (obtainable at https://firms.modaps.eosdis.nasa.gov/api/area/). This is declared in `requiredConfig: { mapKey: 'string' }` and validated at adapter registration. The key is stored in `.env` (not committed). **Security:** `requiredConfig` values are validated for existence only — they are NEVER returned by public endpoints. `/api/config` and `/api/streams` only report `"configured": true/false`, not the actual key values (see SPEC §5.2).
 
 **Alternative data source:** Copernicus EFFIS provides similar fire data for Europe. A future `effis-fire` adapter can reuse the same channel schema (`fire_count`, `fire_intensity`, `fire_newness`).
 
@@ -632,7 +638,7 @@ server/
 | `server/spatial.js` | `queryByH3()` results merge static data with time-window aggregated data | Query logic extension |
 | `server/osc_schema.js` | Add `/adapter/error` address (adapter ID + error message); used by stream scheduler to notify Max of adapter failures | New address, backward-compatible |
 | `server/osc.js` | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push; add `sendAdapterError()` for `/adapter/error` dispatch | New push paths |
-| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS`, `DEFAULT_AOI_STRATEGY`, `AOI_MARGIN_DEG`, `AOI_DEBOUNCE_SEC` | New config entries |
+| `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS`, `DEFAULT_AOI_STRATEGY`, `AOI_MARGIN_DEG`, `AOI_DEBOUNCE_SEC`, `MAX_AOI_AREA_KM2`, `MAX_AOI_BUCKETS` | New config entries |
 
 ### 7.10 New API Endpoints
 
@@ -649,7 +655,8 @@ Response:
       "lastFetch": "2026-02-21T15:30:00Z",
       "lastFetchCount": 12,          // Events fetched in last poll
       "windowMs": 86400000,
-      "activeCells": 847             // Cells with data in current window
+      "activeCells": 847,            // Cells with data in current window
+      "configured": true              // requiredConfig keys present (never exposes actual values)
     }
   ]
 }

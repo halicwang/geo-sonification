@@ -56,15 +56,15 @@ All data within the system is unified into the following structure (JSON represe
   "cellId": "85283473fffffff", // H3 hexagonal Cell ID (see §4)
   "source": "worldcover",      // Data source identifier
   "channels": {                // Normalized values (0–1), computed from channelsRaw + ChannelManifest rules
-    "worldcover.tree": 0.42,
-    "worldcover.urban": 0.15,
-    "worldcover.bare": 0.03
-    // ... each data source defines its own channel set; keys are sourceId.channelName (see §6.2)
+    "tree": 0.42,
+    "urban": 0.15,
+    "bare": 0.03
+    // ... keys are bare channel names from the adapter's ChannelManifest
   },
   "channelsRaw": {             // Original values in source units (preserved for re-normalization)
-    "worldcover.tree": 0.42,   // WorldCover: raw == normalized (already 0–1 fractions)
-    "worldcover.urban": 0.15,
-    "worldcover.bare": 0.03
+    "tree": 0.42,              // WorldCover: raw == normalized (already 0–1 fractions)
+    "urban": 0.15,
+    "bare": 0.03
   },
   "resolution": 4,             // H3 resolution at which this cell was encoded (native resolution)
   "timestamp": null,           // ISO 8601 or null (static data)
@@ -76,9 +76,38 @@ All data within the system is unified into the following structure (JSON represe
 }
 ```
 
+> **Constraint:** `channels` and `channelsRaw` keys are **bare channel names** (e.g., `"tree"`, `"pm25"`), NOT namespaced keys. The source identity is carried by the `source` field. Namespaced keys (`sourceId.channelName`, e.g., `"worldcover.tree"`) are constructed at the **query/merge layer** when building a CellSnapshot (§3.2) — never stored inside a DataRecord. This avoids double-encoding the source identity and keeps storage records clean.
+
 **Why both `channels` and `channelsRaw`?** Without raw values, changing normalization method, value range, or alert thresholds requires a full re-import of the data. By preserving raw values at import time, the system can recompute `channels` on the fly when the user adjusts normalization parameters (e.g., switching from `linear` to `log`, or narrowing the range). For data sources where raw values are already normalized (WorldCover fractions), `channelsRaw` is identical to `channels` — no additional storage overhead. For imported CSVs (e.g., PM2.5 in μg/m³), `channelsRaw` stores the original measurement and `channels` stores the 0–1 normalized value.
 
-### 3.2 Temporal Dimension Classification
+### 3.2 Cell Snapshot (CellSnapshot)
+
+A `CellSnapshot` is the **query-layer / output-layer merged view** of a cell, produced by combining multiple `DataRecord`s from different sources for the same `cellId`. This is the object consumed by `sendAggregatedToMax()`, the frontend renderer, and `/api/config` responses.
+
+```jsonc
+{
+  "cellId": "85283473fffffff",
+  "resolution": 4,                    // Query resolution (may differ from native resolution of individual sources)
+  "channels": {                       // Merged, namespaced keys: sourceId.channelName
+    "worldcover.tree": 0.42,
+    "worldcover.urban": 0.15,
+    "air_quality.pm25": 0.65
+  },
+  "sources": ["worldcover", "air_quality"]  // Which adapters contributed data to this cell
+}
+```
+
+**Design principle: "Storage is per-source (`DataRecord`); output is per-cell (`CellSnapshot`)."**
+
+The query layer (e.g., `queryByH3()`) builds a `CellSnapshot` by:
+1. Looking up all `DataRecord`s for the given `cellId` (one per source).
+2. Prefixing each record's bare channel keys with `sourceId.` to produce namespaced keys.
+3. Merging all namespaced channels into a single `channels` object.
+4. Cross-resolution records are resolved per §4.3 rules before merging.
+
+The spatial index is keyed by `(cellId, source)`, i.e., `Map<cellId, Map<sourceId, DataRecord>>`.
+
+### 3.3 Temporal Dimension Classification
 
 | `temporalType` | Meaning | Aggregation Strategy | Examples |
 | -------------- | ------- | -------------------- | -------- |
@@ -88,7 +117,7 @@ All data within the system is unified into the following structure (JSON represe
 
 Phase 1 implements `static`. Phase 4 implements `stream` (poll scheduler + sliding time window). `timeseries` is reserved for future extension.
 
-### 3.3 Internal Exchange Format
+### 3.4 Internal Exchange Format
 
 **Internal (in-process):** Modules within the same Node.js process pass data as plain `DataRecord[]` arrays (see §3.1). This avoids the overhead of wrapping every record in GeoJSON `Feature` / `FeatureCollection` envelopes for purely in-memory communication.
 
@@ -104,7 +133,7 @@ Phase 1 implements `static`. Phase 4 implements `stream` (poll scheduler + slidi
       "properties": {
         "cellId": "85283473fffffff",
         "source": "worldcover",
-        "channels": { "tree": 0.42, "urban": 0.15 },
+        "channels": { "tree": 0.42, "urban": 0.15 },  // Bare channel names (single-source DataRecord)
         "temporalType": "static"
       }
     }
@@ -200,7 +229,11 @@ These labels are defined in a `H3_RESOLUTION_LABELS` constant in `config.js` and
 
 3. **Upsampling** (query res > stored res — e.g., querying res 7 but data is stored at res 4): Broadcast the parent cell's value to all child cells uniformly. No spatial interpolation — the child cells inherit the parent's value. This is visually obvious (all children show the same color/value) and avoids fabricating false spatial detail.
 
-4. **Cross-resolution lookups** use `cellToParent(cellId, targetRes)` for downsampling and `cellToChildren(cellId, targetRes)` for upsampling, both from h3-js.
+4. **Cross-resolution lookups use `cellToParent()` in both directions:**
+   - **Downsampling** (query res < stored res): group stored cells by `cellToParent(storedCell, queryRes)`, then aggregate each group using the channel's fold method.
+   - **Upsampling** (query res > stored res): for each viewport cell at query res, look up `cellToParent(viewportCell, storedRes)` and inherit the parent's value.
+
+   > **Implementation constraint:** `cellToChildren()` is **NOT** used in the real-time query path. Enumerating children is O(7^(targetRes−nativeRes)) per cell — going from res 4 to res 7 produces ~343 children per stored cell, which can cause combinatorial explosion across many cells. The parent-lookup approach is O(1) per viewport cell regardless of resolution gap. `cellToChildren()` may be used offline (e.g., pre-warming a cache) but never in the viewport pipeline.
 
 5. **Same-resolution** (query res == stored res): Direct lookup, no conversion needed. This is the common case when `DEFAULT_H3_RESOLUTION` is used consistently.
 
@@ -252,6 +285,10 @@ Each data adapter is responsible for:
  * @property {string} [version] - Semantic version of this adapter (e.g., "1.0.0")
  * @property {Object} [requiredConfig] - Configuration keys this adapter needs at registration
  *   (e.g., { apiKey: "string", region: "string" }). Validated by the adapter framework at startup.
+ *   **Security:** requiredConfig values are validated for existence only. They are NEVER returned
+ *   by public endpoints (`/api/config`, `/api/streams`). Those endpoints only report whether
+ *   required config is present (`"configured": true`), not the actual values. All sensitive
+ *   config resides exclusively in `.env`.
  * @property {(rawData: any, encoder: CellEncoder, precision: number) => DataRecord[]} ingest
  * @property {Object} [importFormats] - Supported import formats and their parsers
  */
@@ -365,6 +402,10 @@ The stream adapter accepts an Area of Interest (bounding box or polygon) and onl
 
 Configuration in `config.js`: `DEFAULT_AOI_STRATEGY`, `AOI_MARGIN_DEG`, `AOI_DEBOUNCE_SEC`.
 
+**AOI size cap:** When the merged union bounding box exceeds `MAX_AOI_AREA_KM2` (default: 10,000,000 km², configurable — roughly the area of Europe), the AOI manager must prevent a near-global query. Phase 4 implementation starts with a simple fallback: reject the merge and use only the most-recently-active client's viewport as the AOI. A future refinement can partition clients into up to `MAX_AOI_BUCKETS` (default: 3) spatial clusters by centroid proximity, each with its own independent AOI. This is a known limitation — two clients on opposite sides of the globe cannot both benefit from AOI-scoped filtering simultaneously without the bucketed strategy.
+
+Configuration in `config.js`: `MAX_AOI_AREA_KM2`, `MAX_AOI_BUCKETS`.
+
 ### 5.5 WorldCover Adapter (Existing System Refactor)
 
 The existing `data-loader.js` + `landcover.js` + `normalize.js` are refactored into the first adapter:
@@ -451,6 +492,10 @@ By default, auto-detection handles most CSVs. For advanced use, the preview resp
 
 When `range` is explicitly provided, values are normalized to [0, 1] using the declared range and normalization method. When omitted, the system infers range from the data (p1/p99 percentile for `linear`, observed min/max for `log`).
 
+**Source ID rules:** The `sourceId` for an imported file can be explicitly provided via the `POST /api/import/preview` endpoint (optional `sourceId` parameter). When omitted, the server derives it from the filename (sans extension). In both cases, the value is **sanitized at the import boundary**: lowercased, spaces and hyphens replaced with underscores, non-alphanumeric characters (except underscores) stripped, maximum 64 characters. This ensures sourceIds are safe for use in channel namespaced keys, OSC addresses, and filesystem paths.
+
+**Preview sampling:** The preview step does NOT parse the entire file. It reads the first `IMPORT_PREVIEW_ROWS` rows (default: 50,000, configurable in `config.js`) and returns `sampledRows` and `totalRowsEstimate` (estimated from file size). The full file is only parsed during the confirm step. This prevents large files (millions of rows) from blocking the preview response.
+
 ---
 
 ## 6. Channel Registry
@@ -489,8 +534,11 @@ When multiple adapters coexist, bare channel names (e.g., `tree`, `temperature`)
 
 This namespaced key is the canonical identifier used in:
 - The channel registry (the `key` field above)
-- The `DataRecord.channels` object (see §3.1)
+- `CellSnapshot.channels` objects (see §3.2) — the merged query/output layer
 - Bus mapping configuration (see §7.1)
+- OSC `/ch/register` messages and `/ch/{index}` addresses
+
+> **Important:** Namespaced keys are constructed at the **query/merge layer** when building a `CellSnapshot`, NOT stored inside `DataRecord`. A `DataRecord` uses bare channel names (see §3.1 constraint). This separation keeps storage records clean and avoids double-encoding the source identity.
 
 **Display aliases:** The Phase 3 web console allows users to assign short aliases for frequently used channels (e.g., display `purpleair.pm25` as `pm25`). Aliases are cosmetic — they appear in the console UI only and do not affect OSC output, bus mapping keys, or internal data. Alias mappings are stored in `audio_mapping.json` under a `channelAliases` key.
 
@@ -520,6 +568,16 @@ A one-time channel registration message is sent at startup so Max knows what eac
 ```
 
 The fourth argument (`group`) is optional — omitting it defaults to `"metric"`. This allows downstream consumers (Max patch, web console) to distinguish distribution channels (values sum to ~1) from independent metric channels.
+
+**Optional channel metadata message (`/ch/meta`):** For richer self-description (debugging, Max console UI, auto-generated labels), a companion `/ch/meta` message is sent after all `/ch/register` messages:
+
+```
+/ch/meta  0 "Tree / Forest" "fraction" "linear" 0.0 1.0
+/ch/meta  14 "PM2.5" "μg/m³" "log" 0.0 500.0
+//        index  label        unit       normalization  rangeMin rangeMax
+```
+
+`/ch/meta` is optional — Max patches that don't need display metadata can safely ignore it. The message carries the `label`, `unit`, `normalization` method, and raw value `range` from the channel's `ChannelManifest`. This significantly improves debuggability and enables self-describing console UIs without hardcoding channel knowledge in Max.
 
 ---
 
@@ -591,6 +649,18 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 
 > **Note:** KML and GPX are promoted to Phase 2.5 (between frontend decoupling and audio console) because they are critical for the "open platform" interoperability narrative — particularly KML for Fog of World integration. Both formats store coordinates in WGS84 natively, so no CRS conversion is needed. Implementation scope is limited to coordinate extraction from Point/LineString/Polygon geometries; KML style parsing and GPX extensions are out of scope.
 
+### 8.1 Geometry-to-H3 Rasterization Rules
+
+When importing non-point geometries (LineString, Polygon), the system must convert them into H3 cell sets. Without deterministic rules, different imports produce inconsistent coverage. The following rules apply:
+
+| Geometry Type | Rasterization Method | Notes |
+| ------------- | -------------------- | ----- |
+| Point / `<wpt>` | `latLngToCell(lat, lon, res)` | Direct encoding, one cell per point |
+| LineString / `<trkseg>` / GPX track | Distance-based sampling: take a point every `IMPORT_LINE_SAMPLE_METERS` (default: 250, configurable in `config.js`), encode each sampled point, deduplicate resulting cellIds | Avoids over-sampling dense tracks and under-sampling sparse ones. The 250m default produces reasonable density at res 5–7 without flooding the index |
+| Polygon / `<Polygon>` | `polygonToCells(boundary, res)` from h3-js | Interior fill. Polygon holes are ignored in Phase 2.5 (future: subtract hole cells from the filled set) |
+
+`IMPORT_LINE_SAMPLE_METERS` is defined in `config.js`. GPX tracks with `<time>` elements preserve timestamps per sampled point for future `timeseries` temporal type support.
+
 ---
 
 ## 9. Non-Functional Requirements Roadmap
@@ -610,7 +680,9 @@ Roadmap items: API key or JWT bearer token validation middleware; per-tenant ada
 ### 9.2 Resource Governance
 
 - **Upload limits** for `POST /api/import`: maximum file size (default 50 MB), maximum row count (default 500,000), maximum column count (default 100). Enforced before parsing begins.
+- **Preview sampling:** `IMPORT_PREVIEW_ROWS` (default: 50,000) — the preview step reads at most this many rows, not the full file. Prevents large files from blocking the preview response.
 - **Stream adapter caps:** `MAX_EVENTS_PER_CELL` and `MAX_STREAM_CELLS` (defined in §5.3). Additionally: per-adapter memory high-water mark monitoring.
+- **AOI size cap:** `MAX_AOI_AREA_KM2` (default: 10,000,000) and `MAX_AOI_BUCKETS` (default: 3) — prevents near-global AOI queries from distant clients (defined in §5.4).
 - **Per-source rate limiting:** limit `POST /api/import` to N requests per minute per source IP. For stream adapters, enforce a minimum `pollIntervalMs` floor (e.g., 10 seconds) to prevent upstream API abuse.
 
 ### 9.3 Frontend Dependency Supply Chain
@@ -661,12 +733,14 @@ Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining
 | ---- | ---------- |
 | Cell | The smallest spatial unit produced by grid encoding |
 | Cell ID | Unique identifier for a cell (H3 hexadecimal string in Phase 1) |
+| DataRecord | Single-source, atomic storage record for one cell — contains bare channel keys and a `source` field (§3.1) |
+| CellSnapshot | Merged query-layer view of a cell, combining DataRecords from multiple sources — contains namespaced channel keys (§3.2) |
 | Channel | A single normalized data dimension (e.g., "tree", "pm25") |
 | Bus | An audio output channel, produced by folding one or more channels |
 | Adapter | A module that converts an external data source into DataRecords |
 | Fold | The operation of combining multiple channel values into a single bus volume |
 | Canonical | The unified internal data representation format |
-| Namespace | Dot-separated prefix (`sourceId.channelName`) that uniquely identifies a channel across adapters |
+| Namespace | Dot-separated prefix (`sourceId.channelName`) that uniquely identifies a channel across adapters; applied at the query/merge layer, not in storage |
 | Alias | A user-facing display name mapped to a namespaced channel key |
 | Adapter Manifest | The combination of `id`, `version`, `channels`, `temporalType`, and `requiredConfig` that describes an adapter to the registry |
 | Native Resolution | The H3 resolution at which a data source's cells were originally encoded; stored per DataRecord for cross-resolution queries |

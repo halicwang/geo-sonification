@@ -738,3 +738,23 @@ Phases 1.5, 2, 2.5, and 3 can be worked on in parallel or in any order after the
   - **Choose Phase 4** → Showcase "real-time earthquake data driving sound changes" (strong auditory impact)
   - If time permits, do both.
 - **After the course ends:** Phase 3 — the console is a nice-to-have that does not affect core functionality.
+
+### 9.1 Showcase Narratives
+
+Two "closed-loop" demo paths, each self-contained and presentable on its own.
+
+**Closed Loop A — "From Spreadsheet to Soundscape" (visual emphasis, Phases 0 → 1 → 1.5 → 2)**
+
+- Demo flow: open import wizard → drag-drop a CSV → preview validates columns and resolution → confirm → hex grid appears on map → pan/zoom viewport → ambient sound changes in real time.
+- Audience sees: hexagonal grid fills in, colors shift as the viewport moves across regions.
+- Audience hears: tonal gradient reflecting data values across the viewport — smooth crossfades between zones.
+- Core message: *"Any tabular geodata becomes an audible landscape in under a minute."*
+
+**Closed Loop B — "Live Earthquake Alert" (auditory emphasis, Phases 0 → 1 → 1.5 → 4)**
+
+- Demo flow: USGS adapter is running → earthquake event arrives → new cells appear on map → OSC message fires → alert sound triggers in Max.
+- Audience sees: new hex cells pulse onto the map at the epicenter location.
+- Audience hears: immediate percussive alert when magnitude crosses threshold, ambient low rumble conveying depth.
+- Core message: *"You hear the earthquake before you see the dashboard notification."*
+
+See §8 "Shortest path" calculations for the engineering effort behind each loop.

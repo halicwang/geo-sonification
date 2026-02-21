@@ -71,7 +71,7 @@ Requires approval per CLAUDE.md ("Do not introduce new npm dependencies without 
 - `cell-encoder.js`: ~40 lines (interface documentation + factory function)
 - Tests: ~120 lines (encode round-trip, viewport enumeration, neighbors, cross-resolution, coordinate order regression — verify `polygonToCells()` uses `[lon, lat]` and `latLngToCell()` uses `(lat, lon)` to catch h3-js version-specific convention changes)
 - config/types changes: ~30 lines
-- **Total: ~290 lines of new code, 0 lines of existing code modified**
+- **Total: ~290 lines of new code, ~30 lines of config/types changes (no runtime logic modified)**
 
 ---
 
@@ -542,7 +542,7 @@ Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depen
 
 ## 9. Suggested Timeline (Aligned with Course Schedule)
 
-- **This week:** Phase 0 — pure addition, does not touch existing code, safe to run in parallel with the milestone demo.
+- **This week:** Phase 0 — pure addition, changes only touch config and type definitions (no runtime logic modified), safe to run in parallel with the milestone demo.
 - **After the next milestone:** Phase 1 — the largest refactor, requires comprehensive testing.
 - **Immediately after Phase 1:** Phase 1.5 — runtime import pipeline, opens the data path for all subsequent phases.
 - **Before end of course:** Phase 2 or Phase 4, depending on desired showcase:

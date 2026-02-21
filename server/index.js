@@ -74,6 +74,12 @@ setInterval(() => {
 
 // ============ Shared Helpers ============
 
+/**
+ * Quick-check that bounds is a 4-element array before spatial validation.
+ * @param {*} bounds
+ * @param {string} [clientLabel='request'] - Label for error messages
+ * @returns {{ bounds: number[] } | { error: string }}
+ */
 function parseViewportBounds(bounds, clientLabel = 'request') {
     if (!Array.isArray(bounds) || bounds.length !== 4) {
         return {
@@ -181,6 +187,8 @@ app.post('/api/manual', (req, res) => {
 });
 
 // ============ Startup ============
+
+/** Load data, build spatial index, start HTTP + WebSocket servers. @returns {Promise<void>} */
 async function startServer() {
     try {
         // Load data and initialize spatial index
@@ -328,7 +336,11 @@ async function startServer() {
     }
 }
 
-// Graceful shutdown
+/**
+ * Graceful shutdown: close WS clients, HTTP server, and OSC port.
+ * @param {string} signal - POSIX signal name (e.g. 'SIGTERM')
+ * @returns {void}
+ */
 function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down...`);
     if (wssServer) {

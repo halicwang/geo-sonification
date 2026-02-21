@@ -47,6 +47,9 @@ let normalizeParams = null;
 /**
  * Extract a valid landcover class from a grid cell.
  * Returns a valid ESA class (integer) or null if missing/invalid.
+ *
+ * @param {import('./types').GridCell} cell
+ * @returns {number|null}
  */
 function getValidLandcover(cell) {
     if (
@@ -63,6 +66,10 @@ function getValidLandcover(cell) {
 
 /**
  * Initialize spatial module with loaded data.
+ *
+ * @param {import('./types').GridCell[]} data
+ * @param {import('./types').NormalizeParams} normParams
+ * @returns {void}
  */
 function init(data, normParams) {
     gridData = data;
@@ -75,6 +82,10 @@ function init(data, normParams) {
  * ix = floor((lon + 180) / GRID_SIZE)  — range [0, LON_BUCKETS)
  * iy = floor((lat + 90)  / GRID_SIZE)  — range [0, LAT_BUCKETS)
  * Composite key = ix * LAT_BUCKETS + iy — single integer for Map lookup.
+ *
+ * @param {number} lon
+ * @param {number} lat
+ * @returns {number} Composite bucket key
  */
 function lonLatToBucketKey(lon, lat) {
     const ix = Math.min(Math.floor((lon + 180) / GRID_SIZE), LON_BUCKETS - 1);
@@ -85,6 +96,7 @@ function lonLatToBucketKey(lon, lat) {
 /**
  * Build spatial index from gridData for O(1) viewport lookups.
  * Map<compositeKey, cell[]>
+ * @returns {void}
  */
 function buildSpatialIndex() {
     spatialIndex = new Map();
@@ -104,7 +116,7 @@ function buildSpatialIndex() {
  * Query grids that intersect the given bounds.
  * Handles date-line crossing (west > east).
  * @param {number[]} bounds - [west, south, east, north]
- * @returns {{ gridsInView: object[], theoreticalGridCount: number }}
+ * @returns {{ gridsInView: import('./types').GridCell[], theoreticalGridCount: number }}
  */
 function queryGridsInBounds(bounds) {
     const [west, south, east, north] = bounds;
@@ -201,7 +213,12 @@ function queryGridsInBounds(bounds) {
     return { gridsInView, theoreticalGridCount };
 }
 
-/** Assemble the stats object returned to the frontend and OSC pipeline. */
+/**
+ * Assemble the stats object returned to the frontend and OSC pipeline.
+ *
+ * @param {{ dominantLandcover?: number|null, nightlightNorm?: number, populationNorm?: number, forestNorm?: number, avgForestPct?: number, avgPopulationDensity?: number, avgNightlightMean?: number, avgNightlightP90?: number, gridCount?: number, lcCounts?: Object<string, number>, displayItems?: import('./types').LandcoverBreakdownItem[] }} params
+ * @returns {import('./types').ViewportStats}
+ */
 function buildStatsResult({
     dominantLandcover,
     nightlightNorm,
@@ -233,6 +250,9 @@ function buildStatsResult({
 /**
  * Default stats when viewport has no grid data (e.g. open ocean).
  * dominantLandcover is 80 (Water); OSC sends /landcover 80, /lc/80 1.0.
+ *
+ * @param {number} [gridCount=0]
+ * @returns {import('./types').ViewportStats}
  */
 function emptyStats(gridCount = 0) {
     return buildStatsResult({ dominantLandcover: 80, gridCount, lcCounts: { 80: 1 } });
@@ -241,9 +261,9 @@ function emptyStats(gridCount = 0) {
 /**
  * Build the landcover percentage breakdown for the frontend panel.
  * Shows the top 5 classes (each >= 1%), merges the rest into "Other".
- * @param {Object} lcCounts  — { classId: weight } (count or km2)
- * @param {number} totalWeight — denominator for percentage calculation
- * @returns {{ displayItems: Array, dominantLandcover: number|null }}
+ * @param {Object<string, number>} lcCounts - { classId: weight } (count or km2)
+ * @param {number} totalWeight - Denominator for percentage calculation
+ * @returns {{ displayItems: import('./types').LandcoverBreakdownItem[], dominantLandcover: number|null }}
  */
 function buildLandcoverBreakdown(lcCounts, totalWeight) {
     if (totalWeight <= 0 || Object.keys(lcCounts).length === 0) {
@@ -314,6 +334,9 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
 
 /**
  * Calculate viewport stats (legacy aggregation: simple average / grid-count).
+ *
+ * @param {import('./types').GridCell[]} gridsInView
+ * @returns {import('./types').ViewportStats}
  */
 function calculateLegacyStats(gridsInView) {
     const n = gridsInView.length;
@@ -384,6 +407,9 @@ function calculateLegacyStats(gridsInView) {
  *
  * This gives larger / more-land cells proportionally more influence,
  * reducing the bias from tiny coastal slivers.
+ *
+ * @param {import('./types').GridCell[]} gridsInView
+ * @returns {import('./types').ViewportStats}
  */
 function calculateAreaWeightedStats(gridsInView) {
     // lcCounts: { classId: totalWeightedArea } for landcover distribution
@@ -500,6 +526,7 @@ function calculateAreaWeightedStats(gridsInView) {
 /**
  * Calculate viewport statistics for the given bounds.
  * @param {number[]} bounds - [west, south, east, north]
+ * @returns {import('./types').ViewportStats & { theoreticalGridCount: number, landCoverageRatio: number, gridsInView: import('./types').GridCell[] }}
  */
 function calculateViewportStats(bounds) {
     const { gridsInView, theoreticalGridCount } = queryGridsInBounds(bounds);
@@ -518,19 +545,27 @@ function calculateViewportStats(bounds) {
     return { ...stats, theoreticalGridCount, landCoverageRatio, gridsInView };
 }
 
-/** Get all loaded grid data. */
+/**
+ * Get all loaded grid data.
+ * @returns {import('./types').GridCell[]}
+ */
 function getGridData() {
     return gridData;
 }
 
-/** Get the normalization params (for per-grid OSC). */
+/**
+ * Get the normalization params (for per-grid OSC).
+ * @returns {import('./types').NormalizeParams|null}
+ */
 function getNormalizeParams() {
     return normalizeParams;
 }
 
 /**
  * Validate bounds array: [west, south, east, north]
- * Returns { valid: true, bounds: [w,s,e,n] } or { valid: false, error: string }
+ *
+ * @param {*} bounds
+ * @returns {{ valid: true, bounds: number[] } | { valid: false, error: string }}
  */
 function validateBounds(bounds) {
     if (!bounds || !Array.isArray(bounds) || bounds.length !== 4) {

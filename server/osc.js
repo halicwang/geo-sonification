@@ -52,6 +52,7 @@ oscPort.on('error', (err) => {
 
 oscPort.open();
 
+/** @returns {boolean} Whether the OSC UDP port is ready to send. */
 function isOscReady() {
     return oscReady;
 }
@@ -100,6 +101,11 @@ function sendToMax(landcoverClass, nightlightNorm, populationNorm, forestNorm, l
 /**
  * Send per-grid OSC messages: /grid/count, /viewport, then N × /grid bundle.
  * Existing per-grid behavior is preserved.
+ *
+ * @param {import('./types').GridCell[]} gridsInView
+ * @param {number[]} bounds - [west, south, east, north]
+ * @param {import('./types').NormalizeParams} normalizeParams
+ * @returns {void}
  */
 function sendGridsToMax(gridsInView, bounds, normalizeParams) {
     if (!gridsInView || gridsInView.length === 0) return;
@@ -214,6 +220,9 @@ function sendGridsToMax(gridsInView, bounds, normalizeParams) {
 /**
  * Send current mode to MaxMSP so it can handle transitions (e.g. crossfade).
  * Sent before any data messages on every viewport update.
+ *
+ * @param {string} mode - 'aggregated' or 'per-grid'
+ * @returns {void}
  */
 function sendModeToMax(mode) {
     if (!oscReady) return;
@@ -231,6 +240,9 @@ function sendModeToMax(mode) {
 
 /**
  * Send viewport zoom proximity (0-1).
+ *
+ * @param {number} proximity - 0-1 zoom proximity
+ * @returns {void}
  */
 function sendProximityToMax(proximity) {
     if (!oscReady) return;
@@ -244,6 +256,9 @@ function sendProximityToMax(proximity) {
 
 /**
  * Send /delta/lc (11 floats: per-class land cover change).
+ *
+ * @param {number[]} deltaLc - length-11 per-class delta vector
+ * @returns {void}
  */
 function sendDeltaToMax(deltaLc) {
     if (!oscReady) return;
@@ -257,7 +272,8 @@ function sendDeltaToMax(deltaLc) {
 
 /**
  * Send land coverage ratio to MaxMSP.
- * @param {number} ratio — 0-1 float (land grids / theoretical grids)
+ * @param {number} ratio - 0-1 float (land grids / theoretical grids)
+ * @returns {void}
  */
 function sendCoverageToMax(ratio) {
     if (!oscReady) return;
@@ -270,6 +286,7 @@ function sendCoverageToMax(ratio) {
     }
 }
 
+/** Close the OSC UDP port. @returns {void} */
 function closeOsc() {
     try {
         oscPort.close();

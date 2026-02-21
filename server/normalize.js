@@ -11,11 +11,21 @@ const crypto = require('crypto');
 const NORMALIZE_FILE = path.join(__dirname, '..', 'data', 'cache', 'normalize.json');
 const REQUIRED_FIELDS = ['nightlight_p90', 'population_density', 'forest_pct'];
 
-/** JSON.stringify with sorted keys for stable comparison of flat config objects. */
+/**
+ * JSON.stringify with sorted keys for stable comparison of flat config objects.
+ * @param {object} value
+ * @returns {string}
+ */
 function stableStringify(value) {
     return JSON.stringify(value, Object.keys(value ?? {}).sort());
 }
 
+/**
+ * Compute p1 and p99 percentile values for a field across grid data.
+ * @param {import('./types').GridCell[]} data
+ * @param {string} field - Field name to extract from each cell
+ * @returns {{ p1: number, p99: number }}
+ */
 function calcPercentiles(data, field) {
     const positive = data
         .map((d) => d[field])
@@ -28,6 +38,14 @@ function calcPercentiles(data, field) {
     };
 }
 
+/**
+ * Normalize a value to [0, 1] using p1/p99 percentile range.
+ * @param {number} value
+ * @param {number} p1 - 1st percentile (lower bound)
+ * @param {number} p99 - 99th percentile (upper bound)
+ * @param {boolean} [useLog=false] - Use log1p scale
+ * @returns {number} Normalized value in [0, 1]
+ */
 function normalize(value, p1, p99, useLog = false) {
     if (value == null || isNaN(value) || value <= 0) return 0;
 
@@ -55,6 +73,11 @@ function normalize(value, p1, p99, useLog = false) {
     return Math.max(0, Math.min(1, out));
 }
 
+/**
+ * Compute a short hash fingerprint from CSV file metadata + content snippets.
+ * @param {string[]} csvPaths - Absolute paths to CSV files
+ * @returns {string} 12-char hex fingerprint
+ */
 function calcCsvFingerprint(csvPaths) {
     if (!csvPaths || csvPaths.length === 0) return '';
     const parts = csvPaths.map((p) => {
@@ -87,6 +110,14 @@ function calcCsvFingerprint(csvPaths) {
     return crypto.createHash('md5').update(parts.join('|')).digest('hex').slice(0, 12);
 }
 
+/**
+ * Check if a cached normalize params object matches current expectations.
+ * @param {object} cached - Parsed cache JSON
+ * @param {string} expectedFingerprint - CSV fingerprint to match
+ * @param {string} expectedAggregationVersion
+ * @param {object} expectedAggregationConfig
+ * @returns {boolean}
+ */
 function isValidNormalizeCache(
     cached,
     expectedFingerprint,
@@ -106,6 +137,13 @@ function isValidNormalizeCache(
     });
 }
 
+/**
+ * Load normalization params from cache, or compute from data if cache is stale/missing.
+ * @param {import('./types').GridCell[]} data
+ * @param {string[]} csvPaths - Absolute paths to source CSV files
+ * @param {{ aggregationVersion?: string, aggregationConfig?: object }} [options]
+ * @returns {Promise<import('./types').NormalizeParams>}
+ */
 async function loadOrCalcNormalize(data, csvPaths, options = {}) {
     const currentFingerprint = calcCsvFingerprint(csvPaths || []);
     const aggregationVersion = options.aggregationVersion || 'unknown';
@@ -158,7 +196,7 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
  * @param {number} avgNightlightP90
  * @param {number} avgPopulation — population density (or per-cell value)
  * @param {number} avgForest — forest percentage
- * @param {object} normalizeParams — the object returned by loadOrCalcNormalize()
+ * @param {import('./types').NormalizeParams} normalizeParams
  * @returns {{ nightlightNorm: number, populationNorm: number, forestNorm: number }}
  */
 function normalizeOscValues(avgNightlightP90, avgPopulation, avgForest, normalizeParams) {

@@ -48,7 +48,7 @@ function ensureCleanupTimer() {
 
 /**
  * Create a fresh per-client mode state object (used for WebSocket connections).
- * @returns {{ currentMode: string }}
+ * @returns {import('./types').ModeState}
  */
 function createModeState() {
     return { currentMode: 'aggregated' };
@@ -56,8 +56,8 @@ function createModeState() {
 
 /**
  * Get or create HTTP client mode state, updating lastSeen timestamp.
- * @param {string} clientKey — unique key from getHttpClientKey()
- * @returns {{ modeState: { currentMode: string }, previousMode: string }}
+ * @param {string} clientKey - Unique key from getHttpClientKey()
+ * @returns {{ modeState: import('./types').ModeState, previousMode: string }}
  */
 function getHttpModeState(clientKey) {
     const entry = httpModeByClient.get(clientKey);
@@ -69,7 +69,7 @@ function getHttpModeState(clientKey) {
 /**
  * Persist HTTP client mode state after a viewport update.
  * @param {string} clientKey
- * @param {{ currentMode: string }} modeState
+ * @param {import('./types').ModeState} modeState
  */
 function saveHttpModeState(clientKey, modeState) {
     httpModeByClient.set(clientKey, { currentMode: modeState.currentMode, lastSeen: Date.now() });
@@ -85,8 +85,8 @@ function saveHttpModeState(clientKey, modeState) {
  *   aggregated -> per-grid:  when gridCount > 0 AND gridCount <= ENTER threshold
  *   per-grid -> aggregated:  when gridCount > EXIT threshold OR gridCount === 0
  *
- * @param {{ currentMode: string }} modeState — per-client state (mutated)
- * @param {number} gridCount — number of grid cells in the current viewport
+ * @param {import('./types').ModeState} modeState - Per-client state (mutated)
+ * @param {number} gridCount - Number of grid cells in the current viewport
  */
 function applyHysteresis(modeState, gridCount) {
     if (modeState.currentMode === 'aggregated') {

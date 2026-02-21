@@ -35,10 +35,10 @@ const {
 /**
  * Validate bounds, compute viewport stats, and send to Max.
  * @param {number[]} bounds - [west, south, east, north]
- * @param {{ currentMode: string }} modeState - per-client hysteresis state object (mutated in place)
- * @param {{ previousSnapshot: { lcFractions:number[], timestampMs:number }|null }} deltaState
+ * @param {import('./types').ModeState} modeState - Per-client hysteresis state (mutated in place)
+ * @param {import('./types').DeltaState} deltaState - Per-client delta state (mutated in place)
  * @param {number} [zoom]
- * @returns {{ stats: object, gridsInView: object[], elapsedMs: number } | { error: string }}
+ * @returns {{ stats: import('./types').ViewportStats, gridsInView: import('./types').GridCell[], elapsedMs: number } | { error: string }}
  */
 function processViewport(bounds, modeState, deltaState, zoom) {
     const t0 = Date.now();

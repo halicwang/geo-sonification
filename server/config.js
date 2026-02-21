@@ -7,7 +7,13 @@
 
 // ---- Env helpers ----
 
-/** Parse an env var as a valid TCP/UDP port (1-65535), exit on invalid. */
+/**
+ * Parse an env var as a valid TCP/UDP port (1-65535), exit on invalid.
+ * @param {string} envVar - Environment variable name
+ * @param {number} defaultPort - Fallback value
+ * @param {string} name - Display name for error messages
+ * @returns {number}
+ */
 function parsePort(envVar, defaultPort, name) {
     const value = process.env[envVar];
     if (value === undefined || value === '') {
@@ -23,7 +29,13 @@ function parsePort(envVar, defaultPort, name) {
     return port;
 }
 
-/** Parse an env var as a non-negative float, exit on invalid. */
+/**
+ * Parse an env var as a non-negative float, exit on invalid.
+ * @param {string} envVar - Environment variable name
+ * @param {number} defaultValue - Fallback value
+ * @param {string} name - Display name for error messages
+ * @returns {number}
+ */
 function parseNonNegativeFloat(envVar, defaultValue, name) {
     const value = process.env[envVar];
     if (value === undefined || value === '') return defaultValue;
@@ -35,7 +47,13 @@ function parseNonNegativeFloat(envVar, defaultValue, name) {
     return parsed;
 }
 
-/** Parse an env var as a non-negative integer, exit on invalid. */
+/**
+ * Parse an env var as a non-negative integer, exit on invalid.
+ * @param {string} envVar - Environment variable name
+ * @param {number} defaultValue - Fallback value
+ * @param {string} name - Display name for error messages
+ * @returns {number}
+ */
 function parseNonNegativeInt(envVar, defaultValue, name) {
     const value = process.env[envVar];
     if (value === undefined || value === '') return defaultValue;
@@ -47,7 +65,13 @@ function parseNonNegativeInt(envVar, defaultValue, name) {
     return parsed;
 }
 
-/** Parse an env var as a positive integer (>0), exit on invalid. */
+/**
+ * Parse an env var as a positive integer (>0), exit on invalid.
+ * @param {string} envVar - Environment variable name
+ * @param {number} defaultValue - Fallback value
+ * @param {string} name - Display name for error messages
+ * @returns {number}
+ */
 function parsePositiveInt(envVar, defaultValue, name) {
     const value = process.env[envVar];
     if (value === undefined || value === '') return defaultValue;
@@ -97,6 +121,7 @@ if (!LAND_FRACTION_WEIGHT_MODES.has(LAND_FRACTION_WEIGHT_MODE)) {
     process.exit(1);
 }
 
+/** @type {Readonly<Record<string, string|number|boolean>>} */
 const AGGREGATION_CONFIG = USE_LEGACY_AGGREGATION
     ? { legacy: true }
     : {
@@ -113,6 +138,9 @@ console.log(
  * Compute a multiplier [0,1] for a cell based on its land fraction.
  * Used in v2 aggregation to down-weight coastal/island cells where
  * most of the grid cell is ocean.
+ *
+ * @param {number} landFraction - 0-1 ratio of land area to cell area
+ * @returns {number} Weight multiplier in [0, 1]
  */
 function landFractionWeight(landFraction) {
     const lf = Math.max(0, Math.min(1, Number.isFinite(landFraction) ? landFraction : 0));

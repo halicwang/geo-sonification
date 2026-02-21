@@ -54,6 +54,9 @@ const REQUIRED_CSV_COLUMNS = [
 /**
  * Ensure all required CSV files exist before any cache path is used.
  * This prevents stale cache from masking missing continent datasets.
+ * @param {string} csvDir - Absolute path to the directory containing CSVs
+ * @param {string[]} filenames - Basenames of the required CSV files
+ * @returns {Promise<string[]>} Resolved absolute paths to all files
  */
 async function assertRequiredCsvFiles(csvDir, filenames) {
     const missing = [];
@@ -78,7 +81,11 @@ async function assertRequiredCsvFiles(csvDir, filenames) {
     return paths;
 }
 
-/** Extract the first row of a CSV as an array of column names. */
+/**
+ * Extract the first row of a CSV as an array of column names.
+ * @param {string} csvContent - Raw CSV text
+ * @returns {string[]}
+ */
 function getCsvHeader(csvContent) {
     const headerRecords = parseCSV(csvContent, {
         columns: false,
@@ -92,7 +99,12 @@ function getCsvHeader(csvContent) {
     return header.map((h) => String(h).trim()).filter(Boolean);
 }
 
-/** Throw if the CSV header is missing required columns (detects stale exports). */
+/**
+ * Throw if the CSV header is missing required columns (detects stale exports).
+ * @param {string[]} csvHeader - Column names from the CSV first row
+ * @param {string} sourceLabel - Human-readable source for error messages
+ * @returns {void}
+ */
 function assertCsvSchema(csvHeader, sourceLabel) {
     const headerSet = new Set(csvHeader);
     const missing = REQUIRED_CSV_COLUMNS.filter((col) => !headerSet.has(col));
@@ -120,6 +132,9 @@ function assertCsvSchema(csvHeader, sourceLabel) {
  * Numeric fields are coerced to numbers. Empty values become 0, while invalid
  * non-empty values are treated as parse errors and cause load failure.
  * Also computes derived field: population_density = population_total / land_area_km2.
+ * @param {string} csvContent - Raw CSV text
+ * @param {string} sourceLabel - Human-readable source for error messages
+ * @returns {import('./types').GridCell[]}
  */
 function parseCSVFile(csvContent, sourceLabel) {
     const header = getCsvHeader(csvContent);
@@ -250,6 +265,8 @@ function parseCSVFile(csvContent, sourceLabel) {
 /**
  * Deduplicate grids based on lon_lat key (overlapping continent boundaries).
  * Priority: continuous lc_pct_* > discrete landcover_class > land_area_km2 (higher) > first occurrence
+ * @param {import('./types').GridCell[]} grids
+ * @returns {import('./types').GridCell[]}
  */
 function deduplicateGrids(grids) {
     const seen = new Map();
@@ -284,7 +301,12 @@ function deduplicateGrids(grids) {
     return Array.from(seen.values());
 }
 
-/** Infer minimum positive coordinate step on an axis (lon or lat). */
+/**
+ * Infer minimum positive coordinate step on an axis (lon or lat).
+ * @param {import('./types').GridCell[]} grids
+ * @param {string} key - 'lon' or 'lat'
+ * @returns {number|null} The step size, or null if undetermined
+ */
 function inferAxisStep(grids, key) {
     const values = new Set();
     for (const g of grids) {
@@ -305,6 +327,12 @@ function inferAxisStep(grids, key) {
     return Number.isFinite(minDiff) ? minDiff : null;
 }
 
+/**
+ * Check if two numbers are equal within GRID_SIZE_EPS tolerance.
+ * @param {number} a
+ * @param {number} b
+ * @returns {boolean}
+ */
 function nearlyEqual(a, b) {
     return Math.abs(a - b) <= GRID_SIZE_EPS;
 }
@@ -312,6 +340,9 @@ function nearlyEqual(a, b) {
 /**
  * Fail fast if configured GRID_SIZE does not match actual CSV/cache resolution.
  * Prevents incorrect viewport hits when index bucket size and data cell size differ.
+ * @param {import('./types').GridCell[]} gridData
+ * @param {string} sourceLabel - Human-readable source for error messages
+ * @returns {void}
  */
 function assertGridResolution(gridData, sourceLabel) {
     const lonStep = inferAxisStep(gridData, 'lon');
@@ -351,6 +382,8 @@ function assertGridResolution(gridData, sourceLabel) {
  * Re-validate numeric fields in cached grids.
  * Old caches may contain stale landcover values (e.g. 79 instead of 80)
  * or missing derived fields. This ensures consistency without a full re-parse.
+ * @param {import('./types').GridCell[]} grids
+ * @returns {import('./types').GridCell[]}
  */
 function normalizeCachedGrids(grids) {
     return grids.map((g) => {
@@ -393,7 +426,7 @@ function normalizeCachedGrids(grids) {
 
 /**
  * Load grid data from cache or CSV files.
- * Returns { gridData, normalizeParams }.
+ * @returns {Promise<{ gridData: import('./types').GridCell[], normalizeParams: import('./types').NormalizeParams }>}
  */
 async function loadGridData() {
     const cacheDir = path.join(__dirname, '../data/cache');

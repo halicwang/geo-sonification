@@ -5,6 +5,7 @@
  * The frontend fetches this via /api/config instead of maintaining its own copy.
  */
 
+/** @type {Readonly<Record<number, { name: string, color: string }>>} */
 // ESA WorldCover class metadata — codes, human-readable names, and UI colors.
 const LANDCOVER_META = {
     10: { name: 'Tree/Forest', color: '#2D6A4F' }, // muted deep teal-green
@@ -40,6 +41,9 @@ const LC_PCT_COLUMNS = VALID_LANDCOVER_CLASSES.map((cls) => `lc_pct_${cls}`);
  * Also treats values < 10 (e.g., 0) as missing data, since ESA WorldCover
  * valid classes start at 10. If your data uses 0 to encode missing landcover,
  * it will be correctly treated as null (not normalized to 10).
+ *
+ * @param {string|number|null|undefined} value - Raw landcover class from CSV
+ * @returns {number|null} Valid ESA class code, or null if missing/invalid
  */
 function normalizeLandcoverClass(value) {
     if (value == null || value === '' || (typeof value === 'string' && value.trim() === '')) {
@@ -91,6 +95,9 @@ function normalizeLandcoverClass(value) {
  * Water (class 80) is excluded so that downstream consumers automatically
  * renormalize to land-only fractions when dividing by pctSum.
  * The raw lc_pct_80 remains on the cell object for reference.
+ *
+ * @param {import('./types').GridCell} cell
+ * @returns {Object<number, number>} Map of class code to percentage
  */
 function getCellLcDistribution(cell) {
     const dist = {};
@@ -107,6 +114,9 @@ function getCellLcDistribution(cell) {
 /**
  * Check if a cell has continuous lc_pct_* data.
  * Returns false if all lc_pct_* are 0 or missing (fallback to discrete classification).
+ *
+ * @param {import('./types').GridCell} cell
+ * @returns {boolean}
  */
 function hasContinuousLcData(cell) {
     return LC_PCT_COLUMNS.some((col) => Number.isFinite(cell[col]) && cell[col] > 0);

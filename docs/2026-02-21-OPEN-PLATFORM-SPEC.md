@@ -122,9 +122,10 @@ const { latLngToCell, cellToBoundary, cellToParent,
 const cellId = latLngToCell(37.7749, -122.4194, 5);
 // → "85283473fffffff"
 
-// Cell ID → hexagonal boundary (GeoJSON coordinate array)
+// Cell ID → hexagonal boundary (returns [lat, lng] pairs — NOT GeoJSON order)
 const boundary = cellToBoundary(cellId);
 // → [[37.77, -122.42], [37.78, -122.41], ...]
+// ⚠ To use with GeoJSON/Mapbox, flip each pair: boundary.map(([lat, lng]) => [lng, lat])
 
 // Parent (lower resolution)
 const parent = cellToParent(cellId, 3);
@@ -139,7 +140,7 @@ const cells = polygonToCells(
 );
 ```
 
-> **Coordinate order caution:** `latLngToCell()` and other h3-js functions take `(lat, lon)` parameter order — opposite of GeoJSON `[lon, lat]` array order. When converting from GeoJSON coordinates, swap indices: `latLngToCell(coord[1], coord[0], res)`. `polygonToCells()` accepts GeoJSON-style `[lon, lat]` arrays. Verify the version-specific coordinate convention in h3-js v4 docs.
+> **Coordinate order caution:** h3-js uses `(lat, lon)` parameter order and returns `[lat, lng]` arrays — opposite of GeoJSON `[lon, lat]`. Specifically: `latLngToCell(lat, lon, res)` takes lat-first; `cellToBoundary()` returns `[lat, lng]` pairs that must be flipped to `[lng, lat]` for GeoJSON/Mapbox; `polygonToCells()` accepts GeoJSON-style `[lon, lat]` arrays (exception). When converting from GeoJSON coordinates: `latLngToCell(coord[1], coord[0], res)`. Verify the version-specific coordinate convention in h3-js v4 docs.
 
 ### 4.3 Resolution and Existing System Comparison
 

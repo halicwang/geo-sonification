@@ -186,6 +186,8 @@ data/
 
 ### 4.5 Modified Files
 
+> Note: `server/package.json` also needs updating to add the `multer` (or `busboy`) dependency.
+
 | File | Change | Notes |
 | ---- | ------ | ----- |
 | `server/index.js` | Add `POST /api/import` endpoint (multipart file upload); scan `data/imports/manifest.json` on startup to reload | New route |
@@ -212,7 +214,7 @@ Response (200):
   "channels": ["pm25", "temperature", "humidity"],
   "cellCount": 1247,
   "resolution": 4,
-  "warnings": []                     // Channel name conflicts reported here
+  "warnings": []                     // Non-fatal warnings (e.g., column type coercion, empty rows skipped)
 }
 
 Response (400):

@@ -215,6 +215,7 @@ Each data adapter is responsible for:
  * @property {string} unit - Unit (e.g., "fraction", "μg/m³", "count")
  * @property {string} normalization - Normalization method: "linear" | "log" | "percentile"
  * @property {string} [color] - Suggested visualization color
+ * @property {string} [group] - Semantic grouping (e.g., "distribution" for channels that sum to ~1, "metric" for independent indicators). Used by Phase 3 console for bus mapping UI and by /ch/register for downstream consumers to distinguish channel semantics.
  */
 ```
 
@@ -275,21 +276,22 @@ module.exports = {
     name: 'ESA WorldCover 2021',
     temporalType: 'static',
     channels: [
-        { name: 'tree',     label: 'Tree / Forest',    range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'shrub',    label: 'Shrubland',        range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'grass',    label: 'Grassland',        range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'crop',     label: 'Cropland',         range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'urban',    label: 'Urban / Built-up', range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'bare',     label: 'Bare / Sparse',    range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'snow',     label: 'Snow / Ice',       range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'water',    label: 'Water',            range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'wetland',  label: 'Herbaceous Wetland', range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'mangrove', label: 'Mangroves',        range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        { name: 'moss',     label: 'Moss / Lichen',    range: [0, 1], unit: 'fraction', normalization: 'linear' },
-        // Additional channels (from other CSV columns)
-        { name: 'nightlight', label: 'Nightlight',     range: [0, 1], unit: 'normalized', normalization: 'percentile' },
-        { name: 'population', label: 'Population',     range: [0, 1], unit: 'normalized', normalization: 'log' },
-        { name: 'forest',     label: 'Forest Cover',   range: [0, 1], unit: 'fraction', normalization: 'linear' },
+        // Land cover distribution channels (sum to ~1 within each cell)
+        { name: 'tree',     label: 'Tree / Forest',    range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'shrub',    label: 'Shrubland',        range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'grass',    label: 'Grassland',        range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'crop',     label: 'Cropland',         range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'urban',    label: 'Urban / Built-up', range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'bare',     label: 'Bare / Sparse',    range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'snow',     label: 'Snow / Ice',       range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'water',    label: 'Water',            range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'wetland',  label: 'Herbaceous Wetland', range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'mangrove', label: 'Mangroves',        range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        { name: 'moss',     label: 'Moss / Lichen',    range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        // Independent metric channels (each independently normalized)
+        { name: 'nightlight', label: 'Nightlight',     range: [0, 1], unit: 'normalized', normalization: 'percentile', group: 'metric' },
+        { name: 'population', label: 'Population',     range: [0, 1], unit: 'normalized', normalization: 'log', group: 'metric' },
+        { name: 'forest',     label: 'Forest Cover',   range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'metric' },
     ],
     ingest(csvRows, encoder, precision) { /* ... */ },
     importFormats: { csv: parseContinentCsv },
@@ -362,11 +364,13 @@ Replaces the existing hardcoded 11 ESA classes. At startup, each loaded adapter 
 A one-time channel registration message is sent at startup so Max knows what each index represents:
 
 ```
-/ch/register  0 "tree" "worldcover"
-/ch/register  1 "shrub" "worldcover"
+/ch/register  0 "tree" "worldcover" "distribution"
+/ch/register  1 "shrub" "worldcover" "distribution"
 ...
-/ch/register  14 "pm25" "purpleair"
+/ch/register  14 "pm25" "purpleair" "metric"
 ```
+
+The fourth argument (`group`) is optional — omitting it defaults to `"metric"`. This allows downstream consumers (Max patch, web console) to distinguish distribution channels (values sum to ~1) from independent metric channels.
 
 ---
 

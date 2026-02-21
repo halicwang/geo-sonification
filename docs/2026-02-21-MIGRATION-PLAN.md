@@ -36,7 +36,7 @@ The following locations in the existing codebase hardcode WorldCover's 11 classe
 
 **Goal:** Add H3 encoding alongside the existing system, running in parallel.
 
-> **Note:** Per YAGNI, consider skipping the abstract `CellEncoder` interface (`cell-encoder.js`) in this phase and implementing `h3-encoder.js` directly. The abstraction can be extracted later if a second encoder is needed. This reduces Phase 0 to ~250 lines.
+> **Note:** The `CellEncoder` interface (`cell-encoder.js`) is optional at implementation time. If YAGNI is preferred, implement `h3-encoder.js` directly and extract the abstraction later when a second encoder is needed. The effort estimate below includes `cell-encoder.js` (~40 lines) since the cost is low and it provides a clearer contract for downstream phases.
 
 ### 2.1 New Files
 
@@ -92,6 +92,8 @@ server/
 │   ├── worldcover-adapter.test.js
 │   ├── csv-generic-adapter.test.js
 │   └── channel-registry.test.js
+scripts/
+├── validate-h3-migration.js    # One-time script: compare old spatial query results against H3 query results
 ```
 
 ### 3.2 Modified Files
@@ -100,7 +102,7 @@ server/
 | ---- | ------ | ------ |
 | `server/data-loader.js` | Internal logic migrated to `adapters/worldcover.js`; this file becomes a thin wrapper calling the adapter | External interface unchanged |
 | `server/landcover.js` | ESA metadata migrated to `adapters/worldcover.js`; this file retains lookup functions needed by the frontend | Frontend API unchanged |
-| `server/osc_schema.js` | Add `/ch/register` and `/ch/{index}` addresses; retain all existing `/lc/*` addresses | Backward-compatible |
+| `server/osc_schema.js` | Add `/ch/register` (with optional `group` arg) and `/ch/{index}` addresses; retain all existing `/lc/*` addresses | Backward-compatible |
 | `server/osc.js` | `sendAggregatedToMax()` reads channel list from registry; sends both `/lc/*` (compat) and `/ch/*` (new) | Max requires no changes |
 | `server/delta-state.js` | Channel count changes from hardcoded 11 to registry-driven | Internal change |
 | `server/spatial.js` | Add `queryByH3(bounds, resolution)` method alongside existing `queryByBounds()` | Gradual replacement |
@@ -129,7 +131,8 @@ server/
 - Channel registry: ~200 lines
 - Tests: ~250 lines
 - Existing file modifications: ~200 lines (primarily splitting and thin wrappers)
-- **Total: ~1100 lines, of which ~900 new and ~200 modified**
+- H3 migration validation script (`scripts/validate-h3-migration.js`): ~60 lines
+- **Total: ~1160 lines, of which ~960 new and ~200 modified**
 
 ---
 
@@ -454,7 +457,8 @@ server/
 | ---- | ------ | ----- |
 | `server/index.js` | Initialize `stream-scheduler` at startup; register stream adapters; add `GET /api/streams` status endpoint; store `lastViewport` per WebSocket connection (update on each viewport message) for data-change-driven incremental push | New startup logic + per-client state |
 | `server/spatial.js` | `queryByH3()` results merge static data with time-window aggregated data | Query logic extension |
-| `server/osc.js` | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push | New push path |
+| `server/osc_schema.js` | Add `/adapter/error` address (adapter ID + error message); used by stream scheduler to notify Max of adapter failures | New address, backward-compatible |
+| `server/osc.js` | Add `sendIncrementalUpdate()` — data-change-driven incremental OSC push; add `sendAdapterError()` for `/adapter/error` dispatch | New push paths |
 | `server/config.js` | Add `STREAM_ENABLED`, `STREAM_CHANGE_THRESHOLD`, `MAX_EVENTS_PER_CELL`, `MAX_STREAM_CELLS` | New config entries |
 
 ### 7.9 New API Endpoints
@@ -516,23 +520,23 @@ These mappings can be freely adjusted by the user once Phase 3 (audio config con
 | Phase | New Code | Modified Code | Risk | Prerequisites |
 | ----- | -------- | ------------- | ---- | ------------- |
 | 0: H3 Encoding Layer | ~290 lines | ~30 lines | Very low (pure addition) | None (requires `h3-js` dependency approval) |
-| 1: Adapters + Registry | ~900 lines | ~200 lines | Medium (refactors core data flow) | Phase 0 |
+| 1: Adapters + Registry | ~960 lines | ~200 lines | Medium (refactors core data flow) | Phase 0 |
 | 1.5: Runtime Import | ~420 lines | ~90 lines | Medium (runtime state mutation) | Phase 1 |
 | 2: Frontend Decoupling | ~380 lines | ~200 lines | Medium (grid rendering rewrite) | Phase 1 |
 | 3: Config + Console | ~650 lines | ~100 lines | Low (new feature) | Phase 1 |
 | 4: Real-time Stream + USGS Earthquake | ~780 lines | ~100 lines | Medium (real-time state + external dependency) | Phase 1 + Phase 1.5 |
 
-**Total: ~3420 lines of new code, ~720 lines modified.**
+**Total: ~3480 lines of new code, ~720 lines modified.**
 
 Phases 1.5, 2, and 3 can be worked on in parallel or in any order. Phase 4 depends on Phase 1.5 (runtime spatial index append capability). **Phase 0 + Phase 1 is the critical path.**
 
 **`spatial.js` modification ordering:** Phases 1, 1.5, and 4 all modify `spatial.js`. To avoid merge conflicts, apply changes in order: Phase 1 adds `queryByH3()`, Phase 1.5 adds `addCells()`, Phase 4 modifies `queryByH3()` to merge time-window data. Phase 2 does *not* modify `spatial.js` (frontend-only). If phases are developed on branches, rebase against `spatial.js` changes before merging.
 
-**Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~2500 lines).
+**Shortest path to "vendor uploads CSV, frontend renders immediately":** Phase 0 → 1 → 1.5 → 2 (~2560 lines).
 
-**Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3100 lines; frontend still uses old rendering, but OSC/sound updates in real time).
+**Shortest path to "real-time data stream driving sound":** Phase 0 → 1 → 1.5 → 4 (~3160 lines; frontend still uses old rendering, but OSC/sound updates in real time).
 
-**All phases complete:** ~3420 lines new + ~720 lines modified.
+**All phases complete:** ~3480 lines new + ~720 lines modified.
 
 ---
 

@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.els = {
         zoomLevel: document.getElementById('zoom-level'),
         gridCount: document.getElementById('grid-count'),
-        oscMode: document.getElementById('osc-mode'),
+        audioMode: document.getElementById('audio-mode'),
         landType: document.getElementById('land-type'),
         landcoverList: document.getElementById('landcover-list'),
         wsStatus: document.getElementById('ws-status'),

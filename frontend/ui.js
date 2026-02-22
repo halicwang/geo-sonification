@@ -30,13 +30,13 @@ export function updateUI(stats) {
     }
 
     // Mode indicator (aggregated vs per-grid)
-    if (els.oscMode) {
+    if (els.audioMode) {
         if (stats.mode === 'per-grid') {
-            els.oscMode.textContent = `Per-Grid (${stats.gridCount || 0} cells)`;
-            els.oscMode.style.color = 'var(--color-accent-info)';
+            els.audioMode.textContent = `Per-Grid (${stats.gridCount || 0} cells)`;
+            els.audioMode.style.color = 'var(--color-accent-info)';
         } else {
-            els.oscMode.textContent = 'Aggregated';
-            els.oscMode.style.color = '';
+            els.audioMode.textContent = 'Aggregated';
+            els.audioMode.style.color = '';
         }
     }
 

@@ -16,10 +16,3 @@ data/tiles/
 # Local configuration (not in repository)
 .env
 frontend/config.local.js
-
-# Max/MSP backup files
-*.maxpat.bak
-
-# Sonification sample assets (large binaries; keep out of git)
-sonification/samples/ambience/*.wav
-sonification/samples/icons/**/*.wav

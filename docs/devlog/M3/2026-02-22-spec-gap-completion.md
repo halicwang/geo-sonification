@@ -22,6 +22,6 @@ Completed four spec-level decision locks across all three lighthouse documents a
 
 ## Files changed
 
-- `docs/plans/2026-02-21-OPEN-PLATFORM-SPEC.md` — REQ-ALERT-001, AlertRule type, alert_rules.json, M3/M4 scope, decision locks, future work, performance envelope (10 edit zones)
-- `docs/plans/2026-02-21-MIGRATION-PLAN.md` — M3 scope/DoD/evidence, M4 UI→API, risk register, future work, traceability matrix (15 edit zones)
-- `docs/guides/2026-02-22-IMPLEMENTATION-GUIDE.md` — Section 9 compound semantics, M3-A/M4-B packets, effort matrix, pitfall checklist, scaling boundary, dependencies (11 edit zones)
+- `docs/plans/M3/2026-02-21-M3-open-platform-spec.md` — REQ-ALERT-001, AlertRule type, alert_rules.json, M3/M4 scope, decision locks, future work, performance envelope (10 edit zones)
+- `docs/plans/M3/2026-02-21-M3-migration-plan.md` — M3 scope/DoD/evidence, M4 UI→API, risk register, future work, traceability matrix (15 edit zones)
+- `docs/plans/M3/2026-02-22-M3-implementation-guide.md` — Section 9 compound semantics, M3-A/M4-B packets, effort matrix, pitfall checklist, scaling boundary, dependencies (11 edit zones)

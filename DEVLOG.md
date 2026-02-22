@@ -20,31 +20,31 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date | Category | Title |
 | --- | --- | --- |
-| 2026-02-22 | Design | [Spec Gap Completion](docs/devlog/2026-02-22-spec-gap-completion.md) |
-| 2026-02-22 | Fix | [Frontend Loop Playback Stability](docs/devlog/2026-02-22-loop-playback-fix.md) |
-| 2026-02-22 | Refactor | [Remove Max/MSP Code](docs/devlog/2026-02-22-remove-maxmsp.md) |
-| 2026-02-22 | Fix | [Web Audio & WebSocket Bug Fixes](docs/devlog/2026-02-22-web-audio-bugfix.md) |
-| 2026-02-21 | Feature | [Web Audio Migration (Phase W)](docs/devlog/2026-02-21-web-audio-migration.md) |
-| 2026-02-21 | Refactor | [JSDoc Type Annotations](docs/devlog/2026-02-21-jsdoc-annotations.md) |
-| 2026-02-20 | Refactor | [Frontend Module Split](docs/devlog/2026-02-20-frontend-module-split.md) |
-| 2026-02-20 | Fix | [Proximity Zoom Mapping](docs/devlog/2026-02-20-proximity-zoom-mapping.md) |
-| 2026-02-20 | Fix | [Crossfade Proximity Fix](docs/devlog/2026-02-20-crossfade-proximity-fix.md) |
-| 2026-02-20 | Feature | [Loop Playback](docs/devlog/2026-02-20-loop-playback.md) |
-| 2026-02-19 | Feature | [Crop Bus](docs/devlog/2026-02-19-crop-bus.md) |
-| 2026-02-19 | Feature | [Water Bus & 4-Bus Fold-Mapping](docs/devlog/2026-02-19-water-bus.md) |
-| 2026-02-19 | Design | [Sound Design Architecture](docs/devlog/2026-02-19-sound-design-architecture.md) |
-| 2026-02-19 | Milestone | [Server-Side Foundation](docs/devlog/2026-02-19-server-side-foundation.md) |
-| 2026-02-08 | Feature | [OSC Pipeline Extensions](docs/devlog/2026-02-08-osc-pipeline-extensions.md) |
-| 2026-02-06 | Feature | [Per-Grid Mode](docs/devlog/2026-02-06-per-grid-mode.md) |
-| 2026-01-27 | Discussion | [Pivot to Real-Time](docs/devlog/2026-01-27-pivot-to-realtime.md) |
-| 2026-01-22 | Discussion | [Initial Proposal](docs/devlog/2026-01-22-initial-proposal.md) |
+| 2026-02-22 | Design | [Spec Gap Completion](docs/devlog/M3/2026-02-22-spec-gap-completion.md) |
+| 2026-02-22 | Fix | [Frontend Loop Playback Stability](docs/devlog/M3/2026-02-22-loop-playback-fix.md) |
+| 2026-02-22 | Refactor | [Remove Max/MSP Code](docs/devlog/M3/2026-02-22-remove-maxmsp.md) |
+| 2026-02-22 | Fix | [Web Audio & WebSocket Bug Fixes](docs/devlog/M3/2026-02-22-web-audio-bugfix.md) |
+| 2026-02-21 | Feature | [Web Audio Migration (Phase W)](docs/devlog/M3/2026-02-21-web-audio-migration.md) |
+| 2026-02-21 | Refactor | [JSDoc Type Annotations](docs/devlog/M2/2026-02-21-jsdoc-annotations.md) |
+| 2026-02-20 | Refactor | [Frontend Module Split](docs/devlog/M2/2026-02-20-frontend-module-split.md) |
+| 2026-02-20 | Fix | [Proximity Zoom Mapping](docs/devlog/M2/2026-02-20-proximity-zoom-mapping.md) |
+| 2026-02-20 | Fix | [Crossfade Proximity Fix](docs/devlog/M2/2026-02-20-crossfade-proximity-fix.md) |
+| 2026-02-20 | Feature | [Loop Playback](docs/devlog/M2/2026-02-20-loop-playback.md) |
+| 2026-02-19 | Feature | [Crop Bus](docs/devlog/M2/2026-02-19-crop-bus.md) |
+| 2026-02-19 | Feature | [Water Bus & 4-Bus Fold-Mapping](docs/devlog/M2/2026-02-19-water-bus.md) |
+| 2026-02-19 | Design | [Sound Design Architecture](docs/devlog/M2/2026-02-19-sound-design-architecture.md) |
+| 2026-02-19 | Milestone | [Server-Side Foundation](docs/devlog/M2/2026-02-19-server-side-foundation.md) |
+| 2026-02-08 | Feature | [OSC Pipeline Extensions](docs/devlog/M1/2026-02-08-osc-pipeline-extensions.md) |
+| 2026-02-06 | Feature | [Per-Grid Mode](docs/devlog/M1/2026-02-06-per-grid-mode.md) |
+| 2026-01-27 | Discussion | [Pivot to Real-Time](docs/devlog/M1/2026-01-27-pivot-to-realtime.md) |
+| 2026-01-22 | Discussion | [Initial Proposal](docs/devlog/M1/2026-01-22-initial-proposal.md) |
 
 ### Standalone Design Docs
 
 | Date | Title |
 | --- | --- |
-| 2026-02-06 | [Per-Grid Spatial Sonification — Design Rationale](docs/devlog/2026-02-06-per-grid-design-rationale.md) |
-| 2026-01-26 | [Landcover Fix](docs/devlog/2026-01-26-landcover-fix.md) |
+| 2026-02-06 | [Per-Grid Spatial Sonification — Design Rationale](docs/devlog/M1/2026-02-06-per-grid-design-rationale.md) |
+| 2026-01-26 | [Landcover Fix](docs/devlog/M1/2026-01-26-landcover-fix.md) |
 
 ---
 

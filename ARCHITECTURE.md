@@ -4,7 +4,7 @@ This document describes the browser-based Web Audio engine.
 
 For the overall system architecture (Frontend → Server → Browser Audio), see `README.md`.
 For the frontend module structure (7 ES modules: config, landcover, ui, map, websocket, audio-engine, main), see `docs/devlog/2026-02-20-frontend-module-split.md` and `docs/devlog/2026-02-21-web-audio-migration.md`.
-For sound design rationale and task specs, see `docs/plans/2026-02-19-sound-design-plan.md`.
+For sound design rationale and task specs, see `docs/plans/M2/2026-02-19-M2-sound-design-plan.md`.
 
 ---
 

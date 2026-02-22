@@ -3,7 +3,7 @@
 **Status:** Phase Execution Plan v1.0-preview  
 **Date:** 2026-02-22  
 **Baseline Reality Date:** 2026-02-22  
-**Paired Spec:** `docs/plans/2026-02-21-MILESTONE-3-OPEN-PLATFORM-SPEC.md`
+**Paired Spec:** `docs/plans/M3/2026-02-21-M3-open-platform-spec.md`
 
 ## Executive Intro (Execution Lighthouse)
 This document is the second lighthouse and defines the execution order for delivering the North Star.
@@ -13,8 +13,8 @@ Execution principle: protect WorldCover compatibility first, then progressively 
 Every release must include observability metrics and rollback triggers to avoid "implemented but not operational" outcomes.  
 
 ## Companion Detailed Docs
-- Normative requirement source: `docs/plans/2026-02-21-MILESTONE-3-OPEN-PLATFORM-SPEC.md`
-- Technical rationale and engineering execution: `docs/guides/2026-02-22-MILESTONE-3-IMPLEMENTATION-GUIDE.md`
+- Normative requirement source: `docs/plans/M3/2026-02-21-M3-open-platform-spec.md`
+- Technical rationale and engineering execution: `docs/plans/M3/2026-02-22-M3-implementation-guide.md`
 
 ## Phase Mapping (P0-P5)
 Section numbers in this document are local structure only. Cross-document tracking uses `P0..P5` phase IDs.

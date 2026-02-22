@@ -5,14 +5,17 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 ## Recording Guide
 
 - **Order**: Reverse chronological — newest entry first, oldest last.
-- **Location**: Each entry is a standalone file in `docs/devlog/`.
-- **File naming**: `YYYY-MM-DD-kebab-case-title.md`
-- **Heading format**: `# YYYY-MM-DD — <Category>: <Short Title>` (h1 in standalone file).
+- **Location**: Each entry is a standalone file under `docs/devlog/M*/` (for example `docs/devlog/M3/`).
+- **Milestone folder**: Put each new entry in the active milestone folder (`M1`, `M2`, `M3`, ...).
+- **File naming (new entries)**: `YYYY-MM-DD-M*-kebab-case-title.md` (for example `2026-02-22-M3-web-audio-bugfix.md`).
+- **Legacy files**: Existing entries that used the old naming style do not need to be renamed only for convention.
+- **Heading format (entries)**: `# YYYY-MM-DD — <Category>: <Short Title>` (h1 in standalone entry files listed in `## Entries`).
 - **Categories**: `Feature`, `Fix`, `Refactor`, `Design`, `Milestone`, `Discussion` (pick the most fitting one).
+- **Category note for docs architecture changes**: use `Refactor` for structure/path changes; use `Design` for documentation conventions or policy updates.
 - **Entry body**: Start with a 1–3 sentence summary of _what_ and _why_. Then add subsections (`##`) as needed for details, file lists, formulas, behavior matrices, etc.
 - **Scope**: One entry per logical change. If a single session produces multiple independent changes, write separate entries (same date is fine).
 - **File lists**: End each entry with a "Files changed" section listing new/modified/deleted files with a one-line description.
-- **Index**: Add a link to this file when creating a new entry.
+- **Index**: Add a link in `## Entries` when creating a new entry; use `### Standalone Design Docs` only for non-entry reference docs.
 
 ---
 

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MSG_FILE="${1:-}"
+TRAILER_KEY="DEVLOG-REVIEWED"
+DATE_REGEX='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+ENFORCE="${DEVLOG_REVIEWED_ENFORCE:-0}"
+
+if [[ -z "$MSG_FILE" || ! -f "$MSG_FILE" ]]; then
+    exit 0
+fi
+
+# Skip auto-generated merge commit messages.
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    exit 0
+fi
+
+trailer_value="$(
+    git interpret-trailers --parse "$MSG_FILE" \
+        | awk -F': ' -v key="$TRAILER_KEY" '$1 == key {print $2; exit}'
+)"
+
+if [[ -z "$trailer_value" ]]; then
+    if [[ "$ENFORCE" == "1" ]]; then
+        echo "Commit blocked: missing trailer '$TRAILER_KEY: YYYY-MM-DD'." >&2
+        echo "Add this line to your commit message, for example:" >&2
+        echo "  $TRAILER_KEY: $(date +%F)" >&2
+        exit 1
+    fi
+
+    echo "Warning: missing trailer '$TRAILER_KEY: YYYY-MM-DD'." >&2
+    echo "Tip: add '$TRAILER_KEY: $(date +%F)' to commit message." >&2
+    exit 0
+fi
+
+if [[ ! "$trailer_value" =~ $DATE_REGEX ]]; then
+    if [[ "$ENFORCE" == "1" ]]; then
+        echo "Commit blocked: invalid '$TRAILER_KEY' value '$trailer_value'." >&2
+        echo "Expected format: YYYY-MM-DD (example: $(date +%F))." >&2
+        exit 1
+    fi
+
+    echo "Warning: invalid '$TRAILER_KEY' value '$trailer_value'." >&2
+    echo "Expected format: YYYY-MM-DD (example: $(date +%F))." >&2
+    exit 0
+fi
+
+exit 0

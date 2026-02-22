@@ -31,6 +31,7 @@ Double-click `start.command` to start the Node server and open the browser.
 
 - Node.js 18+
 - Mapbox account (for access token)
+- Five ambience WAV files in `frontend/audio/ambience/`: `tree.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav` (`*.wav` is gitignored; repository only includes `.gitkeep`)
 
 ### 2. Get Mapbox Token
 
@@ -147,6 +148,8 @@ Five ambience WAV loops represent different land cover types. Land cover channel
 - **Water bus**: classes 70, 80 + ocean 3-level detector
 
 The Water bus combines fine-grained grid-level water data (classes 70+80) with a macro ocean signal derived from land coverage ratio. Three quantized levels: 1.0 (pure ocean, no grid data), 0.7 (coastal, coverage < 10% with high proximity), 0.0 (land). EMA smoothing provides gradual transitions.
+
+Ambience WAV files are local assets and are not committed (`frontend/audio/ambience/*.wav` is ignored). If a file is missing, the corresponding bus shows a loading error and that bus remains silent.
 
 ### Audio Controls and Lifecycle
 

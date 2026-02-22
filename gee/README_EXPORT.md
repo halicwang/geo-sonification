@@ -48,14 +48,15 @@ Current resolution is 0.5°×0.5° (~78k cells globally). For even finer resolut
 ## Steps
 
 1. Open [Google Earth Engine Code Editor](https://code.earthengine.google.com/).
-2. For each continent, open the corresponding script (including `antarctica_grid.js`), paste its contents into the editor, and run.
+2. For each required region, open the corresponding script (`south_america`, `africa`, `asia`, `europe`, `north_america`, `oceania`), paste its contents into the editor, and run.
 3. In the **Tasks** tab, click **Run** on the export task. Choose folder `geo_sonification` (or create it).
 4. Wait for completion (per continent ~5–15 min). Download the CSV from Google Drive.
-5. Place CSVs in the project `data/raw/` directory with names: `south_america_grid.csv`, `africa_grid.csv`, `asia_grid.csv`, `europe_grid.csv`, `north_america_grid.csv`, `oceania_grid.csv`, `antarctica_grid.csv`.
+5. Place CSVs in the project `data/raw/` directory with names: `south_america_grid.csv`, `africa_grid.csv`, `asia_grid.csv`, `europe_grid.csv`, `north_america_grid.csv`, `oceania_grid.csv`.
+   - Optional: you can also export `antarctica_grid.csv` for offline analysis, but current server startup and `npm run check:csv` do not require it.
 
 ## Run prerequisites (before starting Node)
 
-1. **Confirm CSV files + headers + resolution**: all 7 CSVs in `data/raw/` must exist, match `data/raw/SCHEMA.md`, and have lon/lat resolution consistent with server `GRID_SIZE` (default `0.5`). If you still have old `loss_*` / `forest2000_*` CSVs, do **not** start the server—re-export with the GEE scripts above and replace the files in `data/raw/`.
+1. **Confirm CSV files + headers + resolution**: all 6 required CSVs in `data/raw/` must exist, match `data/raw/SCHEMA.md`, and have lon/lat resolution consistent with server `GRID_SIZE` (default `0.5`). If you still have old `loss_*` / `forest2000_*` CSVs, do **not** start the server—re-export with the GEE scripts above and replace the files in `data/raw/`.
     - Validate: `npm run check:csv` (from project root)
 2. **Clear caches**: `rm -rf data/cache`, then start the Node server.
 

@@ -51,7 +51,7 @@ This fold-mapping is defined in `server/audio-metrics.js` (`BUS_LC_INDICES`, `co
 
 ## WAV Loading
 
-Five ambience WAVs are fetched from `/audio/ambience/<name>.wav` with progress tracking via `ReadableStream`. Priority ordering: tree + water first (parallel), then crop + urban + bare (parallel). Each `AudioBufferSourceNode` is created after decoding and set to `loop = true`.
+Five ambience WAVs are fetched from `/audio/ambience/<name>.wav` with progress tracking via `ReadableStream`. Priority ordering: tree + water first (parallel), then crop + urban + bare (parallel). Each `AudioBufferSourceNode` is created after decoding and set to `loop = true`. These WAV assets are local and gitignored (`frontend/audio/ambience/*.wav`), so a fresh clone must provide them manually; missing files surface as per-bus load errors in the UI.
 
 ---
 

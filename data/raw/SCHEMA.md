@@ -3,7 +3,7 @@
 Single source of truth for the data contract between GEE export scripts and the Node server.
 
 Data vintage: ESA WorldCover 2021, VIIRS nightlight 2021, WorldPop 2020.
-Resolution: 0.5 x 0.5 degree grid cells. One CSV per continent.
+Resolution: 0.5 x 0.5 degree grid cells. One CSV per required region.
 
 ## Header (exact order)
 
@@ -51,7 +51,7 @@ Values are pixel count ratios (not strict 10m area ratios). Sum ≈ 100% (may di
 | `lc_pct_50` | float | [0, 100] | Built-up/Urban pixel percentage |
 | `lc_pct_60` | float | [0, 100] | Bare/Sparse pixel percentage |
 | `lc_pct_70` | float | [0, 100] | Snow/Ice pixel percentage |
-| `lc_pct_80` | float | [0, 100] | Water pixel percentage (included in CSV, excluded from `/lc/*` OSC) |
+| `lc_pct_80` | float | [0, 100] | Water pixel percentage (included in CSV, excluded from land-only server distribution and bus fold-mapping inputs) |
 | `lc_pct_90` | float | [0, 100] | Wetland pixel percentage |
 | `lc_pct_95` | float | [0, 100] | Mangroves pixel percentage |
 | `lc_pct_100` | float | [0, 100] | Moss/Lichen pixel percentage |
@@ -81,7 +81,7 @@ Values are pixel count ratios (not strict 10m area ratios). Sum ≈ 100% (may di
 ## Constraints
 
 - Only rows with `land_area_km2 > 0` are exported
-- All required continent CSV files must be present in `data/raw/`: Africa, Asia, Europe, North America, Oceania, South America, Antarctica
+- All required CSV files must be present in `data/raw/`: Africa, Asia, Europe, North America, Oceania, South America
 - Each CSV's inferred lon/lat grid step must match server `GRID_SIZE` (default `0.5`)
 - GEE scripts apply a coastal filter (`land_fraction >= MIN_LAND_FRACTION`) by default
 - Missing `nightlight_mean` / `nightlight_p90` are coerced to `-1` (sentinel for "no data") at export time. The server excludes -1 values from aggregation averages. Old CSVs with 0-coercion are backward compatible
@@ -98,4 +98,3 @@ Values are pixel count ratios (not strict 10m area ratios). Sum ≈ 100% (may di
 | `north_america_grid.csv` | North America |
 | `oceania_grid.csv` | Oceania |
 | `south_america_grid.csv` | South America |
-| `antarctica_grid.csv` | Antarctica |

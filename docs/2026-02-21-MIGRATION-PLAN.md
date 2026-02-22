@@ -17,6 +17,30 @@ Every release must include observability metrics and rollback triggers to avoid 
 - Technical rationale and invariants: `docs/2026-02-22-TECHNICAL-DESIGN.md`
 - Engineering execution packets and scripts: `docs/2026-02-22-ENGINEERING-REFERENCE.md`
 
+## Milestone Mapping (M0-M5)
+Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
+`M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
+
+| Milestone ID | Milestone |
+| --- | --- |
+| `M0` | Compatibility guardrails |
+| `M1` | Open ingestion + control plane |
+| `M2` | Unified H3 spatial core |
+| `M3` | Monitoring + Alerting + Stream Loop |
+| `M4` | Configurable audio runtime |
+| `M5` | Governance baseline |
+
+### Cross-Document Milestone Alignment Matrix
+
+| Milestone ID | Spec Anchor | Migration Anchor | Technical Anchor | Engineering Anchor |
+| --- | --- | --- | --- | --- |
+| `M0` | `5.5 [M0]` | `[M0] M0` | `8. [M0] WorldCover Baseline Manifest` | `3.1 [M0] M0 Compatibility Guardrails` |
+| `M1` | `5.1 [M1]` | `[M1] M1` | `3/4/5 [M1]` | `3.2 [M1] M1 Open Ingestion + Control Plane` |
+| `M2` | `5.2 [M2]` | `[M2] M2` | `2. [M2] H3 Technical Deep Dive` | `3.3 [M2] M2 Unified H3 Spatial Core` |
+| `M3` | `5.3 [M3]` | `[M3] M3` | `6. [M3] Alert Engine Semantics` | `3.4 [M3] M3 Monitoring + Alerting + Stream Loop` |
+| `M4` | `5.4 [M4]` | `[M4] M4` | `5.4 [M4] Audio Runtime Config Invariants` | `3.5 [M4] M4 Configurable Audio Runtime` |
+| `M5` | `5.6 [M5]` | `[M5] M5` | `5.5 [M5] Governance Baseline Hooks` | `3.6 [M5] M5 Enterprise Governance Baseline` |
+
 ## 0. Execution Conventions
 
 ### Reality Snapshot (as of 2026-02-22)
@@ -58,7 +82,7 @@ No milestone is considered complete without all of: `DoD + Evidence + Rollback r
 | M0 | Compatibility Guardrails | REQ-COMPAT-001 | EVID-M0-001..004 |
 | M1 | Open Ingestion + Control Plane | REQ-INGEST-001, REQ-COMPAT-001 | EVID-M1-001..006 |
 | M2 | Unified H3 Spatial Core | REQ-GRID-001, REQ-COMPAT-001 | EVID-M2-001..006 |
-| M3 | Monitoring + Alerting Loop | REQ-ALERT-001, REQ-COMPAT-001 | EVID-M3-001..006 |
+| M3 | Monitoring + Alerting + Stream Loop | REQ-ALERT-001, REQ-COMPAT-001 | EVID-M3-001..006 |
 | M4 | Configurable Audio Runtime | REQ-AUDIO-001, REQ-COMPAT-001 | EVID-M4-001..006 |
 | M5 | Enterprise Baseline Governance | REQ-GOV-001, REQ-COMPAT-001 | EVID-M5-001..006 |
 
@@ -66,7 +90,7 @@ No milestone is considered complete without all of: `DoD + Evidence + Rollback r
 
 ## 3. Milestone Details
 
-## M0 — Compatibility Guardrails First
+## [M0] M0 — Compatibility Guardrails First
 
 ### Reality Snapshot (as of 2026-02-22)
 - WorldCover path is the stability anchor.
@@ -107,7 +131,7 @@ Lock current behavior as golden baseline before platform refactor begins.
 
 ---
 
-## M1 — Open Ingestion + Control Plane
+## [M1] M1 — Open Ingestion + Control Plane
 
 ### Reality Snapshot (as of 2026-02-22)
 - Runtime import/control-plane contract is not complete.
@@ -154,7 +178,7 @@ Enable self-service runtime data onboarding without code edits/redeploy.
 
 ---
 
-## M2 — Unified H3 Spatial Core
+## [M2] M2 — Unified H3 Spatial Core
 
 ### Reality Snapshot (as of 2026-02-22)
 - Legacy grid semantics still influence runtime behavior.
@@ -199,7 +223,7 @@ Establish H3 as the single internal spatial language across ingest/query/render.
 
 ---
 
-## M3 — Monitoring + Alerting Operational Loop
+## [M3] M3 — Monitoring + Alerting + Stream Loop
 
 ### Reality Snapshot (as of 2026-02-22)
 - Alerting and real-time monitoring semantics are not yet fully operationalized for production monitoring.
@@ -252,7 +276,7 @@ Deliver operator-grade alerting and real-time stream-driven monitoring from spat
 
 ---
 
-## M4 — Configurable Audio Runtime (No Redeploy)
+## [M4] M4 — Configurable Audio Runtime (No Redeploy)
 
 ### Reality Snapshot (as of 2026-02-22)
 - Web Audio is active, but runtime configurability for business users is not complete.
@@ -298,7 +322,7 @@ Allow non-audio engineers to tune mapping and trigger behavior safely at runtime
 
 ---
 
-## M5 — Enterprise Baseline Governance
+## [M5] M5 — Enterprise Baseline Governance
 
 ### Reality Snapshot (as of 2026-02-22)
 - Governance controls are not yet complete for enterprise onboarding.

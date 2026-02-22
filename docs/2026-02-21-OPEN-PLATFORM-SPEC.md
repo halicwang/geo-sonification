@@ -19,6 +19,19 @@ Any critical interface, type, or configuration not frozen here must not be inven
 - File-level engineering execution details: `docs/2026-02-22-ENGINEERING-REFERENCE.md`
 - Milestone execution contract: `docs/2026-02-21-MIGRATION-PLAN.md`
 
+## Milestone Mapping (M0-M5)
+Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
+`M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
+
+| Milestone ID | Milestone Meaning | Primary Sections In This Spec |
+| --- | --- | --- |
+| `M0` | Compatibility guardrails | `REQ-COMPAT-001`, `5.5` |
+| `M1` | Open ingestion + control plane | `REQ-INGEST-001`, `4.1`, `5.1` |
+| `M2` | Unified H3 spatial core | `REQ-GRID-001`, `3.2`, `5.2` |
+| `M3` | Monitoring + Alerting + Stream Loop | `REQ-ALERT-001`, `4.2 alert`, `5.3` |
+| `M4` | Configurable audio runtime | `REQ-AUDIO-001`, `4.3 audio_mapping.json`, `5.4` |
+| `M5` | Governance baseline | `REQ-GOV-001`, `5.6` |
+
 ## 0. Document Conventions
 
 ### Reality Snapshot (as of 2026-02-22)
@@ -363,42 +376,42 @@ Example success:
 - Capabilities are currently uneven across ingestion, alignment, alerting, configurability, and governance.
 - This section defines mandatory target behavior and explicit gap statements.
 
-## 5.1 Open Ingestion (REQ-INGEST-001)
+## 5.1 [M1] Open Ingestion (REQ-INGEST-001)
 **Current:** Runtime import/control-plane endpoints are not fully available in production path.  
 **Target:** Runtime self-service import for CSV/GeoJSON with source/channel registration and persistence.  
 **Gap:** Build adapter framework, import manager, validation pipeline, and source lifecycle controls.
 
 **Acceptance:** New vendor data becomes queryable and audible in one running session without redeploy.
 
-## 5.2 Unified Spatial Language (REQ-GRID-001)
+## 5.2 [M2] Unified Spatial Language (REQ-GRID-001)
 **Current:** Existing behavior is still tied to legacy grid logic in parts of the runtime path.  
 **Target:** End-to-end H3-based storage/query/merge semantics for all sources.  
 **Gap:** Complete H3 index/query migration and frontend hex rendering alignment.
 
 **Acceptance:** Different sources align on shared H3 cells with deterministic merged snapshots.
 
-## 5.3 Monitoring and Alerting (REQ-ALERT-001)
+## 5.3 [M3] Monitoring and Alerting (REQ-ALERT-001)
 **Current:** Alerting semantics are not yet complete as a production control-plane feature.  
 **Target:** Rule-driven threshold alerts with hysteresis, cooldown, dedup, and auditable events.  
 **Gap:** Implement alert engine, runtime rule loading, and event dispatch contract.
 
 **Acceptance:** Alert lifecycle is deterministic: `idle -> active -> cooldown -> idle`.
 
-## 5.4 Configurable Audio (REQ-AUDIO-001)
+## 5.4 [M4] Configurable Audio (REQ-AUDIO-001)
 **Current:** Core Web Audio path exists, but business-level runtime configurability is limited.  
 **Target:** Non-audio engineers can configure channel/bus mapping and alert-sonification behavior.  
 **Gap:** Deliver stable mapping schema, hot reload path, and minimum console workflows.
 
 **Acceptance:** Mapping change is applied at runtime and reflected in output without deployment.
 
-## 5.5 Compatibility Guardrail (REQ-COMPAT-001)
+## 5.5 [M0] Compatibility Guardrail (REQ-COMPAT-001)
 **Current:** WorldCover demo is the stable baseline.  
 **Target:** Every milestone preserves baseline behavior while extending platform scope.  
 **Gap:** Introduce and enforce golden-regression harness across milestones.
 
 **Acceptance:** WorldCover-only scenario remains functionally unchanged at each milestone exit.
 
-## 5.6 Governance Baseline (REQ-GOV-001)
+## 5.6 [M5] Governance Baseline (REQ-GOV-001)
 **Current:** Enterprise baseline controls are not complete in V1 runtime path.  
 **Target:** API authentication, import quotas/rate limits, and auditable change logs.  
 **Gap:** Add auth middleware, limiter policies, and audit event persistence.

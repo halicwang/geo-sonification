@@ -15,6 +15,19 @@ Recommended reading order: lighthouse migration document first, then this refere
 - Use `docs/2026-02-22-ENGINEERING-REFERENCE.md` for implementation sequencing and detailed work packets.
 - Use `docs/2026-02-22-TECHNICAL-DESIGN.md` for model/algorithm rationale.
 
+## Milestone Mapping (M0-M5)
+Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
+`M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
+
+| Milestone ID | Primary Execution Anchors In This Document |
+| --- | --- |
+| `M0` | `3.1 M0 Compatibility Guardrails` |
+| `M1` | `3.2 M1 Open Ingestion + Control Plane` |
+| `M2` | `3.3 M2 Unified H3 Spatial Core` |
+| `M3` | `3.4 M3 Monitoring + Alerting + Stream Loop` |
+| `M4` | `3.5 M4 Configurable Audio Runtime` |
+| `M5` | `3.6 M5 Enterprise Governance Baseline` |
+
 ## 1. Coupling Analysis (Legacy Constraints Inventory)
 
 These couplings explain why migration must be staged and regression-guarded.
@@ -48,7 +61,7 @@ Rule:
 
 This section restores the fine-grained packet model from legacy phases.
 
-## 3.1 M0 Compatibility Guardrails
+## 3.1 [M0] M0 Compatibility Guardrails
 
 ### Packet M0-A: Golden baseline harness
 - Scope:
@@ -58,7 +71,7 @@ This section restores the fine-grained packet model from legacy phases.
 - Risk: Low
 - Output: baseline fixtures and mandatory CI gate.
 
-## 3.2 M1 Open Ingestion + Control Plane
+## 3.2 [M1] M1 Open Ingestion + Control Plane
 
 ### Packet M1-A (former Phase 1a): Adapter + Registry foundation
 - New files:
@@ -91,7 +104,7 @@ This section restores the fine-grained packet model from legacy phases.
 - Key risk:
   - runtime mutation safety and import validation correctness.
 
-## 3.3 M2 Unified H3 Spatial Core
+## 3.3 [M2] M2 Unified H3 Spatial Core
 
 ### Packet M2-A (former Phase 0): H3 foundation
 - New files:
@@ -125,7 +138,7 @@ This section restores the fine-grained packet model from legacy phases.
 - Risk:
   - medium (render correctness + zoom/resolution behavior).
 
-## 3.4 M3 Monitoring and Alerting
+## 3.4 [M3] M3 Monitoring + Alerting + Stream Loop
 
 ### Packet M3-A (former Phase 4.5): alert engine core
 - New files:
@@ -161,7 +174,7 @@ This section restores the fine-grained packet model from legacy phases.
 - Risk:
   - medium (external feed instability + state growth + push correctness).
 
-## 3.5 M4 Configurable Audio Runtime
+## 3.5 [M4] M4 Configurable Audio Runtime
 
 ### Packet M4-A: mapping reload baseline (legacy Phase 1a §3.5.5/3.5.6)
 - New file:
@@ -182,7 +195,7 @@ This section restores the fine-grained packet model from legacy phases.
 - Risk:
   - medium (UX correctness + runtime sync)
 
-## 3.6 M5 Enterprise Governance Baseline
+## 3.6 [M5] M5 Enterprise Governance Baseline
 
 ### Packet M5-A: auth and access control
 - Protect mutation/control endpoints.

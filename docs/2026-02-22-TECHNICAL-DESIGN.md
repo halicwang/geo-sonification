@@ -15,6 +15,19 @@ If the lighthouse docs define what must be delivered, this companion defines why
 - Use `docs/2026-02-22-TECHNICAL-DESIGN.md` for design rationale, algorithm choices, and implementation traps.
 - Use `docs/2026-02-22-ENGINEERING-REFERENCE.md` for file-level execution sequencing.
 
+## Milestone Anchors (M0-M5)
+Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
+`M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
+
+| Milestone ID | Primary Technical Anchors In This Document |
+| --- | --- |
+| `M0` | `8. WorldCover Baseline Manifest` |
+| `M1` | `3. Adapter Interface Contracts`, `4. Import Pipeline`, `5. Channel Registry` |
+| `M2` | `2. H3 Technical Deep Dive` |
+| `M3` | `6. Alert Engine Semantics` |
+| `M4` | `5.4 Audio Runtime Config Invariants` |
+| `M5` | `5.5 Governance Baseline Hooks` |
+
 ## 1. Canonical Data Model: Why It Is Designed This Way
 
 ### 1.1 DataRecord keeps both `channels` and `channelsRaw`
@@ -60,7 +73,7 @@ Design rationale:
 - Makes multi-source overlay deterministic and explicit.
 - Supports partial source deletes and source-specific replacement.
 
-## 2. H3 Technical Deep Dive (Do Not Skip)
+## 2. [M2] H3 Technical Deep Dive (Do Not Skip)
 
 ### 2.1 Why H3 over Quadkey/Geohash
 
@@ -133,7 +146,7 @@ Critical performance constraint:
 Rationale:
 - Keeps spatial backend swappable, while preserving uniform contracts for ingestion and query code.
 
-## 3. Adapter Interface Contracts (Frozen Module Boundary)
+## 3. [M1] Adapter Interface Contracts (Frozen Module Boundary)
 
 ### 3.1 DataAdapter contract
 
@@ -173,7 +186,7 @@ Engineering intent:
 - `StreamAdapter` extends, not replaces, DataAdapter semantics.
 - Runtime scheduler treats stream adapters as first-class registry participants.
 
-## 4. Import Pipeline Deep Semantics
+## 4. [M1] Import Pipeline Deep Semantics
 
 ### 4.1 CSV minimal contract
 
@@ -199,7 +212,7 @@ Required columns:
 - Re-import with same `sourceId` replaces previous source atomically.
 - Manifest writes must use temp-file + rename to avoid crash corruption.
 
-## 5. Channel Registry and Runtime Stability
+## 5. [M1] Channel Registry and Runtime Stability
 
 ### 5.1 Namespace strategy
 
@@ -225,7 +238,21 @@ On registry change:
 - emit reload signal for downstream consumers
 - `GET /api/channels` is source of truth
 
-## 6. Alert Engine Semantics (Operational, Not Decorative)
+### 5.4 [M4] Audio Runtime Config Invariants
+
+- Runtime mapping changes must be schema-validated before activation.
+- Invalid updates must preserve last-known-good runtime config.
+- Audio mapping reload and channel registry updates must remain causally ordered.
+- Bus-level behavior must remain deterministic for the same channel snapshot input.
+
+### 5.5 [M5] Governance Baseline Hooks
+
+- Adapter required config must support secret-presence validation without leaking values.
+- Import and control mutations should be designed for auth middleware insertion points.
+- Import path must expose quota/rate-limit decision hooks before expensive parse/ingest work.
+- Change operations should emit auditable events (import/delete/reload/rule updates).
+
+## 6. [M3] Alert Engine Semantics (Operational, Not Decorative)
 
 State machine per `(ruleId, cellId)`:
 - `idle -> active -> cooldown -> idle`
@@ -249,7 +276,7 @@ Why this matters:
 6. Do not mutate channel indices without explicit reload notifications.
 7. Do not treat alert sounds as UI ornament; they are monitoring signals.
 
-## 8. WorldCover Baseline Manifest (Compatibility Contract)
+## 8. [M0] WorldCover Baseline Manifest (Compatibility Contract)
 
 The baseline WorldCover compatibility set is the contract protected by M0 regression gates.
 
@@ -287,4 +314,4 @@ Compatibility note:
 - REQ-ALERT-001: Section 6
 - REQ-AUDIO-001: Sections 5 and 6 integration assumptions
 - REQ-COMPAT-001: Sections 5.2 and 8
-- REQ-GOV-001: Section 4.3 and pipeline hardening hooks
+- REQ-GOV-001: Sections 4.3, 5.5, and pipeline hardening hooks

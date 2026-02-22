@@ -16,3 +16,6 @@ data/tiles/
 # Local configuration (not in repository)
 .env
 frontend/config.local.js
+
+# Max/MSP artifacts
+sonification/

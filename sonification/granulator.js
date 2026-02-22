@@ -175,11 +175,15 @@ function triggerGrain() {
     if (effDurMin > durMax) effDurMin = durMax;
     if (effIntMin > intervalMax) effIntMin = intervalMax;
 
-    // Random grain duration within [effDurMin, durMax]
-    var durRange = durMax - effDurMin;
+    // Random grain duration within [effDurMin, durMax],
+    // clamped so the grain never exceeds startRange (buffer boundary)
+    var effDurMax = durMax;
+    if (startRange > 0 && effDurMax > startRange) effDurMax = startRange;
+    if (effDurMin > effDurMax) effDurMin = effDurMax;
+    var durRange = effDurMax - effDurMin;
     var dur = effDurMin + Math.random() * (durRange > 0 ? durRange : 0);
 
-    // Random start position within buffer (0 to startRange)
+    // Random start position within buffer (0 to startRange - dur)
     var maxStart = startRange - dur;
     var startMs = Math.random() * (maxStart > 0 ? maxStart : 0);
 

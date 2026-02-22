@@ -9,15 +9,17 @@ Interactive map that streams viewport-level geographic metrics to Max/MSP via OS
 
 ```
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│   Mapbox Map    │ WS   │   Node.js       │ OSC  │    MaxMSP       │
+│   Mapbox Map    │ WS   │   Node.js       │ OSC  │    Max/MSP      │
 │   (Frontend)    │ ───> │   Server        │ ───> │    Sound Engine │
-│                 │      │                 │      │                 │
-│  viewport ──────┼──────┼─> calculate ────┼──────┼─> /landcover    │
-│  interaction    │      │   stats         │      │   /nightlight   │
-│                 │      │                 │      │   /population   │
-│                 │      │                 │      │   /forest       │
-│                 │      │                 │      │   /lc/10…/lc/100│
-└─────────────────┘      └─────────────────┘      └─────────────────┘
+│                 │      │                 │      │  (ENABLE_OSC=   │
+│  viewport ──────┼──────┼─> calculate ────┼──────┼─>  true)        │
+│  interaction    │      │   stats +       │      └─────────────────┘
+│                 │      │   audioParams   │
+│  audio-engine ◄─┼──────┼── busTargets,   │
+│  (Web Audio)    │  WS  │   oceanLevel   │
+│  (ENABLE_OSC=   │      │                │
+│   false)        │      │                │
+└─────────────────┘      └────────────────┘
 ```
 
 ## Quick Start
@@ -125,6 +127,7 @@ geo-sonification/
 │   ├── map.js                            # Mapbox init, grid overlay, viewport tracking, HTTP fallback
 │   ├── websocket.js                      # WebSocket connection with exponential-backoff reconnect
 │   ├── ui.js                             # DOM updates: stats panel, connection status, toast
+│   ├── audio-engine.js                   # Web Audio engine: 5-bus EMA crossfade + ocean detector
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
 ├── sonification/
 │   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → 5-bus fold-mapping → audio
@@ -184,25 +187,34 @@ Additional recommended mappings (optional):
 
 ## Web Audio Playback (Browser-Based Audio)
 
-The sonification system can run entirely in the browser without Max/MSP:
+The sonification system can run entirely in the browser without Max/MSP. The audio engine (`frontend/audio-engine.js`) mirrors the Max patch behavior: 5-bus fold-mapping, three-level ocean detection, and EMA smoothing.
+
+### Setup
 
 1. Set `ENABLE_OSC=false` in `.env` to disable the UDP/OSC path.
 2. Start the server: `npm start`
 3. Open the frontend in a browser.
 4. Click the play button in the info panel.
-5. Five ambient WAV files (~45MB each, ~225MB total) load progressively. Tree and water load first. Each bus plays silence until its file is ready.
 
-**Requirements:**
+### How it works
+
+The server computes `audioParams` on every viewport update: `computeBusTargets()` folds 11 LC classes into 5 bus values, and `computeOceanLevel()` produces a three-level ocean signal (1.0 pure ocean / 0.7 coastal / 0.0 land). These are sent to the frontend via WebSocket.
+
+`audio-engine.js` creates one `AudioBufferSourceNode` per bus (loop enabled) routed through per-bus `GainNode`s into a master `GainNode`. On each `update()` call, EMA smoothing (500ms time constant, same as the Max crossfade controller) is applied using `performance.now()` timing. A `requestAnimationFrame` loop writes the smoothed values to `GainNode.gain`. The Water bus uses `Math.max(busSmoothed, oceanSmoothed)` — same logic as the Max `[maximum]` wiring.
+
+Five ambient WAV files (~45MB each, ~225MB total) load progressively with priority ordering: tree and water first (most common land types), then crop, urban, bare. Each bus plays silence until its file is ready.
+
+### Requirements
 
 - Modern browser with Web Audio API (Chrome 66+, Firefox 76+, Safari 14.1+)
 - Sufficient bandwidth for initial WAV download
 
-**Audio controls:**
+### Audio controls and lifecycle
 
 - Play/Stop toggle in the info panel
 - Per-bus loading progress indicators
-- Audio automatically suspends when the browser tab is hidden
-- Audio fades to silence after 3 seconds of no server data
+- Audio automatically suspends when the browser tab is hidden (`visibilitychange`), resumes and snaps to current targets on return
+- No-data timeout: fade to silence after 3s of no server data, suspend `AudioContext` after 10s. Resumes automatically when data arrives again.
 
 Both audio paths (OSC to Max and Web Audio) can run simultaneously when `ENABLE_OSC=true`.
 

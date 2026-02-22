@@ -27,8 +27,25 @@ Frontend: audio-engine.js
   ├── engine.update(audioParams) — EMA smoothing (performance.now() timing)
   ├── requestAnimationFrame loop — apply smoothed → GainNode.gain
   ├── AudioBufferSourceNode × 5 — looping ambience WAVs
+  ├── Water bus: Math.max(busSmoothed[water], oceanSmoothed)
   └── visibilitychange — suspend/resume AudioContext
 ```
+
+### WAV loading
+
+Five ambience WAVs are fetched from `/audio/ambience/<name>.wav` with progress tracking via `ReadableStream`. Priority ordering: tree + water first (parallel), then crop + urban + bare (parallel). Each `AudioBufferSourceNode` is created after decoding and set to `loop = true`.
+
+### EMA smoothing
+
+Same formula as the Max crossfade controller: `alpha = 1 - exp(-dt / 500)`. Timing uses `performance.now()`, not rAF timestamps. If `dt > 2000ms` (snap threshold), values jump directly to target. The `requestAnimationFrame` loop reads smoothed values and writes them to `GainNode.gain`.
+
+### No-data timeout
+
+When `update()` is not called for 3 seconds (WS disconnect or server down), the rAF loop begins smoothing all buses toward silence. After 10 seconds total, `AudioContext.suspend()` is called. When data arrives again, `update()` detects `audioCtx.state === 'suspended'` and calls `resume()` automatically — no user interaction required.
+
+### Visibility handling
+
+On `document.hidden`: cancel rAF, clear no-data timers, suspend `AudioContext`. On visible (if user hasn't explicitly stopped): resume context, snap smoothed values to current targets (avoids jarring transition from stale values), restart rAF and no-data watchdog.
 
 Both paths (OSC and Web Audio) can run simultaneously when `ENABLE_OSC=true`. The server always computes `audioParams`; the frontend only uses them when the user clicks the play button.
 

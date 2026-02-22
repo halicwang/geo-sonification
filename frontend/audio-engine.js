@@ -121,7 +121,9 @@ function notifyLoadingUpdate() {
  * @returns {Promise<void>}
  */
 async function loadSample(busIndex) {
-    // Skip buses that already loaded successfully (on stop/start retry cycle)
+    // Skip buses that already loaded or are currently loading (prevents
+    // duplicate parallel fetches when stop/start is called mid-load)
+    if (loadingStates[busIndex].status === 'loading') return;
     if (loadingStates[busIndex].status === 'ready' && buffers[busIndex]) return;
 
     const name = BUS_NAMES[busIndex];
@@ -220,6 +222,12 @@ function update(audioParams) {
     if (!audioCtx || suspended) return;
     if (!audioParams) return;
 
+    // Resume from auto-suspend (no-data timeout suspended the context
+    // but the user never clicked stop — suspended flag is still false)
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+
     const now = performance.now();
 
     if (Array.isArray(audioParams.busTargets)) {
@@ -257,7 +265,10 @@ function update(audioParams) {
 function rafLoop() {
     if (!audioCtx || suspended) return;
 
-    // When no data is flowing, continue smoothing toward zero targets
+    // When no data is flowing, smooth toward zero (silence) explicitly.
+    // Don't rely on busTargets being zeroed by the setTimeout — the rAF
+    // tick may fire before the macrotask timer, leaving a 1-2 frame gap
+    // where we'd smooth toward stale non-zero targets.
     const now = performance.now();
     if (lastUpdateTime > 0 && now - lastUpdateTime > NO_DATA_FADE_START_MS) {
         const dt = lastEmaTime > 0 ? now - lastEmaTime : 0;
@@ -265,9 +276,9 @@ function rafLoop() {
         if (dt > 0 && dt <= SNAP_THRESHOLD_MS) {
             const alpha = 1 - Math.exp(-dt / SMOOTHING_TIME_MS);
             for (let i = 0; i < NUM_BUSES; i++) {
-                busSmoothed[i] += alpha * (busTargets[i] - busSmoothed[i]);
+                busSmoothed[i] -= alpha * busSmoothed[i]; // toward 0
             }
-            oceanSmoothed += alpha * (oceanTarget - oceanSmoothed);
+            oceanSmoothed -= alpha * oceanSmoothed; // toward 0
         }
     }
 
@@ -385,6 +396,14 @@ async function start() {
     }
 
     suspended = false;
+
+    // Zero EMA state so stale values from a previous session don't cause
+    // an audible pop (e.g. water bus loud → stop → navigate to desert → start)
+    busTargets.fill(0);
+    busSmoothed.fill(0);
+    oceanTarget = 0;
+    oceanSmoothed = 0;
+
     lastEmaTime = performance.now();
     startRaf();
     resetNoDataTimeout();

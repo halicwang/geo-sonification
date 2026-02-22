@@ -19,3 +19,6 @@ frontend/config.local.js
 
 # Max/MSP artifacts
 sonification/
+
+# Audio samples (too large for git)
+frontend/audio/ambience/*.wav

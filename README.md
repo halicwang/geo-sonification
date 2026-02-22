@@ -1,24 +1,23 @@
 # Geo-Sonification: Interactive Sound Map
 
-Interactive map that streams viewport-level geographic metrics to Max/MSP via OSC.
+Interactive map that sonifies geographic data in real-time using Web Audio.
 
-- Frontend (Mapbox) currently visualizes **landcover only**.
-- Other metrics (nightlight, population, forest) are sent via OSC so users can design their own sound mappings in Max.
+- Frontend (Mapbox) visualizes **landcover** and streams viewport metrics to a Node.js server.
+- The server computes audio parameters (5-bus fold-mapping, ocean detection) and sends them back via WebSocket.
+- The browser's Web Audio engine plays ambient soundscapes that reflect the land cover composition of the current viewport.
 
 ## Architecture
 
 ```
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│   Mapbox Map    │ WS   │   Node.js       │ OSC  │    Max/MSP      │
-│   (Frontend)    │ ───> │   Server        │ ───> │    Sound Engine │
-│                 │      │                 │      │  (ENABLE_OSC=   │
-│  viewport ──────┼──────┼─> calculate ────┼──────┼─>  true)        │
-│  interaction    │      │   stats +       │      └─────────────────┘
+┌─────────────────┐      ┌─────────────────┐
+│   Mapbox Map    │ WS   │   Node.js       │
+│   (Frontend)    │ ───> │   Server        │
+│                 │      │                 │
+│  viewport ──────┼──────┼─> calculate     │
+│  interaction    │      │   stats +       │
 │                 │      │   audioParams   │
 │  audio-engine ◄─┼──────┼── busTargets,   │
 │  (Web Audio)    │  WS  │   oceanLevel   │
-│  (ENABLE_OSC=   │      │                │
-│   false)        │      │                │
 └─────────────────┘      └────────────────┘
 ```
 
@@ -26,12 +25,11 @@ Interactive map that streams viewport-level geographic metrics to Max/MSP via OS
 
 ### One-click start (macOS)
 
-Double-click `start.command` to start the Node server, open the Max patch, and open the browser.
+Double-click `start.command` to start the Node server and open the browser.
 
 ### 1. Prerequisites
 
 - Node.js 18+
-- MaxMSP 8+
 - Mapbox account (for access token)
 
 ### 2. Get Mapbox Token
@@ -54,26 +52,22 @@ Run the scripts in `gee/` and download CSVs to `data/raw/`. See `gee/README_EXPO
 
 ### 5. Start the System
 
-**Terminal 1: Start Node.js Server**
+**Terminal: Start Node.js Server**
 
 ```bash
 npm start
 ```
 
-**MaxMSP: Open and Configure**
-
-1. Open `sonification/max_wav_osc.maxpat`
-2. Verify `udpreceive 7400` is receiving (numbers should change when the viewport changes)
-
 **Browser: Open Frontend**
 
 - Navigate to http://localhost:3000
+- Click the play button in the info panel to start audio
 
 ### 6. Interact!
 
 - Pan and zoom the map
-- Watch the info panel update (landcover-only UI)
-- In Max, connect the Data Hub outlets to your own synth/effects and map the parameters as you like
+- Watch the info panel update (landcover UI)
+- Listen to the ambient soundscape change as the viewport moves across different land cover types
 
 ## File Structure
 
@@ -95,29 +89,21 @@ geo-sonification/
 ├── docs/                                 # Dev notes and milestone proposals
 ├── gee/
 │   ├── README_EXPORT.md                  # GEE export instructions
-│   ├── africa_grid.js                    # GEE export scripts (one per continent)
-│   ├── antarctica_grid.js
-│   ├── asia_grid.js
-│   ├── europe_grid.js
-│   ├── north_america_grid.js
-│   ├── oceania_grid.js
-│   ├── oceania_grid_q{1..4}.js           # Oceania quadrant exports (split for GEE limits)
-│   └── south_america_grid.js
+│   └── <continent>_grid.js               # GEE export scripts (one per continent)
 ├── server/
 │   ├── package.json
 │   ├── index.js                          # Express routes, WebSocket, startup
 │   ├── config.js                         # Env parsing, aggregation settings
 │   ├── landcover.js                      # ESA WorldCover class metadata + normalization
-│   ├── osc.js                            # OSC/UDP client → MaxMSP
-│   ├── osc_schema.js                     # Shared OSC addresses, class order, packet builders
-│   ├── osc-metrics.js                    # Pure computation: proximity, delta
+│   ├── audio-metrics.js                  # Audio computation: bus fold-mapping, proximity, delta, ocean detection
 │   ├── delta-state.js                    # Per-client delta state management
 │   ├── mode-manager.js                   # Aggregated ↔ per-grid hysteresis
+│   ├── viewport-processor.js             # Viewport processing orchestrator
 │   ├── data-loader.js                    # CSV parsing, caching, deduplication
 │   ├── spatial.js                        # Spatial index, viewport stats, bounds validation
-│   ├── normalize.js                      # p1/p99 percentile normalization + OSC value mapping
+│   ├── normalize.js                      # p1/p99 percentile normalization
 │   ├── types.js                          # JSDoc type definitions
-│   └── __tests__/                        # Jest test suite (98 tests, 10 suites)
+│   └── __tests__/                        # Jest test suite
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
@@ -128,27 +114,10 @@ geo-sonification/
 │   ├── websocket.js                      # WebSocket connection with exponential-backoff reconnect
 │   ├── ui.js                             # DOM updates: stats panel, connection status, toast
 │   ├── audio-engine.js                   # Web Audio engine: 5-bus EMA crossfade + ocean detector
+│   ├── audio/ambience/                   # Loopable stereo WAVs (one per bus)
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
-├── sonification/
-│   ├── max_wav_osc.maxpat                # Max Data Hub: OSC in → 5-bus fold-mapping → audio
-│   ├── loop_bus.maxpat                   # Per-bus abstraction: buffer + 2×groove~ + crossfade
-│   ├── loop_clock.js                     # Global crossfade clock (syncs all 5 buses)
-│   ├── loop_voice.js                     # Per-bus voice manager (double-buffered playback)
-│   ├── crossfade_controller.js           # 11-ch land cover crossfade with EMA smoothing
-│   ├── icon_trigger.js                   # Probabilistic auditory icon triggering
-│   ├── granulator.js                     # 4-voice granular synthesis scheduler
-│   ├── water_bus.js                      # 3-level ocean detector (coverage-based)
-│   └── samples/
-│       ├── ambience/                     # 5 WAV loops (tree, crop, urban, bare, water)
-│       └── icons/                        # Future: icon samples per land cover type
-│           ├── tree/
-│           ├── crop/
-│           ├── urban/
-│           ├── bare/
-│           └── water/
 └── scripts/
     ├── check_csv_schema.js                # CSV schema validator
-    ├── osc_simulator.js                   # Standalone OSC simulator (6 scenarios)
     ├── build-tiles.js                     # Tile builder
     └── test_bounds_validation.sh          # Bounds regression test
 ```
@@ -161,7 +130,7 @@ This project uses a single, "now-only" schema (no historical time series). Each 
 
 - Landcover breakdown and dominant landcover are computed **by land area** (sum of `land_area_km2`), not by grid count.
 - Forest and population are aggregated by land area: forest = `sum(forest_area_km2) / sum(land_area_km2) * 100`, population density = `sum(population_total) / sum(land_area_km2)`.
-- Nightlight uses `nightlight_p90` for OSC; viewport nightlight is an **area-weighted mean of cell-level p90** (approximation, not the true viewport p90).
+- Nightlight uses `nightlight_p90` for viewport display; viewport nightlight is an **area-weighted mean of cell-level p90** (approximation, not the true viewport p90).
 
 All server settings (ports, aggregation mode, coastal weighting, cache) are configurable via environment variables. See `.env.example` for a full list with defaults. Copy to `.env` and modify as needed.
 
@@ -169,54 +138,27 @@ Caches live in `data/cache/` and include aggregation version in their keys. Chan
 
 ## Sound Mapping
 
-The Max patch includes a sound engine with loop playback, crossfade mixing, icon triggering, and granular synthesis. Five ambience WAVs (2:01.875 each, 128 BPM) are played via double-buffered `groove~` objects with a 1875ms crossfade window, synchronized by a global clock (`loop_clock.js`). Land cover channels are folded into 5 audio buses:
+Five ambience WAV loops represent different land cover types. Land cover channels are folded into 5 audio buses:
 
 - **Tree bus**: classes 10, 20, 30, 90, 95, 100 (natural vegetation)
 - **Crop bus**: class 40
 - **Urban bus**: class 50
 - **Bare bus**: class 60
-- **Water bus**: classes 70, 80 + ocean 3-level detector (`water_bus.js` via `maximum`)
+- **Water bus**: classes 70, 80 + ocean 3-level detector
 
-The Water bus combines fine-grained grid-level water data (crossfade controller classes 70+80) with a macro ocean signal derived from `/coverage`. Three quantized levels: 1.0 (pure ocean, no grid data), 0.7 (coastal, coverage < 10% with high proximity), 0.0 (land). EMA smoothing provides gradual transitions.
+The Water bus combines fine-grained grid-level water data (classes 70+80) with a macro ocean signal derived from land coverage ratio. Three quantized levels: 1.0 (pure ocean, no grid data), 0.7 (coastal, coverage < 10% with high proximity), 0.0 (land). EMA smoothing provides gradual transitions.
 
-Additional recommended mappings (optional):
-
-- `/population` → rhythm density / event rate
-- `/nightlight` → presence / loudness / brightness
-- `/forest` → smoothness / texture / reverb amount
-
-## Web Audio Playback (Browser-Based Audio)
-
-The sonification system can run entirely in the browser without Max/MSP. The audio engine (`frontend/audio-engine.js`) mirrors the Max patch behavior: 5-bus fold-mapping, three-level ocean detection, and EMA smoothing.
-
-### Setup
-
-1. Set `ENABLE_OSC=false` in `.env` to disable the UDP/OSC path.
-2. Start the server: `npm start`
-3. Open the frontend in a browser.
-4. Click the play button in the info panel.
-
-### How it works
-
-The server computes `audioParams` on every viewport update: `computeBusTargets()` folds 11 LC classes into 5 bus values, and `computeOceanLevel()` produces a three-level ocean signal (1.0 pure ocean / 0.7 coastal / 0.0 land). These are sent to the frontend via WebSocket.
-
-`audio-engine.js` creates one `AudioBufferSourceNode` per bus (loop enabled) routed through per-bus `GainNode`s into a master `GainNode`. On each `update()` call, EMA smoothing (500ms time constant, same as the Max crossfade controller) is applied using `performance.now()` timing. A `requestAnimationFrame` loop writes the smoothed values to `GainNode.gain`. The Water bus uses `Math.max(busSmoothed, oceanSmoothed)` — same logic as the Max `[maximum]` wiring.
-
-Five ambient WAV files (~45MB each, ~225MB total) load progressively with priority ordering: tree and water first (most common land types), then crop, urban, bare. Each bus plays silence until its file is ready.
-
-### Requirements
-
-- Modern browser with Web Audio API (Chrome 66+, Firefox 76+, Safari 14.1+)
-- Sufficient bandwidth for initial WAV download
-
-### Audio controls and lifecycle
+### Audio Controls and Lifecycle
 
 - Play/Stop toggle in the info panel
 - Per-bus loading progress indicators
 - Audio automatically suspends when the browser tab is hidden (`visibilitychange`), resumes and snaps to current targets on return
 - No-data timeout: fade to silence after 3s of no server data, suspend `AudioContext` after 10s. Resumes automatically when data arrives again.
 
-Both audio paths (OSC to Max and Web Audio) can run simultaneously when `ENABLE_OSC=true`.
+### Requirements
+
+- Modern browser with Web Audio API (Chrome 66+, Firefox 76+, Safari 14.1+)
+- Sufficient bandwidth for initial WAV download
 
 ## Troubleshooting
 
@@ -224,12 +166,6 @@ Both audio paths (OSC to Max and Web Audio) can run simultaneously when `ENABLE_
 
 - Re-export CSVs using `gee/*.js` and place them into `data/raw/`
 - Delete caches: `rm -rf data/cache`
-
-### MaxMSP not receiving OSC
-
-- Check `udpreceive 7400`
-- Confirm the server is sending to the right host/port (`OSC_HOST`, `OSC_PORT`)
-- Use `POST /api/manual` to test OSC output
 
 ### WebSocket disconnected
 
@@ -251,49 +187,6 @@ Both audio paths (OSC to Max and Web Audio) can run simultaneously when `ENABLE_
 ## API Endpoints
 
 - `GET /health` - Health check (used by `start.command` to wait for readiness)
-- `GET /api/config` - Server configuration (ports, OSC status, grid size, landcover metadata)
+- `GET /api/config` - Server configuration (ports, grid size, landcover metadata)
 - `GET /api/grids` - Returns all grid data as JSON
 - `POST /api/viewport` - Calculate stats for given bounds
-- `POST /api/manual` - Manual OSC control for testing
-
-## OSC Messages
-
-Sent to MaxMSP on port 7400 per viewport update.
-
-**Mode indicator (always sent first):**
-
-- `/mode` (string) - `"aggregated"` or `"per-grid"`, sent before data on every update
-
-**Viewport signals (sent after /mode, before data):**
-
-- `/proximity` (float 0–1) — Viewport zoom proximity. 0 = satellite/distant view, 1 = closest zoom. Based on map zoom level with linear interpolation between configurable thresholds (default: zoom 4–6). See `PROXIMITY_ZOOM_LOW` / `PROXIMITY_ZOOM_HIGH` in `.env.example`.
-- `/delta/lc` (11 floats) — Per-class land cover change since previous update, same class order as `/lc/*`. All zeros on first update.
-
-### Aggregated Mode (always sent, 15 messages)
-
-**Aggregated stats (4):**
-
-- `/landcover` (int) - Dominant land cover class (10/20/30/40/50/60/70/80/90/95/100)
-- `/nightlight` (float 0-1) - Normalized viewport nightlight (based on `nightlight_p90`)
-- `/population` (float 0-1) - Normalized viewport population density
-- `/forest` (float 0-1) - Normalized viewport forest percentage
-
-**Landcover distribution (11):**
-
-- `/lc/10` … `/lc/100` (float 0-1) - Area fraction per ESA WorldCover class
-- Classes: 10 (Tree), 20 (Shrub), 30 (Grass), 40 (Crop), 50 (Urban), 60 (Bare), 70 (Snow), 80 (Water), 90 (Wetland), 95 (Mangrove), 100 (Moss)
-- Classes not present in viewport send `0.0`; all 11 are always sent
-
-**Land coverage:**
-
-- `/coverage` (float 0–1) — Ratio of land grid cells to theoretical grid cells in viewport. Sent after aggregated messages.
-
-### Per-Grid Mode (with hysteresis, default center threshold 50)
-
-Sent **in addition to** aggregated messages when zoomed in with few grid cells. Uses hysteresis to avoid mode flickering (enter/exit thresholds configurable via `PER_GRID_THRESHOLD`, `PER_GRID_THRESHOLD_ENTER`, `PER_GRID_THRESHOLD_EXIT`). Mode state is tracked per-client: per WebSocket connection, and per IP for HTTP clients (expires after 5 minutes of inactivity).
-
-- `/grid/count` (int) - Number of grid cells in viewport
-- `/viewport` (4 floats) - Viewport bounds: west, south, east, north (for panning calculation)
-- `/grid` (float float int float float float) × N - Per-cell data: lon, lat, landcover, nightlight, population, forest
-- `/grid/pos` (2 floats) × N - Per-cell normalized viewport position: xNorm (0=west, 1=east), yNorm (0=south, 1=north)
-- `/grid/lc` (11 floats) × N - Per-cell landcover distribution, same class order as `/lc/*`

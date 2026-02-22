@@ -1,6 +1,6 @@
 /**
- * Normalization for OSC output: p1/p99 from data, fingerprint for cache.
- * Used by server/index.js after loading CSV.
+ * Normalization: p1/p99 percentile scaling, fingerprint-based caching.
+ * Used by spatial.js to map raw metric averages into [0,1].
  */
 
 const fs = require('fs');
@@ -191,7 +191,6 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
 
 /**
  * Map raw viewport/cell averages to 0-1 using p1/p99 percentile params.
- * These normalized values are what MaxMSP receives via OSC.
  *
  * @param {number} avgNightlightP90
  * @param {number} avgPopulation — population density (or per-cell value)
@@ -199,7 +198,7 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
  * @param {import('./types').NormalizeParams} normalizeParams
  * @returns {{ nightlightNorm: number, populationNorm: number, forestNorm: number }}
  */
-function normalizeOscValues(avgNightlightP90, avgPopulation, avgForest, normalizeParams) {
+function normalizeValues(avgNightlightP90, avgPopulation, avgForest, normalizeParams) {
     let nightlightNorm = 0,
         populationNorm = 0,
         forestNorm = 0;
@@ -236,7 +235,7 @@ function normalizeOscValues(avgNightlightP90, avgPopulation, avgForest, normaliz
 module.exports = {
     calcPercentiles,
     normalize,
-    normalizeOscValues,
+    normalizeValues,
     calcCsvFingerprint,
     loadOrCalcNormalize,
 };

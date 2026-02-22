@@ -1,5 +1,5 @@
 /**
- * Mode manager: hysteresis-based switching between "aggregated" and "per-grid" OSC modes.
+ * Mode manager: hysteresis-based switching between "aggregated" and "per-grid" modes.
  *
  * Responsibilities:
  *   - Per-client mode state (WebSocket: per-connection, HTTP: per-IP with TTL)

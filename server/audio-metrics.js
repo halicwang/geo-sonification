@@ -1,10 +1,22 @@
 /**
- * Pure helpers for proximity and delta calculations.
+ * Pure helpers for audio-parameter computation:
+ * proximity, delta, bus fold-mapping, ocean detection.
  *
- * No I/O side effects. Safe for unit tests and simulator reuse.
+ * No I/O side effects. Safe for unit tests and reuse.
  */
 
-const { LC_CLASS_ORDER, clamp01 } = require('./osc_schema');
+/** Canonical ESA WorldCover class order (11 classes). @type {readonly number[]} */
+const LC_CLASS_ORDER = Object.freeze([10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100]);
+
+/**
+ * Clamp a value to [0, 1]; returns 0 if non-finite.
+ * @param {number} value
+ * @returns {number}
+ */
+function clamp01(value) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(1, value));
+}
 
 /**
  * Return the value if finite, otherwise 0.
@@ -113,7 +125,7 @@ function createZeroDelta() {
 }
 
 /**
- * Compute /delta/lc from current lc fractions and previous snapshot.
+ * Compute per-class delta from current lc fractions and previous snapshot.
  *
  * @param {number[]} currentLcFractions - length-11 vector (0-1)
  * @param {import('./types').Snapshot|null} previousSnapshot
@@ -137,14 +149,13 @@ function computeDeltaMetrics(currentLcFractions, previousSnapshot) {
 // ── Bus fold-mapping (11 LC classes → 5 audio buses) ────────────────
 
 /**
- * Bus index-to-name mapping. Matches Max/MSP patch wiring.
+ * Bus index-to-name mapping.
  * @type {readonly string[]}
  */
 const BUS_NAMES = Object.freeze(['tree', 'crop', 'urban', 'bare', 'water']);
 
 /**
  * LC_CLASS_ORDER index sets for each bus.
- * Derived from crossfade_controller.js wiring (lines 73-78).
  * @type {readonly number[][]}
  */
 const BUS_LC_INDICES = Object.freeze([
@@ -159,8 +170,7 @@ const BUS_LC_INDICES = Object.freeze([
  * Fold 11-class LC fractions into 5 bus target values.
  *
  * Each bus value is the sum of its constituent LC class fractions,
- * clamped to [0, 1]. This mirrors the Max patch wiring where
- * multiple crossfade controller outlets feed into a single bus.
+ * clamped to [0, 1].
  *
  * @param {number[]} lcFractions - length-11 array of 0-1 fractions (LC_CLASS_ORDER)
  * @returns {number[]} length-5 array [tree, crop, urban, bare, water]
@@ -176,21 +186,20 @@ function computeBusTargets(lcFractions) {
     );
 }
 
-// ── Ocean detection (mirrors water_bus.js three-level logic) ────────
+// ── Ocean detection (three-level logic) ──────────────────────────────
 
-/** Coverage below this means "mostly ocean" (water_bus.js line 93). */
+/** Coverage below this means "mostly ocean". */
 const OCEAN_COVERAGE_THRESHOLD = 0.1;
 
-/** Proximity above this qualifies as "zoomed in enough" for coastal (water_bus.js line 94). */
+/** Proximity above this qualifies as "zoomed in enough" for coastal. */
 const COASTAL_PROXIMITY_THRESHOLD = 0.7;
 
-/** Output level for the coastal zone (water_bus.js line 95). */
+/** Output level for the coastal zone. */
 const COASTAL_LEVEL = 0.7;
 
 /**
  * Three-level ocean detection, pre-smoothing.
  *
- * Replicates the target-level logic from water_bus.js (lines 140-149).
  * Smoothing is NOT applied here — the frontend EMA handles it.
  *
  *   proximity == 0                                       → 1.0  (pure ocean)
@@ -210,6 +219,8 @@ function computeOceanLevel(proximity, coverage) {
 }
 
 module.exports = {
+    LC_CLASS_ORDER,
+    clamp01,
     getLcFractionsFromDistribution,
     computeProximityFromGridCount,
     computeProximityFromZoom,

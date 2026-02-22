@@ -14,7 +14,6 @@ export const state = {
     /** Server-provided configuration (populated by loadServerConfig). */
     config: {
         wsPort: 3001,
-        oscReady: false, // Approximate; UDP has no handshake
         gridSize: 0.5,
         apiBase: '',
         mapboxToken: null,
@@ -77,14 +76,13 @@ export function getWebSocketURL() {
 
 // ============ Server Config ============
 
-/** Fetch WS port, OSC status, and landcover metadata from server. */
+/** Fetch WS port and landcover metadata from server. */
 export async function loadServerConfig() {
     try {
         const response = await fetch(`${state.config.apiBase}/api/config`);
         if (response.ok) {
             const config = await response.json();
             state.config.wsPort = config.wsPort || 3001;
-            state.config.oscReady = config.oscReady || false;
             if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
                 state.config.gridSize = config.gridSize;
             }

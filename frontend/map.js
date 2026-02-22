@@ -84,7 +84,7 @@ function getViewportBounds() {
     return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
 }
 
-/** Debounce viewport changes, then send bounds to server for stats + OSC. */
+/** Debounce viewport changes, then send bounds to server for stats + audio params. */
 export function onViewportChange() {
     clearTimeout(state.runtime.debounceTimer);
     state.runtime.debounceTimer = setTimeout(() => {
@@ -153,7 +153,6 @@ export async function refreshServerConfig() {
         if (!response.ok) return;
         const config = await response.json();
 
-        state.config.oscReady = config.oscReady || false;
         if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
             state.config.gridSize = config.gridSize;
         }

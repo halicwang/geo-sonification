@@ -7,7 +7,7 @@ const {
     BUS_LC_INDICES,
     computeBusTargets,
     computeOceanLevel,
-} = require('../osc-metrics');
+} = require('../audio-metrics');
 
 // ═════════════════════════════════════════════════════════════════
 //  BUS_NAMES and BUS_LC_INDICES constants

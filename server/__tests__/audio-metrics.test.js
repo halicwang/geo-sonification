@@ -3,7 +3,7 @@ const {
     computeProximityFromGridCount,
     computeProximityFromZoom,
     computeDeltaMetrics,
-} = require('../osc-metrics');
+} = require('../audio-metrics');
 
 describe('computeProximityFromGridCount', () => {
     test('gridCount=0 is forced to 0', () => {

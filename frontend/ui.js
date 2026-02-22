@@ -29,14 +29,14 @@ export function updateUI(stats) {
         els.gridCount.textContent = gc;
     }
 
-    // OSC mode indicator
-    if (els.oscMode) {
+    // Mode indicator (aggregated vs per-grid)
+    if (els.audioMode) {
         if (stats.mode === 'per-grid') {
-            els.oscMode.textContent = `Per-Grid (${stats.gridCount || 0} cells)`;
-            els.oscMode.style.color = 'var(--color-accent-info)';
+            els.audioMode.textContent = `Per-Grid (${stats.gridCount || 0} cells)`;
+            els.audioMode.style.color = 'var(--color-accent-info)';
         } else {
-            els.oscMode.textContent = 'Aggregated';
-            els.oscMode.style.color = '';
+            els.audioMode.textContent = 'Aggregated';
+            els.audioMode.style.color = '';
         }
     }
 
@@ -90,11 +90,7 @@ export function updateConnectionStatus(connected) {
         els.wsStatus.classList.remove('disconnected');
         els.wsStatus.classList.add('connected');
         els.landcoverList.closest('#info-panel')?.classList.remove('stale');
-        if (state.config.oscReady) {
-            els.wsText.textContent = 'Connected to server / OSC: ready(approx)';
-        } else {
-            els.wsText.textContent = 'Connected to server / OSC: not ready';
-        }
+        els.wsText.textContent = 'Connected to server';
     } else {
         els.wsStatus.classList.remove('connected');
         els.wsStatus.classList.add('disconnected');

@@ -73,9 +73,9 @@ All ingested data MUST be aligned to a unified H3 cell model before query, merge
 **Acceptance:** Multi-source data queried for the same viewport can be merged by `cellId` with deterministic namespaced channel keys.
 
 ### REQ-ALERT-001: Monitoring and Alerting
-The platform MUST support operational alerting (not only artistic sonification) with threshold, hysteresis, cooldown, and dedup semantics.
+The platform MUST support operational alerting (not only artistic sonification) with threshold, hysteresis, cooldown, and dedup semantics. V1 MUST also support basic compound alert rules combining 2-3 channels with AND/OR logic.
 
-**Acceptance:** Threshold crossings emit alert events, clears are emitted on exit threshold, and duplicate storms are prevented for the same `(ruleId, cellId)`.
+**Acceptance:** Threshold crossings emit alert events, clears are emitted on exit threshold, and duplicate storms are prevented for the same `(ruleId, cellId)`. Compound rules with AND/OR operators across 2-3 channels produce correct fire/clear transitions.
 
 ### REQ-AUDIO-001: Fully Configurable Audio Mapping and Samples
 Business users MUST be able to configure what triggers sound, mapping behavior, severity behavior, and audio samples via configuration/control plane without audio-engineering expertise.
@@ -103,9 +103,9 @@ V1 MUST explicitly target `single_org_multi_team` deployment and MUST NOT implic
 **Acceptance:** API/UI/docs expose the deployment model boundary consistently, and full tenant isolation remains outside V1 commitments.
 
 ### REQ-UX-001: Minimum Operator Workflow for Audio Control
-V1 MUST provide a minimum operator workflow for runtime audio behavior updates without audio-engineering expertise.
+V1 MUST provide a minimum operator workflow for runtime audio behavior updates without audio-engineering expertise. V1 control surface is REST API + JSON configuration files only; a graphical UI is not required.
 
-**Acceptance:** Operators can complete `Draft -> Validate -> Apply -> Rollback` for mapping/rule updates through the control surface and observe runtime effect without redeploy.
+**Acceptance:** Operators can complete `Draft -> Validate -> Apply -> Rollback` for mapping/rule updates through REST APIs and JSON config edits, and observe runtime effect without redeploy.
 
 ### REQ-PERF-001: Quantified V1 Performance Envelope
 V1 MUST publish quantified capacity/latency limits as provisional targets, then freeze them to normative gates after benchmark validation.
@@ -213,9 +213,12 @@ Alert Engine           Audio Mapping Engine
 - Adapters MUST declare manifests for all exported channels.
 
 ### AlertRule
+
+Single-channel rule (default `type: "simple"`):
 ```json
 {
   "ruleId": "pm25_warning",
+  "type": "simple",
   "channel": "air_quality.pm25",
   "enterThreshold": 0.6,
   "exitThreshold": 0.4,
@@ -224,6 +227,27 @@ Alert Engine           Audio Mapping Engine
   "dedupKey": "cellId"
 }
 ```
+
+Compound rule (`type: "compound"`, V1 limit: 2-3 conditions, one operator level):
+```json
+{
+  "ruleId": "heat_and_pollution",
+  "type": "compound",
+  "operator": "AND",
+  "conditions": [
+    { "channel": "air_quality.pm25", "enterThreshold": 0.6, "exitThreshold": 0.4 },
+    { "channel": "air_quality.temp_c", "enterThreshold": 0.7, "exitThreshold": 0.5 }
+  ],
+  "severity": "critical",
+  "cooldownMs": 120000,
+  "dedupKey": "cellId"
+}
+```
+
+V1 compound rule constraints:
+- V1 MUST support `AND` and `OR` operators only.
+- V1 MUST contain 2-3 conditions per compound rule (no nesting, single operator level).
+- `type` field defaults to `"simple"` if omitted for backward compatibility.
 
 ### AlertEvent
 ```json
@@ -422,11 +446,24 @@ Example success:
   "rules": [
     {
       "ruleId": "pm25_warning",
+      "type": "simple",
       "channel": "air_quality.pm25",
       "enterThreshold": 0.6,
       "exitThreshold": 0.4,
       "severity": "warning",
       "cooldownMs": 60000,
+      "dedupKey": "cellId"
+    },
+    {
+      "ruleId": "heat_and_pollution",
+      "type": "compound",
+      "operator": "AND",
+      "conditions": [
+        { "channel": "air_quality.pm25", "enterThreshold": 0.6, "exitThreshold": 0.4 },
+        { "channel": "air_quality.temp_c", "enterThreshold": 0.7, "exitThreshold": 0.5 }
+      ],
+      "severity": "critical",
+      "cooldownMs": 120000,
       "dedupKey": "cellId"
     }
   ]
@@ -512,22 +549,27 @@ Responsibility lock in this milestone:
 
 ## 5.3 [M3] Monitoring and Alerting (REQ-ALERT-001 + REQ-STREAM-001)
 **Current:** Alerting semantics are not yet complete as a production control-plane feature.  
-**Target:** Rule-driven threshold alerts with hysteresis, cooldown, dedup, auditable events, and dual stream ingestion (`poll + HTTPS push`).  
-**Gap:** Implement alert engine, runtime rule loading, event dispatch contract, and push ingress path (`POST /api/streams/push/:sourceId`).
+**Target:** Rule-driven threshold alerts with hysteresis, cooldown, dedup, auditable events, basic compound alert rules (AND/OR across 2-3 channels), and dual stream ingestion (`poll + HTTPS push`).
+**Gap:** Implement alert engine (including compound rule evaluation), runtime rule loading, event dispatch contract, and push ingress path (`POST /api/streams/push/:sourceId`).
 
 V1 stream scope lock:
 - V1 MUST support poll and HTTPS JSON push ingestion.
 - WebSocket ingress from external producers is explicitly deferred.
+
+V1 alert scope lock:
+- V1 MUST support simple single-channel rules and basic compound rules (AND/OR, 2-3 conditions, flat operator — no nesting).
+- Advanced compound rule DSL (nested AND/OR trees, N-of-M, temporal correlation) is explicitly deferred.
 
 **Acceptance:** Alert lifecycle is deterministic: `idle -> active -> cooldown -> idle`.
 
 ## 5.4 [M4] Configurable Audio (REQ-AUDIO-001 + REQ-UX-001)
 **Current:** Core Web Audio path exists, but business-level runtime configurability is limited. Audio samples are hardcoded.
 **Target:** Non-audio engineers can configure channel/bus mapping, alert-sonification behavior, and custom audio samples.
-**Gap:** Deliver stable mapping schema, hot reload path, minimum console workflows, and sample upload/management.
+**Gap:** Deliver stable mapping schema, hot reload path, REST API control endpoints for the `Draft -> Validate -> Apply -> Rollback` workflow (no GUI required in V1), and sample upload/management.
 
 Minimum control workflow contract for V1:
 - Workflow state machine: `Draft -> Validate -> Apply -> Rollback`.
+- V1 delivery surface: REST API endpoints + JSON config files. A graphical UI for this workflow is future scope.
 - Required operator tasks:
   - edit channel-to-bus mapping;
   - validate mapping/rules before activation;
@@ -576,6 +618,11 @@ Provisional V1 targets (subject to benchmark freeze):
 
 Benchmark note (informative, non-commitment): a local 80-request smoke sample on 2026-02-22 observed `p50=1.622ms`, `p95=2.059ms`, `p99=10.331ms` for one fixed viewport. This sample is sanity input only, not release certification.
 
+V1 scaling boundary (hard limit):
+- V1 is designed and tested for a single-instance deployment serving up to 200 concurrent viewport clients and up to 500,000 unique cells per source.
+- Horizontal scaling, sharding, or multi-instance coordination is explicitly out of V1 scope.
+- Exceeding these limits in production requires architecture changes tracked as post-V1 work.
+
 ## 6. Quality Gates for This Spec
 
 ### Reality Snapshot (as of 2026-02-22)
@@ -614,6 +661,9 @@ Benchmark note (informative, non-commitment): a local 80-request smoke sample on
 - Performance targets are provisional before benchmark freeze and become normative release gates from `M2` exit.
 - V1 npm dependencies are pre-approved (no per-packet gate needed): `h3-js`, `multer` or `busboy`, `ajv` or equivalent, `express-rate-limit` or equivalent. Future dependencies (e.g. `fast-xml-parser` for KML/GPX) require explicit approval.
 - Audio sample customization is V1 scope: custom WAV/OGG upload via `POST /api/audio-samples/upload` and per-bus `sampleUrl` in `audio_mapping.json`.
+- V1 audio control surface is API + JSON config only. A graphical UI for audio mapping/alert rule management is future scope and does not block V1 delivery.
+- V1 compound alert rules support basic AND/OR with 2-3 conditions (flat, no nesting). Advanced compound DSL (nested trees, N-of-M, temporal correlation) is future scope.
+- V1 performance boundary is single-instance: 200 concurrent viewport clients, 500,000 cells per source. Scaling beyond these limits is post-V1 architecture work.
 - M0 and M1 Packet A execute in parallel; M1-B onward starts after M0 gate is green.
 
 **Acceptance:** Implementers are not required to make architecture-level choices outside this document.
@@ -624,11 +674,18 @@ Benchmark note (informative, non-commitment): a local 80-request smoke sample on
 - Deferred items were previously scattered.
 - Future scope is now centralized to avoid contaminating V1 commitments.
 
-- KML/GPX adapters and richer geometry semantics.
+- Priority-ordered format roadmap (post-V1):
+  1. **Shapefile** (.shp) — highest demand from GIS enterprise workflows.
+  2. **Parquet / GeoParquet** — columnar analytics and cloud-native pipelines.
+  3. **KML / GPX** — field data, GPS tracks, and Google Earth interop.
+  4. **NetCDF / HDF5** — climate and atmospheric science datasets.
+  5. Richer geometry semantics (polygon/line features beyond point-in-cell).
 - AOI bucketed strategies for many concurrent global viewports.
 - Full tenant isolation model (tenant-aware access control and data boundaries).
 - External producer WebSocket ingress path.
-- Compound alert expressions (AND/OR trees across channels).
+- Advanced compound alert expressions (nested AND/OR trees, N-of-M, temporal correlation across channels).
+- Audio control graphical UI for the `Draft -> Validate -> Apply -> Rollback` workflow.
+- Horizontal scaling architecture (multi-instance, sharded spatial index, load balancing).
 - Expanded observability and long-term compliance reporting features.
 
 **Acceptance:** Deferred scope does not alter V1 red lines or milestones.

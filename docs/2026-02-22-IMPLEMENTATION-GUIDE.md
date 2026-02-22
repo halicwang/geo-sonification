@@ -72,9 +72,12 @@ All V1 dependencies below are pre-approved. No per-packet approval gate is neede
 
 Future dependencies (not pre-approved, require explicit approval):
 
-| Dependency | Estimated Size | Used By | Purpose |
-| --- | --- | --- | --- |
-| `fast-xml-parser` | ~40 KB | Future | KML/GPX XML parsing |
+| Dependency | Estimated Size | Used By | Purpose | Priority |
+| --- | --- | --- | --- | --- |
+| `shpjs` or `shapefile` | ~60 KB | Future | Shapefile parsing | P1 |
+| `parquet-wasm` or `hyparquet` | ~500 KB | Future | Parquet / GeoParquet reading | P2 |
+| `fast-xml-parser` | ~40 KB | Future | KML/GPX XML parsing | P3 |
+| `netcdfjs` | ~120 KB | Future | NetCDF reading | P4 |
 
 ## 4. H3 Technical Deep Dive
 
@@ -150,6 +153,21 @@ Rationale: Keeps spatial backend swappable while preserving uniform contracts fo
 - Before M2, legacy grid path behavior can be measured for baseline and trend only.
 - After M2 exits, H3 path is the normative target and supports stable p95/p99 gate enforcement.
 - Any statement claiming normative SLO compliance MUST identify the active spatial path and MUST NOT certify M2+ SLOs while legacy path is still the serving path.
+
+### 4.7 V1 Scaling Boundary (Hard Limit)
+
+V1 is architectured for single-instance deployment with explicit capacity limits:
+
+| Dimension | V1 Hard Limit | Scaling Approach (Post-V1) |
+| --- | --- | --- |
+| Concurrent viewport clients | 200 per instance | Horizontal instance scaling + load balancer |
+| Unique cells per source | 500,000 | Sharded spatial index |
+| Total sources | Not hard-limited in V1 | Source partitioning |
+
+- These limits are V1 scope and MUST be validated by the M2 benchmark gate.
+- Runtime SHOULD expose current utilization (active clients, cell counts) via `/api/config` or a status endpoint.
+- Exceeding these limits without architecture changes is unsupported and may cause degraded performance without clear error signals.
+- Implementation SHOULD add monitoring hooks that warn operators when utilization approaches 80% of hard limits.
 
 ## 5. Canonical Data Model Rationale
 
@@ -340,6 +358,22 @@ Required semantics:
 
 Why this matters: Without hysteresis/cooldown/dedup, operators get alert storms and stop trusting audio alerts.
 
+### 9.0.1 Compound Rule Evaluation (V1)
+
+V1 supports basic compound rules with `AND` / `OR` operators across 2-3 conditions (single operator level, no nesting).
+
+Evaluation semantics:
+- `AND`: rule fires when ALL conditions cross their `enterThreshold`. Rule clears when ANY condition crosses its `exitThreshold`.
+- `OR`: rule fires when ANY condition crosses its `enterThreshold`. Rule clears when ALL conditions cross their `exitThreshold`.
+- Each condition is evaluated independently against its channel's current normalized value.
+- Cooldown and dedup apply at the compound rule level (keyed by `ruleId + cellId`), not per-condition.
+
+State machine remains `idle -> active -> cooldown -> idle` per `(ruleId, cellId)`. The fire/clear transition logic differs only in how enter/exit predicates are composed.
+
+Implementation constraint: V1 MUST NOT support nested compound rules (compound rules containing compound conditions). The `conditions` array MUST contain 2-3 simple channel/threshold entries only.
+
+Why flat-only: Nested compound rules create exponential state complexity and make operator debugging extremely difficult. The 2-3 condition limit is sufficient for common multi-channel monitoring scenarios (e.g., "high pollution AND high temperature").
+
 ### 9.1 Push ingress payload and acknowledgement types
 
 `PushEvent` (technical type):
@@ -403,6 +437,8 @@ Rationale for `Draft -> Validate -> Apply -> Rollback`:
 - Rollback preserves operator trust under incident pressure.
 
 Boundary note: The workflow itself is normative in SPEC. This section exists only to explain why this workflow is safer than direct in-place edits.
+
+V1 delivery surface note: The `Draft -> Validate -> Apply -> Rollback` workflow is delivered as REST API endpoints in V1. A graphical UI is future scope. Operators use HTTP clients (curl, Postman, scripts) to execute the workflow.
 
 ## 10. Milestone Work Packets
 
@@ -552,11 +588,16 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 
 - New files:
     - `server/alert-engine.js`
+    - `server/alert-rule-validator.js`
     - `alert_rules.json`
 - Core updates:
     - `server/index.js`, `server/viewport-processor.js`, event dispatch path
-- Target effort: ~370 LOC.
-- Risk: Low-medium (state machine correctness).
+- Compound rule support:
+    - `type` discriminator (`"simple"` / `"compound"`) in rule schema.
+    - AND/OR evaluation logic for 2-3 conditions (see Section 9.0.1).
+    - Validation: reject nested compounds, enforce 2-3 condition limit.
+- Target effort: ~470-600 LOC.
+- Risk: Medium (state machine correctness + compound evaluation edge cases).
 
 #### Packet M3-B: Real-time stream pipeline (poll)
 
@@ -606,14 +647,15 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
     - fallback to previous valid config on error
 - Risk: Medium (runtime audio continuity).
 
-#### Packet M4-B: Minimum control UI
+#### Packet M4-B: Control API workflow endpoints
 
 - Scope:
-    - workflow state machine: `Draft -> Validate -> Apply -> Rollback`
-    - channel-to-bus mapping edits
-    - threshold and basic intensity controls
-    - version visibility and rollback target selection
-- Risk: Medium (UX correctness + runtime sync).
+    - REST API endpoints implementing workflow state machine: `Draft -> Validate -> Apply -> Rollback`
+    - channel-to-bus mapping edits via API
+    - threshold and basic intensity controls via API
+    - version visibility and rollback target selection via API
+    - No graphical UI required; operators interact via HTTP clients or scripts.
+- Risk: Medium (API contract correctness + runtime sync).
 
 #### Packet M4-C: Audio sample management (minimum viable)
 
@@ -659,14 +701,14 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 | Frontend hex rendering (M2-C) | ~380-700 | ~180-420 | Medium |
 | Stream pipeline poll (M3-B) | ~600-1000 | ~100-260 | Medium |
 | Push ingress pipeline (M3-C) | ~450-850 | ~80-220 | Medium-high |
-| Alert engine (M3-A) | ~320-520 | ~50-130 | Low-medium |
+| Alert engine + compound rules (M3-A) | ~420-650 | ~60-150 | Medium |
 | Audio sample management (M4-C) | ~200-350 | ~50-100 | Low-medium |
 
 Cumulative planning envelope (matrix sum):
 
-- Approx new LOC: `~4,650-7,970`
-- Approx modified LOC: `~1,850-4,450`
-- Approx total touched LOC: `~6,500-12,420`
+- Approx new LOC: `~4,750-8,100`
+- Approx modified LOC: `~1,860-4,470`
+- Approx total touched LOC: `~6,610-12,570`
 
 Execution warning: Keep structural decoupling (M2 Phase 1) mandatory before H3 semantics migration. Treat all estimates as ranges; do not commit to lower-bound values without parity evidence checkpoints.
 
@@ -742,6 +784,8 @@ The baseline WorldCover compatibility set is the contract protected by M0 regres
 8. Do not conflate `/api/import` with `/api/sources`; they solve different registration problems.
 9. Do not accept push retries without idempotency and dedup checks.
 10. Do not claim normative SLO compliance before M2 path activation and benchmark freeze.
+11. Do not allow nested compound alert rules; V1 supports flat AND/OR with 2-3 conditions only.
+12. Do not apply cooldown per-condition in compound rules; cooldown is per `(ruleId, cellId)` at the compound rule level.
 
 ## 16. Compatibility Gate Checklist (Must Pass Every Milestone)
 
@@ -750,6 +794,7 @@ The baseline WorldCover compatibility set is the contract protected by M0 regres
 3. Existing audio update behavior remains non-regressed.
 4. Any new feature can be disabled without breaking baseline path.
 5. API ownership boundaries remain intact (`/api/import` vs `/api/sources` vs push ingress).
+6. V1 scaling boundary (200 clients, 500K cells) is not exceeded without explicit post-V1 architecture work.
 
 This checklist prevents platformization work from breaking core demo reliability.
 
@@ -807,6 +852,10 @@ Validation targets:
 ```bash
 # Run repeated /api/viewport requests and capture p50/p95/p99.
 # Informational in M0/M1, freeze input for M2 SLO gate.
+# V1 scaling boundary validation targets:
+# - Sustain 200 concurrent viewport clients without p95 > 250ms
+# - Sustain source with 500,000 cells without query degradation
+# - These become hard gates from M2 exit onward
 ```
 
 Reference baseline sample (informational only):

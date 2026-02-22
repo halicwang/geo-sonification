@@ -94,7 +94,7 @@ Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.
 | M0 | Compatibility Guardrails | REQ-COMPAT-001 | EVID-M0-001..004 |
 | M1 | Open Ingestion + Control Plane | REQ-INGEST-001, REQ-COMPAT-001 | EVID-M1-001..009 |
 | M2 | Unified H3 Spatial Core (includes structural decoupling) | REQ-GRID-001, REQ-PERF-001, REQ-COMPAT-001 | EVID-M2-001..013 |
-| M3 | Monitoring + Alerting + Stream Loop | REQ-ALERT-001, REQ-STREAM-001, REQ-COMPAT-001 | EVID-M3-001..008 |
+| M3 | Monitoring + Alerting + Stream Loop | REQ-ALERT-001, REQ-STREAM-001, REQ-COMPAT-001 | EVID-M3-001..009 |
 | M4 | Configurable Audio Runtime (includes sample management) | REQ-AUDIO-001, REQ-UX-001, REQ-COMPAT-001 | EVID-M4-001..008 |
 | M5 | Enterprise Baseline Governance | REQ-GOV-001, REQ-DEPLOY-001, REQ-COMPAT-001 | EVID-M5-001..007 |
 
@@ -293,6 +293,8 @@ Deliver operator-grade alerting and real-time stream-driven monitoring from spat
 ### In Scope
 - `alert_rules.json` loader/validator.
 - Alert engine state machine (`idle -> active -> cooldown -> idle`).
+- Basic compound alert rules (AND/OR across 2-3 channel conditions, flat operator — no nesting).
+- Compound rule loader/validator supporting `type: "compound"` in `alert_rules.json`.
 - Hysteresis, cooldown, dedup by `(ruleId, cellId)`.
 - Alert event dispatch (`alert` WebSocket event).
 - Stream scheduler and lifecycle management for at least one production stream adapter.
@@ -305,12 +307,13 @@ Deliver operator-grade alerting and real-time stream-driven monitoring from spat
 - `GET /api/streams` status contract with health and last-fetch metadata.
 
 ### Out of Scope
-- Full compound rule DSL (future scope).
+- Advanced compound rule DSL (nested AND/OR trees, N-of-M, temporal correlation — future scope).
 - External producer WebSocket ingress.
 
 ### DoD
 - Alert fire/clear lifecycle works with deterministic transitions.
 - Duplicate storms are prevented.
+- Compound alert rules (AND/OR, 2-3 conditions) evaluate correctly with deterministic fire/clear semantics.
 - Alert events are observable by frontend and test harness.
 - Stream adapter status and health are observable via `GET /api/streams`.
 - Stream time-window expiry and incremental push behavior are test-verified.
@@ -322,6 +325,7 @@ Deliver operator-grade alerting and real-time stream-driven monitoring from spat
 - EVID-M3-001: Unit tests for state transitions and hysteresis.
 - EVID-M3-002: Cooldown suppression tests.
 - EVID-M3-003: Dedup tests for repeated updates.
+- EVID-M3-009: Compound alert rule evaluation tests (AND/OR logic, 2-3 conditions, fire/clear transitions).
 - EVID-M3-004: WebSocket alert payload contract tests.
 - EVID-M3-005: Stream scheduler + time-window integration tests.
 - EVID-M3-006: Compatibility regression report.
@@ -356,7 +360,7 @@ Allow non-audio engineers to tune mapping, trigger behavior, and audio samples s
 - `audio_mapping.json` schema enforcement (including per-bus `sampleUrl` field for custom samples).
 - `POST /api/audio-mapping/reload` hot reload path.
 - WebSocket `bus_config_update` event.
-- Minimum control UI/workflow for channel-to-bus mapping and threshold tuning.
+- REST API control endpoints for channel-to-bus mapping and threshold tuning (no GUI required in V1).
 - SPEC-frozen workflow contract: `Draft -> Validate -> Apply -> Rollback`.
 - Runtime validation and rollback to last-known-good mapping.
 - Audio sample management: `POST /api/audio-samples/upload` for custom WAV/OGG files, stored in `data/samples/` with format/size validation. Frontend loads samples from configured URL.
@@ -368,14 +372,14 @@ Allow non-audio engineers to tune mapping, trigger behavior, and audio samples s
 ### DoD
 - Config changes apply without restart/redeploy.
 - Invalid config does not break runtime audio path.
-- Operators can complete `Draft -> Validate -> Apply -> Rollback` through control surface.
+- Operators can complete `Draft -> Validate -> Apply -> Rollback` through REST API endpoints and JSON config edits.
 - Custom audio samples can be uploaded and referenced in bus mapping.
 - Compatibility guardrail remains green.
 
 ### Evidence
 - EVID-M4-001: API tests for reload success/failure and schema errors.
 - EVID-M4-002: Runtime config update propagation test.
-- EVID-M4-003: UI workflow test for mapping update.
+- EVID-M4-003: API workflow test for mapping update (`Draft -> Validate -> Apply -> Rollback` via REST endpoints).
 - EVID-M4-004: Last-known-good fallback test.
 - EVID-M4-005: Audio behavior change verification script.
 - EVID-M4-006: Compatibility regression report.
@@ -383,10 +387,10 @@ Allow non-audio engineers to tune mapping, trigger behavior, and audio samples s
 - EVID-M4-008: Custom sample playback verification (upload -> reference in mapping -> audible output).
 
 ### Rollback
-- Revert to previous valid audio mapping at runtime; disable new control UI endpoint if needed.
+- Revert to previous valid audio mapping at runtime; disable new control API endpoint if needed.
 
 ### Release Train
-- Canary: control UI limited to internal operator cohort.
+- Canary: control API limited to internal operator cohort.
 - Monitoring: reload failures, config validation errors, audio update latency, workflow completion success rate.
 - Rollback trigger: repeated reload failures or broken audible behavior.
 
@@ -410,7 +414,7 @@ Provide minimum enterprise gatekeeping and traceability required for production 
 - Rate limits/quotas for import and control-plane mutation endpoints.
 - Audit logging for import/delete/config/rule changes.
 - Governance visibility in ops runbooks.
-- Deployment model disclosure (`single_org_multi_team`) across API docs/control UI/operator runbooks.
+- Deployment model disclosure (`single_org_multi_team`) across API docs/control API responses/operator runbooks.
 
 ### Out of Scope
 - Full multi-tenant isolation model and tenant-scoped RBAC depth.
@@ -468,8 +472,8 @@ SLO gate staging (`REQ-PERF-001`):
 | REQ-COMPAT-001 | M0..M5 (continuous gate) | EVID-M0-001..004 + each milestone compat report |
 | REQ-INGEST-001 | M1 | EVID-M1-001..009 |
 | REQ-GRID-001 | M2 (Phase 1 + Phase 2) | EVID-M2-001..013 |
-| REQ-ALERT-001 | M3 | EVID-M3-001..008 |
-| REQ-STREAM-001 | M3 | EVID-M3-001..008 |
+| REQ-ALERT-001 | M3 | EVID-M3-001..009 |
+| REQ-STREAM-001 | M3 | EVID-M3-001..009 |
 | REQ-AUDIO-001 | M4 | EVID-M4-001..008 |
 | REQ-UX-001 | M4 | EVID-M4-001..008 |
 | REQ-GOV-001 | M5 | EVID-M5-001..007 |
@@ -491,7 +495,7 @@ This table enforces single ownership for each new API contract to prevent overla
 | H3 query/merge/render semantics | M2 Phase 2 | Unified spatial language delivery |
 | `POST /api/streams/push/:sourceId` | M3 | Push ingress contract, idempotency, backpressure |
 | `GET /api/streams` expanded status contract | M3 | Poll + push operational health contract |
-| `POST /api/audio-mapping/reload` + workflow `Draft -> Validate -> Apply -> Rollback` | M4 | Runtime audio control plane UX/behavior |
+| `POST /api/audio-mapping/reload` + workflow `Draft -> Validate -> Apply -> Rollback` | M4 | Runtime audio control plane API behavior (no GUI in V1) |
 | `POST /api/audio-samples/upload` + sample management | M4 | Custom audio sample upload and reference |
 | Auth/quota/audit + deployment boundary disclosure | M5 | Governance and boundary clarity |
 
@@ -508,8 +512,8 @@ Milestone boundary check rule:
 Mitigation: dual-path verification + tolerance checks + rollback flag.
 2. **Runtime import risk (M1):** malformed/oversized inputs.  
 Mitigation: strict validators, size/row/column caps, safe parser behavior.
-3. **Alert fatigue risk (M3):** noisy alerts.  
-Mitigation: hysteresis/cooldown/dedup defaults and ops tuning runbook.
+3. **Alert fatigue risk (M3):** noisy alerts and compound rule misconfiguration.
+Mitigation: hysteresis/cooldown/dedup defaults and ops tuning runbook. Compound rules limited to 2-3 conditions with flat AND/OR to prevent combinatorial explosion. Validation rejects nested or oversized compound rules.
 4. **Audio config risk (M4):** invalid mapping breaks output.  
 Mitigation: schema validation + last-known-good fallback.
 5. **Governance risk (M5):** auth misconfiguration blocks operations.  
@@ -518,8 +522,10 @@ Mitigation: staged canary, emergency bypass procedure, policy verification tests
 Mitigation: force structural decoupling as M2 Phase 1 before H3 semantics in Phase 2, and track scope as range-based estimates with parity checkpoints.
 7. **API-boundary ambiguity risk (M1/M3):** `/api/import`, `/api/sources`, and push ingress responsibilities are interpreted inconsistently.
 Mitigation: freeze API responsibility matrix in SPEC and enforce milestone boundary ownership checks in every review.
-8. **Total change-volume ratio risk (M1..M4):** current range estimate is roughly `~6,500-12,420 LOC` touched across new+modified code, which is large relative to current application code footprint (planning heuristic: ~50%-85% rewrite-equivalent).
+8. **Total change-volume ratio risk (M1..M4):** current range estimate is roughly `~6,610-12,570 LOC` touched across new+modified code, which is large relative to current application code footprint (planning heuristic: ~50%-85% rewrite-equivalent).
 Mitigation: keep staged delivery (`M1` additive -> `M2` Phase 1 decoupling -> `M2` Phase 2 semantic migration), enforce per-phase rollback gates, and require scope rebasing when realized change volume exceeds upper-range assumptions.
+9. **Scaling boundary risk (M2+):** V1 is designed for single-instance deployment (200 concurrent clients, 500K cells per source). Users exceeding these limits will hit performance degradation without clear error signals.
+Mitigation: document hard limits in API docs and `/api/config` metadata, add runtime monitoring for client count and cell count approaching limits, return clear error responses when limits are exceeded.
 
 **Acceptance:** Each risk has explicit mitigation and rollback linkage.
 
@@ -528,11 +534,18 @@ Mitigation: keep staged delivery (`M1` additive -> `M2` Phase 1 decoupling -> `M
 ### Reality Snapshot (as of 2026-02-22)
 - Deferred items are intentionally separated from V1 commitments.
 
-- KML/GPX adapters and richer geospatial import workflows.
+- Priority-ordered format roadmap (post-V1):
+  1. **Shapefile** (.shp) — highest demand from GIS enterprise workflows.
+  2. **Parquet / GeoParquet** — columnar analytics and cloud-native pipelines.
+  3. **KML / GPX** — field data, GPS tracks, and Google Earth interop.
+  4. **NetCDF / HDF5** — climate and atmospheric science datasets.
+  5. Richer geospatial import workflows and geometry semantics.
 - AOI bucketed streaming for globally distributed concurrent clients.
 - Full multi-tenant isolation and tenant-scoped RBAC.
 - External producer WebSocket ingress path (beyond V1 HTTPS push scope).
-- Compound alert expressions and advanced rule authoring.
+- Advanced compound alert expressions (nested AND/OR trees, N-of-M, temporal correlation) and advanced rule authoring.
+- Audio control graphical UI for the `Draft -> Validate -> Apply -> Rollback` workflow.
+- Horizontal scaling architecture (multi-instance, sharded spatial index, load balancing).
 - Extended compliance and observability tooling.
 
 **Acceptance:** Deferred work does not block M0-M5 completion criteria.

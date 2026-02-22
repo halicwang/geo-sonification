@@ -9,7 +9,6 @@
  *   - start() creates context + source nodes, resumes if suspended
  *   - stop() suspends context (sources stay connected, loop forever)
  *   - visibilitychange: suspend on hidden, resume+snap on visible
- *   - No-data timeout: fade to silence after 3s, suspend after 10s
  *
  * No icon triggers — sample folders are empty (YAGNI).
  *
@@ -29,12 +28,6 @@ const SMOOTHING_TIME_MS = 500;
 
 /** If dt exceeds this, snap to target instead of smoothing. */
 const SNAP_THRESHOLD_MS = 2000;
-
-/** Milliseconds of no update() calls before starting fade to silence. */
-const NO_DATA_FADE_START_MS = 3000;
-
-/** Total no-data time before suspending AudioContext. */
-const NO_DATA_SUSPEND_MS = 10000;
 
 /**
  * Loading priority order (indices into BUS_NAMES).
@@ -70,13 +63,8 @@ let oceanSmoothed = 0;
 
 // ── Timing ──
 let lastEmaTime = 0;
-let lastUpdateTime = 0;
 let rafId = null;
 let suspended = false;
-
-// ── No-data timeout ──
-let noDataTimerId = null;
-let noDataSuspendTimerId = null;
 
 // ── Loading ──
 
@@ -222,8 +210,7 @@ function update(audioParams) {
     if (!audioCtx || suspended) return;
     if (!audioParams) return;
 
-    // Resume from auto-suspend (no-data timeout suspended the context
-    // but the user never clicked stop — suspended flag is still false)
+    // Resume if the context is suspended while audio remains enabled.
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
@@ -241,7 +228,6 @@ function update(audioParams) {
 
     const dt = lastEmaTime > 0 ? now - lastEmaTime : 0;
     lastEmaTime = now;
-    lastUpdateTime = now;
 
     let alpha;
     if (dt <= 0 || dt > SNAP_THRESHOLD_MS) {
@@ -255,7 +241,6 @@ function update(audioParams) {
     }
     oceanSmoothed += alpha * (oceanTarget - oceanSmoothed);
 
-    resetNoDataTimeout();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -264,23 +249,6 @@ function update(audioParams) {
 
 function rafLoop() {
     if (!audioCtx || suspended) return;
-
-    // When no data is flowing, smooth toward zero (silence) explicitly.
-    // Don't rely on busTargets being zeroed by the setTimeout — the rAF
-    // tick may fire before the macrotask timer, leaving a 1-2 frame gap
-    // where we'd smooth toward stale non-zero targets.
-    const now = performance.now();
-    if (lastUpdateTime > 0 && now - lastUpdateTime > NO_DATA_FADE_START_MS) {
-        const dt = lastEmaTime > 0 ? now - lastEmaTime : 0;
-        lastEmaTime = now;
-        if (dt > 0 && dt <= SNAP_THRESHOLD_MS) {
-            const alpha = 1 - Math.exp(-dt / SMOOTHING_TIME_MS);
-            for (let i = 0; i < NUM_BUSES; i++) {
-                busSmoothed[i] -= alpha * busSmoothed[i]; // toward 0
-            }
-            oceanSmoothed -= alpha * oceanSmoothed; // toward 0
-        }
-    }
 
     for (let i = 0; i < NUM_BUSES; i++) {
         if (gains[i] && buffers[i]) {
@@ -307,34 +275,6 @@ function cancelRaf() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  No-Data Timeout
-// ════════════════════════════════════════════════════════════════════
-
-function resetNoDataTimeout() {
-    clearTimeout(noDataTimerId);
-    clearTimeout(noDataSuspendTimerId);
-
-    noDataTimerId = setTimeout(() => {
-        // No data for 3 seconds: fade targets to silence
-        busTargets.fill(0);
-        oceanTarget = 0;
-
-        noDataSuspendTimerId = setTimeout(() => {
-            if (audioCtx && audioCtx.state === 'running') {
-                audioCtx.suspend();
-            }
-        }, NO_DATA_SUSPEND_MS - NO_DATA_FADE_START_MS);
-    }, NO_DATA_FADE_START_MS);
-}
-
-function clearNoDataTimers() {
-    clearTimeout(noDataTimerId);
-    clearTimeout(noDataSuspendTimerId);
-    noDataTimerId = null;
-    noDataSuspendTimerId = null;
-}
-
-// ════════════════════════════════════════════════════════════════════
 //  Visibility Change Handler
 // ════════════════════════════════════════════════════════════════════
 
@@ -342,7 +282,6 @@ function handleVisibilityChange() {
     if (!audioCtx) return;
 
     if (document.hidden) {
-        clearNoDataTimers(); // prevent no-data timer from zeroing targets while hidden
         if (audioCtx.state === 'running') {
             audioCtx.suspend();
         }
@@ -357,7 +296,6 @@ function handleVisibilityChange() {
             oceanSmoothed = oceanTarget;
             lastEmaTime = performance.now();
             startRaf();
-            resetNoDataTimeout(); // restart no-data watchdog after resuming
         }
     }
 }
@@ -405,7 +343,6 @@ async function start() {
 
     lastEmaTime = performance.now();
     startRaf();
-    resetNoDataTimeout();
 
     loadAllSamples();
 }
@@ -417,7 +354,6 @@ async function start() {
 async function stop() {
     suspended = true;
     cancelRaf();
-    clearNoDataTimers();
     loadingStarted = false; // allow retry of failed samples on next start()
 
     if (audioCtx && audioCtx.state === 'running') {

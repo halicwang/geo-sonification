@@ -153,7 +153,8 @@ The Water bus combines fine-grained grid-level water data (classes 70+80) with a
 - Play/Stop toggle in the info panel
 - Per-bus loading progress indicators
 - Audio automatically suspends when the browser tab is hidden (`visibilitychange`), resumes and snaps to current targets on return
-- No-data timeout: fade to silence after 3s of no server data, suspend `AudioContext` after 10s. Resumes automatically when data arrives again.
+- When viewport updates pause (for example, map is stationary), audio keeps looping at the last targets; no idle auto-fade is applied.
+- HTTP fallback (`POST /api/viewport`) also updates `audioParams`, so audio keeps tracking map movement when WebSocket is unavailable.
 
 ### Requirements
 

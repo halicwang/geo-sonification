@@ -10,6 +10,7 @@
 import { state, VIEWPORT_DEBOUNCE, getClientId } from './config.js';
 import { escapeHtml, getLandcoverName } from './landcover.js';
 import { updateUI } from './ui.js';
+import { engine } from './audio-engine.js';
 
 // ============ Grid Overlay ============
 
@@ -135,6 +136,9 @@ async function sendViewportHTTP(bounds) {
         }
         const stats = await response.json();
         updateUI(stats);
+        if (stats.audioParams) {
+            engine.update(stats.audioParams);
+        }
     } catch (err) {
         console.error('HTTP viewport update failed:', err);
     }

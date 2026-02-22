@@ -75,15 +75,15 @@ The target is EMA-smoothed with the same formula (default 500 ms). The output is
 
 ---
 
-## No-Data Timeout
+## Idle Behavior
 
-When `update()` is not called for 3 seconds (WS disconnect or server down), the rAF loop begins smoothing all buses toward silence. After 10 seconds total, `AudioContext.suspend()` is called. When data arrives again, `update()` detects `audioCtx.state === 'suspended'` and calls `resume()` automatically — no user interaction required.
+If `update()` is not called (for example, map is stationary), the engine keeps the last smoothed bus values and continues loop playback. It does not auto-fade to silence on idle; suspension is only driven by explicit user stop or tab visibility changes.
 
 ---
 
 ## Visibility Handling
 
-On `document.hidden`: cancel rAF, clear no-data timers, suspend `AudioContext`. On visible (if user hasn't explicitly stopped): resume context, snap smoothed values to current targets (avoids jarring transition from stale values), restart rAF and no-data watchdog.
+On `document.hidden`: cancel rAF and suspend `AudioContext`. On visible (if user hasn't explicitly stopped): resume context, snap smoothed values to current targets (avoids jarring transition from stale values), restart rAF.
 
 ---
 
@@ -93,5 +93,3 @@ On `document.hidden`: cancel rAF, clear no-data timers, suspend `AudioContext`. 
 | -------------------- | ------- | --------------- | -------------------------------- |
 | `SMOOTHING_TIME_MS`  | 500 ms  | audio-engine.js | EMA time constant                |
 | `SNAP_THRESHOLD_MS`  | 2000 ms | audio-engine.js | Snap-to-target when dt too large |
-| `NO_DATA_FADE_START_MS` | 3000 ms | audio-engine.js | Begin fade to silence            |
-| `NO_DATA_SUSPEND_MS`    | 10000ms | audio-engine.js | Suspend AudioContext             |

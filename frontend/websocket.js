@@ -10,6 +10,9 @@
 
 import { state, getWebSocketURL, WS_RECONNECT_MAX } from './config.js';
 
+/** @type {number|null} */
+let reconnectTimerId = null;
+
 /**
  * Connect to the server WebSocket and auto-reconnect on close.
  *
@@ -20,6 +23,22 @@ import { state, getWebSocketURL, WS_RECONNECT_MAX } from './config.js';
  * @param {function(): void}          callbacks.onDisconnect — called on close or error
  */
 export function connectWebSocket(callbacks) {
+    // Cancel any pending reconnect timer to prevent duplicate connections
+    if (reconnectTimerId !== null) {
+        clearTimeout(reconnectTimerId);
+        reconnectTimerId = null;
+    }
+
+    // Close previous socket if still open (prevents connection leak)
+    if (state.runtime.ws) {
+        try {
+            state.runtime.ws.onclose = null; // prevent triggering reconnect
+            state.runtime.ws.close();
+        } catch {
+            // ignore — socket may already be closing
+        }
+    }
+
     const wsUrl = getWebSocketURL();
     state.runtime.ws = new WebSocket(wsUrl);
 
@@ -28,7 +47,11 @@ export function connectWebSocket(callbacks) {
         state.runtime.wsReconnectDelay = 1000; // reset backoff on successful connection
 
         if (callbacks.onOpen) {
-            await callbacks.onOpen();
+            try {
+                await callbacks.onOpen();
+            } catch (err) {
+                console.error('WebSocket onOpen callback failed:', err);
+            }
         }
     };
 
@@ -58,8 +81,11 @@ export function connectWebSocket(callbacks) {
 
         if (callbacks.onDisconnect) callbacks.onDisconnect();
 
-        // Reconnect with exponential backoff
-        setTimeout(() => connectWebSocket(callbacks), state.runtime.wsReconnectDelay);
+        // Reconnect with exponential backoff (store timer so it can be cancelled)
+        reconnectTimerId = setTimeout(() => {
+            reconnectTimerId = null;
+            connectWebSocket(callbacks);
+        }, state.runtime.wsReconnectDelay);
     };
 
     state.runtime.ws.onerror = (err) => {

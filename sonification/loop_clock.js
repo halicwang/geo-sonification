@@ -123,6 +123,11 @@ function stop() {
     crossfadeTask.cancel();
     outlet(0, "stop");
     isRunning = false;
+
+    // Clear stale entries so bufLengths doesn't grow across stop/start cycles
+    bufLengths = [];
+    triggerMs = 0;
+
     post("loop_clock: stopped\n");
 }
 

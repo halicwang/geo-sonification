@@ -1,4 +1,4 @@
-# Implementation Guide
+# Milestone 3 — Open Platform Implementation Guide
 
 **Status:** Combined Technical Design + Engineering Execution Reference
 **Date:** 2026-02-22
@@ -7,7 +7,7 @@
 ## Executive Intro
 
 This document merges the former Technical Design Companion and Engineering Reference Companion into a single implementation guide.
-It answers WHY choices were made, HOW to avoid failure modes, and WHAT the file-level execution packets are for each milestone.
+It answers WHY choices were made, HOW to avoid failure modes, and WHAT the file-level execution packets are for each phase.
 It does not replace the SPEC or PLAN; it supports both with a single reference layer.
 
 ## 0. Three-Document Protocol
@@ -17,25 +17,25 @@ The project uses three lighthouse documents:
 | Document | Role | Authority |
 | --- | --- | --- |
 | `OPEN-PLATFORM-SPEC` | Normative contracts (`MUST/SHOULD/MAY`) | Highest — defines what to build |
-| `MIGRATION-PLAN` | Milestone sequencing, evidence, rollback | Second — defines delivery order |
+| `MIGRATION-PLAN` | Phase sequencing, evidence, rollback | Second — defines delivery order |
 | `IMPLEMENTATION-GUIDE` | Technical rationale + engineering packets | Third — defines why and how |
 
 ### 0.1 Three-Document Use
 The Three-Document Protocol is defined authoritatively in `OPEN-PLATFORM-SPEC` §0.1. This document inherits all protocol rules and adds no overrides.
 
-## 1. Milestone Anchors
+## 1. Phase Anchors
 
-Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
-`M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
+Section numbers in this document are local structure only. Cross-document tracking uses `P0..P5` phase IDs.
+`P0..P5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
 
-| Milestone ID | Primary Anchors In This Document |
+| Phase ID | Primary Anchors In This Document |
 | --- | --- |
-| `M0` | `10.1`, `14. WorldCover Baseline Manifest` |
-| `M1` | `10.2`, `6. Adapter Contracts`, `7. Import Pipeline`, `8. Channel Registry` |
-| `M2` | `10.3`, `4. H3 Technical Deep Dive` |
-| `M3` | `10.4`, `9. Alert Engine Semantics` |
-| `M4` | `10.5`, `8.4 Audio Runtime Config Invariants` |
-| `M5` | `10.6`, `8.5 Governance Baseline Hooks` |
+| `P0` | `10.1`, `14. WorldCover Baseline Manifest` |
+| `P1` | `10.2`, `6. Adapter Contracts`, `7. Import Pipeline`, `8. Channel Registry` |
+| `P2` | `10.3`, `4. H3 Technical Deep Dive` |
+| `P3` | `10.4`, `9. Alert Engine Semantics` |
+| `P4` | `10.5`, `8.4 Audio Runtime Config Invariants` |
+| `P5` | `10.6`, `8.5 Governance Baseline Hooks` |
 
 ## 2. Coupling Analysis (Legacy Constraints)
 
@@ -60,10 +60,10 @@ All V1 dependencies below are pre-approved. No per-packet approval gate is neede
 
 | Dependency | Estimated Size | Used By | Purpose |
 | --- | --- | --- | --- |
-| `h3-js` | ~1.2 MB | M2 | H3 encode/query support |
-| `multer` or `busboy` | ~50 KB | M1 | `POST /api/import` multipart file handling |
-| `ajv` (or equivalent) | ~200 KB | M3 | Push/source payload schema validation |
-| `express-rate-limit` (or equivalent) | ~30 KB | M5 | Control-plane rate limiting and quota |
+| `h3-js` | ~1.2 MB | P2 | H3 encode/query support |
+| `multer` or `busboy` | ~50 KB | P1 | `POST /api/import` multipart file handling |
+| `ajv` (or equivalent) | ~200 KB | P3 | Push/source payload schema validation |
+| `express-rate-limit` (or equivalent) | ~30 KB | P5 | Control-plane rate limiting and quota |
 
 Future dependencies (not pre-approved, require explicit approval):
 
@@ -143,11 +143,11 @@ Critical performance constraint: Do not use `cellToChildren()` in hot viewport q
 
 Rationale: Keeps spatial backend swappable while preserving uniform contracts for ingestion and query code.
 
-### 4.6 SLO prerequisite boundary (M2+)
+### 4.6 SLO prerequisite boundary (P2+)
 
-- Before M2, legacy grid path behavior can be measured for baseline and trend only.
-- After M2 exits, H3 path is the normative target and supports stable p95/p99 gate enforcement.
-- Any statement claiming normative SLO compliance MUST identify the active spatial path and MUST NOT certify M2+ SLOs while legacy path is still the serving path.
+- Before P2, legacy grid path behavior can be measured for baseline and trend only.
+- After P2 exits, H3 path is the normative target and supports stable p95/p99 gate enforcement.
+- Any statement claiming normative SLO compliance MUST identify the active spatial path and MUST NOT certify P2+ SLOs while legacy path is still the serving path.
 
 ### 4.7 V1 Scaling Boundary (Hard Limit)
 
@@ -159,7 +159,7 @@ V1 is architectured for single-instance deployment with explicit capacity limits
 | Unique cells per source | 500,000 | Sharded spatial index |
 | Total sources | Not hard-limited in V1 | Source partitioning |
 
-- These limits are V1 scope and MUST be validated by the M2 benchmark gate.
+- These limits are V1 scope and MUST be validated by the P2 benchmark gate.
 - Runtime SHOULD expose current utilization (active clients, cell counts) via `/api/config` or a status endpoint.
 - Exceeding these limits without architecture changes is unsupported and may cause degraded performance without clear error signals.
 - Implementation SHOULD add monitoring hooks that warn operators when utilization approaches 80% of hard limits.
@@ -464,13 +464,13 @@ Boundary note: The workflow itself is normative in SPEC. This section exists onl
 
 V1 delivery surface note: The `Draft -> Validate -> Apply -> Rollback` workflow is delivered as REST API endpoints in V1. A graphical UI is future scope. Operators use HTTP clients (curl, Postman, scripts) to execute the workflow.
 
-## 10. Milestone Work Packets
+## 10. Phase Work Packets
 
-### 10.1 [M0] Compatibility Guardrails
+### 10.1 [P0] Compatibility Guardrails
 
-**Execution note: M0 and M1 Packet A start in parallel. See section 12 for sequencing.**
+**Execution note: P0 and P1 Packet A start in parallel. See section 12 for sequencing.**
 
-#### Packet M0-A: Golden baseline harness
+#### Packet P0-A: Golden baseline harness
 
 - Scope:
     - Snapshot `/api/config`, `/api/viewport`, WebSocket `stats` payloads.
@@ -479,20 +479,20 @@ V1 delivery surface note: The `Draft -> Validate -> Apply -> Rollback` workflow 
 - Risk: Low.
 - Output: baseline fixtures and mandatory CI gate.
 
-#### Packet M0-B: Provisional SLO benchmark gate
+#### Packet P0-B: Provisional SLO benchmark gate
 
 - Scope:
     - Execute coarse local benchmark script against `POST /api/viewport`.
     - Capture p50/p95/p99 and sample environment metadata.
-    - Publish provisional metric table and freeze criteria handoff for M2.
+    - Publish provisional metric table and freeze criteria handoff for P2.
 - Output: benchmark report template + first baseline run record.
 - Risk: Low (informational), but high impact if omitted because SLO freeze cannot proceed cleanly.
 
-### 10.2 [M1] Open Ingestion + Control Plane (Parallel Start with M0)
+### 10.2 [P1] Open Ingestion + Control Plane (Parallel Start with P0)
 
-**Execution note: Packet M1-A starts in parallel with M0. M1-B onward starts after M0 gate is green.**
+**Execution note: Packet P1-A starts in parallel with P0. P1-B onward starts after P0 gate is green.**
 
-#### Packet M1-A: Adapter + Registry foundation
+#### Packet P1-A: Adapter + Registry foundation
 
 - New files:
     - `server/adapters/adapter-interface.js`
@@ -504,7 +504,7 @@ V1 delivery surface note: The `Draft -> Validate -> Apply -> Rollback` workflow 
 - Target effort: ~1100 LOC equivalent change volume.
 - Key risk: behavior parity with existing WorldCover path.
 
-#### Packet M1-B: Runtime import lifecycle
+#### Packet P1-B: Runtime import lifecycle
 
 - New files:
     - `server/import-manager.js`
@@ -524,42 +524,42 @@ V1 delivery surface note: The `Draft -> Validate -> Apply -> Rollback` workflow 
 - Target effort: ~1000 LOC equivalent change volume.
 - Key risk: runtime mutation safety and import validation correctness.
 
-#### Packet M1-C: API responsibility boundary hardening
+#### Packet P1-C: API responsibility boundary hardening
 
 - Scope:
     - Enforce non-overlapping responsibilities for `/api/import` vs `/api/sources`.
     - Add conflict/error contracts for mode/schema mismatch.
     - Add integration tests for success + conflict scenarios.
-- Risk: Medium (contract ambiguity creates downstream rework in M3/M4).
+- Risk: Medium (contract ambiguity creates downstream rework in P3/P4).
 
-#### Packet M1-D: Degraded end-to-end demo (early value validation)
+#### Packet P1-D: Degraded end-to-end demo (early value validation)
 
 - Scope:
     - Import CSV using existing grid system (no H3 required).
     - Display imported data on existing map overlay layer.
     - Route imported channels through existing audio bus system.
-- Purpose: validate the "upload -> see -> hear" loop at the earliest possible milestone.
+- Purpose: validate the "upload -> see -> hear" loop at the earliest possible phase.
 - Degraded aspects: no hex rendering, no H3 alignment, existing grid overlay only.
 - Exit criteria: imported CSV data produces visible map response and audible output when viewport covers the imported area.
 - Risk: Low (additive, no architectural changes needed).
 
-### 10.3 [M2] Unified H3 Spatial Core (includes Structural Decoupling)
+### 10.3 [P2] Unified H3 Spatial Core (includes Structural Decoupling)
 
-**Phase 1: Structural Decoupling (formerly M2-Prep)**
+**Stage 1: Structural Decoupling (formerly P2-Prep)**
 
-These packets execute as the first PRs of M2, not as a separate milestone. M2 Phase 2 starts only after Phase 1 evidence passes.
+These packets execute as the first PRs of P2, not as a separate phase. P2 Stage 2 starts only after Stage 1 evidence passes.
 
 Objective: Reduce migration risk before H3 cutover by decoupling high-coupling legacy modules into testable boundaries.
 
-#### Packet M2-P1: `spatial.js` split-prep
+#### Packet P2-P1: `spatial.js` split-prep
 
 - Scope:
     - Split responsibilities into `spatial-index`, `viewport-query`, `viewport-aggregator` with compatibility facade preserved.
-    - Preserve external contracts while preparing for H3 path swap in Phase 2.
+    - Preserve external contracts while preparing for H3 path swap in Stage 2.
 - Target effort: ~250-450 modified LOC (range-based estimate).
 - Risk: High (touches highest-coupling runtime path).
 
-#### Packet M2-P2: `data-loader.js` split-prep
+#### Packet P2-P2: `data-loader.js` split-prep
 
 - Scope:
     - Separate parser/validator/cache/manifest responsibilities.
@@ -567,18 +567,18 @@ Objective: Reduce migration risk before H3 cutover by decoupling high-coupling l
 - Target effort: ~300-550 modified LOC (range-based estimate).
 - Risk: High (startup/load path reliability).
 
-#### Packet M2-P3: Parity harness hardening
+#### Packet P2-P3: Parity harness hardening
 
 - Scope:
-    - Add deterministic parity hooks so Phase 2 can compare legacy and H3 outputs.
+    - Add deterministic parity hooks so Stage 2 can compare legacy and H3 outputs.
     - Ensure compatibility fixtures remain mandatory in CI.
 - Risk: Medium (tooling discipline risk).
 
-Phase 1 exit criteria: decoupled module boundaries are merged and covered by regression tests; no material behavior drift in WorldCover compatibility scenarios.
+Stage 1 exit criteria: decoupled module boundaries are merged and covered by regression tests; no material behavior drift in WorldCover compatibility scenarios.
 
-**Phase 2: H3 Migration**
+**Stage 2: H3 Migration**
 
-#### Packet M2-A: H3 foundation
+#### Packet P2-A: H3 foundation
 
 - New files:
     - `server/grid/h3-encoder.js`
@@ -586,9 +586,9 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 - Target effort: ~300 LOC.
 - Risk: Very low (additive).
 
-#### Packet M2-B: Spatial H3 migration (High Risk)
+#### Packet P2-B: Spatial H3 migration (High Risk)
 
-- High-risk hotspot: `server/spatial.js` (legacy responsibilities now decoupled in Phase 1).
+- High-risk hotspot: `server/spatial.js` (legacy responsibilities now decoupled in Stage 1).
 - Migration targets:
     - `server/spatial-index.js` -> H3 cell index
     - `server/viewport-aggregator.js` -> H3 cell query/merge
@@ -596,7 +596,7 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 - Validation: parity script for old vs H3 query path.
 - Target effort: ~250 new LOC + heavy refactor/reorg in spatial path.
 
-#### Packet M2-C: Frontend hex rendering
+#### Packet P2-C: Frontend hex rendering
 
 - New files:
     - `frontend/h3-utils.js`
@@ -606,9 +606,9 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 - Target effort: ~480 LOC.
 - Risk: Medium (render correctness + zoom/resolution behavior).
 
-### 10.4 [M3] Monitoring + Alerting + Stream Loop
+### 10.4 [P3] Monitoring + Alerting + Stream Loop
 
-#### Packet M3-A: Alert engine core
+#### Packet P3-A: Alert engine core
 
 - New files:
     - `server/alert-engine.js`
@@ -623,7 +623,7 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 - Target effort: ~470-600 LOC.
 - Risk: Medium (state machine correctness + compound evaluation edge cases).
 
-#### Packet M3-B: Real-time stream pipeline (poll)
+#### Packet P3-B: Real-time stream pipeline (poll)
 
 - New files:
     - `server/stream-scheduler.js`
@@ -645,7 +645,7 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 - Target effort: ~720 LOC equivalent change volume.
 - Risk: Medium (external feed instability + state growth + push correctness).
 
-#### Packet M3-C: HTTPS push ingress pipeline
+#### Packet P3-C: HTTPS push ingress pipeline
 
 - API additions:
     - `POST /api/streams/push/:sourceId`
@@ -658,9 +658,9 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 - Target effort: ~450-850 LOC equivalent change volume.
 - Risk: Medium-high (producer variability + retries + queue pressure).
 
-### 10.5 [M4] Configurable Audio Runtime (includes Sample Management)
+### 10.5 [P4] Configurable Audio Runtime (includes Sample Management)
 
-#### Packet M4-A: Mapping engine + apply baseline
+#### Packet P4-A: Mapping engine + apply baseline
 
 - New file:
     - `server/audio-mapping.js`
@@ -673,7 +673,7 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
     - emit `bus_config_update` WebSocket event on successful apply
 - Risk: Medium (runtime audio continuity).
 
-#### Packet M4-B: Control API workflow endpoints
+#### Packet P4-B: Control API workflow endpoints
 
 - Scope:
     - Remaining SPEC-frozen workflow endpoints: `POST /api/audio-mapping/draft`, `POST /api/audio-mapping/validate`, `POST /api/audio-mapping/rollback`, `GET /api/audio-mapping/history`
@@ -683,7 +683,7 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
     - No graphical UI required; operators interact via HTTP clients or scripts.
 - Risk: Medium (API contract correctness + runtime sync).
 
-#### Packet M4-C: Audio sample management (minimum viable)
+#### Packet P4-C: Audio sample management (minimum viable)
 
 - Scope:
     - Allow per-bus sample file override via `audio_mapping.json` (`sampleUrl` field).
@@ -694,23 +694,23 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
     - Frontend audio engine loads sample from configured URL instead of hardcoded path.
 - Risk: Low-medium (file handling + audio format compatibility).
 
-### 10.6 [M5] Enterprise Governance Baseline
+### 10.6 [P5] Enterprise Governance Baseline
 
-#### Packet M5-A: Auth and access control
+#### Packet P5-A: Auth and access control
 
 - Protect mutation/control endpoints.
 - Verify unauthorized write rejection behavior.
 
-#### Packet M5-B: Quotas and throttling
+#### Packet P5-B: Quotas and throttling
 
 - Import quotas (size/row/cell caps).
 - Rate limiting for control-plane writes.
 
-#### Packet M5-C: Audit trail
+#### Packet P5-C: Audit trail
 
 - Log import/delete/reload/alert-rule updates with operator identity and timestamp.
 
-#### Packet M5-D: Deployment-boundary disclosure
+#### Packet P5-D: Deployment-boundary disclosure
 
 - Ensure API docs, `/api/config` capability metadata, and operator UI consistently show `single_org_multi_team`.
 - Add verification checks preventing accidental hard multi-tenant claims in V1 artifacts.
@@ -719,25 +719,25 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 
 | Packet | Approx New LOC | Approx Modified LOC | Risk |
 | --- | --- | --- | --- |
-| Golden baseline harness (M0-A) | ~150-250 | ~20-50 | Low |
-| Provisional SLO benchmark (M0-B) | ~100-200 | ~10-30 | Low |
-| Adapter + registry (M1-A) | ~900-1300 | ~120-220 | Medium |
-| Runtime import + boundary (M1-B + M1-C) | ~950-1500 | ~90-220 | Medium |
-| Degraded demo (M1-D) | ~100-200 | ~50-100 | Low |
-| Structural decoupling (M2 Phase 1) | ~200-450 | ~600-1400 | High |
-| H3 foundation (M2-A) | ~250-400 | ~30-80 | Very low |
-| Spatial H3 migration (M2-B) | ~300-700 | ~500-1300 | High |
-| Frontend hex rendering (M2-C) | ~380-700 | ~180-420 | Medium |
-| Alert engine + compound rules (M3-A) | ~420-650 | ~60-150 | Medium |
-| Stream pipeline poll (M3-B) | ~600-1000 | ~100-260 | Medium |
-| Push ingress pipeline (M3-C) | ~450-850 | ~80-220 | Medium-high |
-| Mapping engine + apply baseline (M4-A) | ~200-350 | ~80-150 | Medium |
-| Control API workflow (M4-B) | ~350-600 | ~50-120 | Medium |
-| Audio sample management (M4-C) | ~200-350 | ~50-100 | Low-medium |
-| Auth and access control (M5-A) | ~200-350 | ~60-120 | Medium |
-| Quotas and throttling (M5-B) | ~150-250 | ~40-80 | Low-medium |
-| Audit trail (M5-C) | ~200-350 | ~30-60 | Low-medium |
-| Deployment boundary (M5-D) | ~50-100 | ~20-40 | Low |
+| Golden baseline harness (P0-A) | ~150-250 | ~20-50 | Low |
+| Provisional SLO benchmark (P0-B) | ~100-200 | ~10-30 | Low |
+| Adapter + registry (P1-A) | ~900-1300 | ~120-220 | Medium |
+| Runtime import + boundary (P1-B + P1-C) | ~950-1500 | ~90-220 | Medium |
+| Degraded demo (P1-D) | ~100-200 | ~50-100 | Low |
+| Structural decoupling (P2 Stage 1) | ~200-450 | ~600-1400 | High |
+| H3 foundation (P2-A) | ~250-400 | ~30-80 | Very low |
+| Spatial H3 migration (P2-B) | ~300-700 | ~500-1300 | High |
+| Frontend hex rendering (P2-C) | ~380-700 | ~180-420 | Medium |
+| Alert engine + compound rules (P3-A) | ~420-650 | ~60-150 | Medium |
+| Stream pipeline poll (P3-B) | ~600-1000 | ~100-260 | Medium |
+| Push ingress pipeline (P3-C) | ~450-850 | ~80-220 | Medium-high |
+| Mapping engine + apply baseline (P4-A) | ~200-350 | ~80-150 | Medium |
+| Control API workflow (P4-B) | ~350-600 | ~50-120 | Medium |
+| Audio sample management (P4-C) | ~200-350 | ~50-100 | Low-medium |
+| Auth and access control (P5-A) | ~200-350 | ~60-120 | Medium |
+| Quotas and throttling (P5-B) | ~150-250 | ~40-80 | Low-medium |
+| Audit trail (P5-C) | ~200-350 | ~30-60 | Low-medium |
+| Deployment boundary (P5-D) | ~50-100 | ~20-40 | Low |
 
 Cumulative planning envelope (matrix sum):
 
@@ -745,21 +745,21 @@ Cumulative planning envelope (matrix sum):
 - Approx modified LOC: `~2,170-5,120`
 - Approx total touched LOC: `~8,320-15,670`
 
-Execution warning: Keep structural decoupling (M2 Phase 1) mandatory before H3 semantics migration. Treat all estimates as ranges; do not commit to lower-bound values without parity evidence checkpoints.
+Execution warning: Keep structural decoupling (P2 Stage 1) mandatory before H3 semantics migration. Treat all estimates as ranges; do not commit to lower-bound values without parity evidence checkpoints.
 
 ## 12. Critical Sequencing and Merge Order
 
-1. Compatibility harness (M0-A) and adapter/registry foundation (M1-A) start in parallel.
-2. Provisional SLO benchmark (M0-B) after compatibility harness.
-3. M0 gate must be green before M1-B/M1-C/M1-D merge.
-4. Degraded demo (M1-D) after M1-B import lifecycle lands.
-5. Finish M1 additive control-plane work before M2 Phase 1.
-6. M2 Phase 1 (structural decoupling) before Phase 2 (H3 semantics).
-7. H3 foundation (M2-A) before H3 spatial migration (M2-B).
-8. Spatial migration before frontend hex rendering (M2-C).
+1. Compatibility harness (P0-A) and adapter/registry foundation (P1-A) start in parallel.
+2. Provisional SLO benchmark (P0-B) after compatibility harness.
+3. P0 gate must be green before P1-B/P1-C/P1-D merge.
+4. Degraded demo (P1-D) after P1-B import lifecycle lands.
+5. Finish P1 additive control-plane work before P2 Stage 1.
+6. P2 Stage 1 (structural decoupling) before Stage 2 (H3 semantics).
+7. H3 foundation (P2-A) before H3 spatial migration (P2-B).
+8. Spatial migration before frontend hex rendering (P2-C).
 9. Alert engine can start after registry abstractions stabilize.
-10. Push ingress packet lands in M3 after stream registry is stable.
-11. Audio sample management (M4-C) after mapping reload baseline (M4-A).
+10. Push ingress packet lands in P3 after stream registry is stable.
+11. Audio sample management (P4-C) after mapping reload baseline (P4-A).
 12. Governance packet lands after core functionality is stable enough to secure.
 
 Special note for `server/spatial.js`: If multiple branches touch it, merge order should preserve query parity checks after each integration.
@@ -767,9 +767,9 @@ Special note for `server/spatial.js`: If multiple branches touch it, merge order
 ## 13. Shortest Delivery Paths (Decision Aid)
 
 - **CSV upload -> degraded demo (earliest value):**
-    M0-A + M1-A parallel -> M1-B import -> M1-D degraded demo
+    P0-A + P1-A parallel -> P1-B import -> P1-D degraded demo
 - **CSV upload -> hex view -> sound (full H3 path):**
-    compatibility harness -> M1 ingest -> M2 decoupling -> H3 migration -> frontend hex
+    compatibility harness -> P1 ingest -> P2 decoupling -> H3 migration -> frontend hex
 - **Live earthquake -> sound:**
     adapter/registry -> stream registry -> poll stream packet -> alert engine
 - **Enterprise push feed -> alert -> sound:**
@@ -781,7 +781,7 @@ Use this section to choose showcase path under tight schedule.
 
 ## 14. WorldCover Baseline Manifest (Compatibility Contract)
 
-The baseline WorldCover compatibility set is the contract protected by M0 regression gates.
+The baseline WorldCover compatibility set is the contract protected by P0 regression gates.
 
 ### 14.1 Declared channel manifest (11 distribution + 3 metric)
 
@@ -805,7 +805,7 @@ The baseline WorldCover compatibility set is the contract protected by M0 regres
 ### 14.2 Derived compatibility control signal
 
 - `proximity` in [0,1] (runtime-derived control path, non-manifest channel).
-- M0 fixtures should lock the 14 declared channels and this derived control signal where applicable.
+- P0 fixtures should lock the 14 declared channels and this derived control signal where applicable.
 
 ## 15. Engineering Pitfall Checklist
 
@@ -818,12 +818,12 @@ The baseline WorldCover compatibility set is the contract protected by M0 regres
 7. Do not treat alert sounds as UI ornament; they are monitoring signals.
 8. Do not conflate `/api/import` with `/api/sources`; they solve different registration problems.
 9. Do not accept push retries without idempotency and dedup checks.
-10. Do not claim normative SLO compliance before M2 path activation and benchmark freeze.
+10. Do not claim normative SLO compliance before P2 path activation and benchmark freeze.
 11. Do not allow nested compound alert rules; V1 supports flat AND/OR with 2-3 conditions only.
 12. Do not apply cooldown per-condition in compound rules; cooldown is per `(ruleId, cellId)` at the compound rule level.
 13. Do not treat unresolved channel references as zero; absent channels must be distinguishable from channels with value 0.
 
-## 16. Compatibility Gate Checklist (Must Pass Every Milestone)
+## 16. Compatibility Gate Checklist (Must Pass Every Phase)
 
 1. WorldCover-only flow still works end-to-end.
 2. Existing viewport stats payload fields remain compatible.
@@ -889,11 +889,11 @@ Validation targets:
 
 ```bash
 # Run repeated /api/viewport requests and capture p50/p95/p99.
-# Informational in M0/M1, freeze input for M2 SLO gate.
+# Informational in P0/P1, freeze input for P2 SLO gate.
 # V1 scaling boundary validation targets:
 # - Sustain 200 concurrent viewport clients without p95 > 250ms
 # - Sustain source with 500,000 cells without query degradation
-# - These become hard gates from M2 exit onward
+# - These become hard gates from P2 exit onward
 ```
 
 Reference baseline sample (informational only):

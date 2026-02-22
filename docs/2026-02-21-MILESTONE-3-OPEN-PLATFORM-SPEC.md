@@ -1,4 +1,4 @@
-# Geo-Sonification Open Platform Specification
+# Milestone 3 — Open Platform Target Specification
 
 **Status:** Normative Spec v1.0-preview  
 **Date:** 2026-02-22  
@@ -15,21 +15,21 @@ This document uses RFC 2119 terms (MUST/SHOULD/MAY) to drive implementation and 
 Any critical interface, type, or configuration not frozen here must not be invented ad hoc during implementation.  
 
 ## Companion Detailed Docs
-- Technical rationale and engineering execution: `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`
-- Milestone execution contract: `docs/2026-02-21-MIGRATION-PLAN.md`
+- Technical rationale and engineering execution: `docs/2026-02-22-MILESTONE-3-IMPLEMENTATION-GUIDE.md`
+- Phase execution contract: `docs/2026-02-21-MILESTONE-3-MIGRATION-PLAN.md`
 
-## Milestone Mapping (M0-M5)
-Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
-`M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
+## Phase Mapping (P0-P5)
+Section numbers in this document are local structure only. Cross-document tracking uses `P0..P5` phase IDs.
+`P0..P5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
 
-| Milestone ID | Milestone Meaning | Primary Sections In This Spec |
+| Phase ID | Phase Meaning | Primary Sections In This Spec |
 | --- | --- | --- |
-| `M0` | Compatibility guardrails | `REQ-COMPAT-001`, `5.5` |
-| `M1` | Open ingestion + control plane | `REQ-INGEST-001`, `4.1`, `5.1` |
-| `M2` | Unified H3 spatial core | `REQ-GRID-001`, `REQ-PERF-001`, `3.2`, `5.2`, `5.8` |
-| `M3` | Monitoring + Alerting + Stream Loop | `REQ-ALERT-001`, `REQ-STREAM-001`, `4.2 alert`, `5.3` |
-| `M4` | Configurable audio runtime (includes sample management) | `REQ-AUDIO-001`, `REQ-UX-001`, `4.3 audio_mapping.json`, `5.4` |
-| `M5` | Governance baseline | `REQ-GOV-001`, `REQ-DEPLOY-001`, `5.6`, `5.7` |
+| `P0` | Compatibility guardrails | `REQ-COMPAT-001`, `5.5` |
+| `P1` | Open ingestion + control plane | `REQ-INGEST-001`, `4.1`, `5.1` |
+| `P2` | Unified H3 spatial core | `REQ-GRID-001`, `REQ-PERF-001`, `3.2`, `5.2`, `5.8` |
+| `P3` | Monitoring + Alerting + Stream Loop | `REQ-ALERT-001`, `REQ-STREAM-001`, `4.2 alert`, `5.3` |
+| `P4` | Configurable audio runtime (includes sample management) | `REQ-AUDIO-001`, `REQ-UX-001`, `4.3 audio_mapping.json`, `5.4` |
+| `P5` | Governance baseline | `REQ-GOV-001`, `REQ-DEPLOY-001`, `5.6`, `5.7` |
 
 ## 0. Document Conventions
 
@@ -49,14 +49,14 @@ This document uses [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords:
 - **SHOULD**: strong recommendation; deviations need explicit rationale.
 - **MAY**: optional capability.
 
-All requirements are traceable by `REQ-*` IDs and are referenced by milestones in the migration plan.
+All requirements are traceable by `REQ-*` IDs and are referenced by phases in the migration plan.
 
 ### 0.1 Mandatory Three-Document Protocol (Human + AI)
 - Any implementation agent (human or AI) MUST consult all three lighthouse documents before planning or coding:
-  - `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
-  - `docs/2026-02-21-MIGRATION-PLAN.md`
-  - `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`
-- Every implementation plan, task, or PR MUST include a trace tuple: at least one `REQ-*`, one `M*`, and one implementation guide section anchor.
+  - `docs/2026-02-21-MILESTONE-3-OPEN-PLATFORM-SPEC.md`
+  - `docs/2026-02-21-MILESTONE-3-MIGRATION-PLAN.md`
+  - `docs/2026-02-22-MILESTONE-3-IMPLEMENTATION-GUIDE.md`
+- Every implementation plan, task, or PR MUST include a trace tuple: at least one `REQ-*`, one `P*`, and one implementation guide section anchor.
 - Document precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `IMPLEMENTATION-GUIDE`.
 - If cross-document conflict is detected, implementation MUST pause and the document conflict MUST be resolved (or explicitly decision-locked) before merge.
 
@@ -87,7 +87,7 @@ Business users MUST be able to configure what triggers sound, mapping behavior, 
 ### REQ-COMPAT-001: WorldCover Compatibility Guardrail
 Refactoring MUST NOT break existing WorldCover demo behavior during migration.
 
-**Acceptance:** Existing WorldCover-only workflow remains functional and passes regression checks after each milestone.
+**Acceptance:** Existing WorldCover-only workflow remains functional and passes regression checks after each phase.
 
 ### REQ-GOV-001: Enterprise Baseline Governance
 V1 MUST include baseline governance: authentication, request quotas/rate limits, and auditable operation logs.
@@ -112,7 +112,7 @@ V1 MUST provide a minimum operator workflow for runtime audio behavior updates w
 ### REQ-PERF-001: Quantified V1 Performance Envelope
 V1 MUST publish quantified capacity/latency limits as provisional targets, then freeze them to normative gates after benchmark validation.
 
-**Acceptance:** Provisional metrics are declared in SPEC, benchmark gate is defined, and metrics become release-blocking from `M2` exit onward.
+**Acceptance:** Provisional metrics are declared in SPEC, benchmark gate is defined, and metrics become release-blocking from `P2` exit onward.
 
 ## 2. Target System Architecture (Web Audio Primary)
 
@@ -600,25 +600,25 @@ Persistence relationship (`manifest.json` vs `stream_sources.json`):
 
 ## 5. V1 Capability Specifications
 
-## 5.1 [M1] Open Ingestion (REQ-INGEST-001)
+## 5.1 [P1] Open Ingestion (REQ-INGEST-001)
 **Current:** Runtime import/control-plane endpoints are not fully available in production path.  
 **Target:** Runtime self-service import for CSV/GeoJSON with source/channel registration and persistence.  
 **Gap:** Build adapter framework, import manager, validation pipeline, and source lifecycle controls.
 
-Responsibility lock in this milestone:
+Responsibility lock in this phase:
 - `POST /api/import` = static/batch data-carrying registration.
 - `POST /api/sources` = stream source descriptor registration (no observation payload).
 
-**Acceptance:** New vendor data becomes queryable and audible in one running session without redeploy. M1 includes a degraded end-to-end demo (using existing grid overlay, no H3) to validate the "upload -> see -> hear" loop at the earliest possible milestone.
+**Acceptance:** New vendor data becomes queryable and audible in one running session without redeploy. P1 includes a degraded end-to-end demo (using existing grid overlay, no H3) to validate the "upload -> see -> hear" loop at the earliest possible phase.
 
-## 5.2 [M2] Unified Spatial Language (REQ-GRID-001)
+## 5.2 [P2] Unified Spatial Language (REQ-GRID-001)
 **Current:** Existing behavior is still tied to legacy grid logic in parts of the runtime path.  
 **Target:** End-to-end H3-based storage/query/merge semantics for all sources.  
 **Gap:** Complete H3 index/query migration and frontend hex rendering alignment.
 
 **Acceptance:** Different sources align on shared H3 cells with deterministic merged snapshots.
 
-## 5.3 [M3] Monitoring and Alerting (REQ-ALERT-001 + REQ-STREAM-001)
+## 5.3 [P3] Monitoring and Alerting (REQ-ALERT-001 + REQ-STREAM-001)
 **Current:** Alerting semantics are not yet complete as a production control-plane feature.  
 **Target:** Rule-driven threshold alerts with hysteresis, cooldown, dedup, auditable events, basic compound alert rules (AND/OR across 2-3 channels), and dual stream ingestion (`poll + HTTPS push`).
 **Gap:** Implement alert engine (including compound rule evaluation), runtime rule loading, event dispatch contract, and push ingress path (`POST /api/streams/push/:sourceId`).
@@ -633,7 +633,7 @@ V1 alert scope lock:
 
 **Acceptance:** Alert lifecycle is deterministic: `idle -> active -> cooldown -> idle`.
 
-## 5.4 [M4] Configurable Audio (REQ-AUDIO-001 + REQ-UX-001)
+## 5.4 [P4] Configurable Audio (REQ-AUDIO-001 + REQ-UX-001)
 **Current:** Core Web Audio path exists, but business-level runtime configurability is limited. Audio samples are hardcoded.
 **Target:** Non-audio engineers can configure channel/bus mapping, alert-sonification behavior, and custom audio samples.
 **Gap:** Deliver stable mapping schema, frozen audio mapping workflow REST API endpoints (`GET /api/audio-mapping`, `/draft`, `/validate`, `/apply`, `/rollback`, `/history`), sample upload/management (`POST /api/audio-samples/upload`, `GET /api/audio-samples`), and the `Draft -> Validate -> Apply -> Rollback` operator workflow (no GUI required in V1).
@@ -650,42 +650,42 @@ Minimum control workflow contract for V1:
 
 **Acceptance:** Mapping change is applied at runtime and reflected in output without deployment.
 
-## 5.5 [M0] Compatibility Guardrail (REQ-COMPAT-001)
+## 5.5 [P0] Compatibility Guardrail (REQ-COMPAT-001)
 **Current:** WorldCover demo is the stable baseline.  
-**Target:** Every milestone preserves baseline behavior while extending platform scope.  
-**Gap:** Introduce and enforce golden-regression harness across milestones.
+**Target:** Every phase preserves baseline behavior while extending platform scope.  
+**Gap:** Introduce and enforce golden-regression harness across phases.
 
-**Acceptance:** WorldCover-only scenario remains functionally unchanged at each milestone exit.
+**Acceptance:** WorldCover-only scenario remains functionally unchanged at each phase exit.
 
-## 5.6 [M5] Governance Baseline (REQ-GOV-001)
+## 5.6 [P5] Governance Baseline (REQ-GOV-001)
 **Current:** Enterprise baseline controls are not complete in V1 runtime path.  
 **Target:** API authentication, import quotas/rate limits, and auditable change logs.  
 **Gap:** Add auth middleware, limiter policies, and audit event persistence.
 
 **Acceptance:** Unauthorized writes fail, quota breaches are blocked, and key operations are traceable.
 
-## 5.7 [M5] Deployment Model Boundary (REQ-DEPLOY-001)
+## 5.7 [P5] Deployment Model Boundary (REQ-DEPLOY-001)
 **Current:** Deployment boundary is not consistently documented across API/UX/ops artifacts.  
 **Target:** V1 is explicitly `single_org_multi_team` with no implied hard tenant isolation guarantees.  
 **Gap:** Align API docs, config flags, and operator runbooks to one deployment boundary statement.
 
 **Acceptance:** All public artifacts expose the same deployment model boundary without ambiguity.
 
-## 5.8 [M2+] Performance Envelope (REQ-PERF-001)
+## 5.8 [P2+] Performance Envelope (REQ-PERF-001)
 **Current:** Performance monitoring language exists, but quantified acceptance targets are not yet frozen.  
-**Target:** Publish provisional SLO/capacity targets, validate with benchmark gate, and freeze as normative gates from `M2` exit.  
+**Target:** Publish provisional SLO/capacity targets, validate with benchmark gate, and freeze as normative gates from `P2` exit.  
 **Gap:** Define metric table, benchmark method, freeze criteria, and release-gate enforcement boundary.
 
 Provisional V1 targets (subject to benchmark freeze):
 
 | Metric | Provisional Target | Gate Activation |
 | --- | --- | --- |
-| Active viewport clients (per instance) | `>= 200` | Normative after `M2` exit |
-| `POST /api/viewport` latency | `p95 <= 250ms`, `p99 <= 500ms` | Normative after `M2` exit |
-| Single import size | `<= 250MB`, `<= 1,000,000 rows` | Normative after `M2` exit |
-| Source unique cells | `<= 500,000` | Normative after `M2` exit |
-| Push batch size | `<= 5,000` records | Normative after `M2` exit |
-| Push queue depth cap | `20,000` (`429` above cap) | Normative after `M2` exit |
+| Active viewport clients (per instance) | `>= 200` | Normative after `P2` exit |
+| `POST /api/viewport` latency | `p95 <= 250ms`, `p99 <= 500ms` | Normative after `P2` exit |
+| Single import size | `<= 250MB`, `<= 1,000,000 rows` | Normative after `P2` exit |
+| Source unique cells | `<= 500,000` | Normative after `P2` exit |
+| Push batch size | `<= 5,000` records | Normative after `P2` exit |
+| Push queue depth cap | `20,000` (`429` above cap) | Normative after `P2` exit |
 
 Benchmark note (informative, non-commitment): a local 80-request smoke sample on 2026-02-22 observed `p50=1.622ms`, `p95=2.059ms`, `p99=10.331ms` for one fixed viewport. This sample is sanity input only, not release certification.
 
@@ -698,7 +698,7 @@ V1 scaling boundary (hard limit):
 
 1. Interface consistency: SPEC, migration plan, and implementation guide MUST not conflict on API/type/schema names.
 2. Reality alignment: each core chapter MUST include `Current/Target/Gap`.
-3. Traceability: every milestone MUST map to at least one `REQ-*`.
+3. Traceability: every phase MUST map to at least one `REQ-*`.
 4. Compatibility: `REQ-COMPAT-001` MUST be explicitly testable.
 5. Ingestion scenario: runtime import path MUST support CSV/GeoJSON without code changes.
 6. Spatial alignment: multi-source H3 merge MUST be deterministic.
@@ -708,7 +708,7 @@ V1 scaling boundary (hard limit):
 10. Readability: the executive intro MUST communicate value in 3 minutes; the body MUST be implementation-ready.
 11. API responsibility boundary: `POST /api/import`, `POST /api/sources`, and `POST /api/streams/push/:sourceId` MUST have non-overlapping responsibilities.
 12. Control workflow contract: the `Draft -> Validate -> Apply -> Rollback` workflow MUST be testable end-to-end.
-13. SLO governance: provisional performance targets MUST include benchmark freeze rule and explicit gate activation boundary (`M2` exit).
+13. SLO governance: provisional performance targets MUST include benchmark freeze rule and explicit gate activation boundary (`P2` exit).
 
 **Acceptance:** Reviewers can derive implementation and QA plans from this document without unresolved decisions.
 
@@ -722,13 +722,13 @@ V1 scaling boundary (hard limit):
 - V1 stream ingestion MUST support `poll + HTTPS JSON push`.
 - External producer WebSocket ingress is future scope, not V1.
 - H3 is the sole internal spatial language for merged operations.
-- Performance targets are provisional before benchmark freeze and become normative release gates from `M2` exit.
+- Performance targets are provisional before benchmark freeze and become normative release gates from `P2` exit.
 - V1 npm dependencies are pre-approved (no per-packet gate needed): `h3-js`, `multer` or `busboy`, `ajv` or equivalent, `express-rate-limit` or equivalent. Future dependencies (e.g. `fast-xml-parser` for KML/GPX) require explicit approval.
 - Audio sample customization is V1 scope: custom WAV/OGG upload via `POST /api/audio-samples/upload` and per-bus `sampleUrl` in `audio_mapping.json`.
 - V1 audio control surface is API + JSON config only. A graphical UI for audio mapping/alert rule management is future scope and does not block V1 delivery.
 - V1 compound alert rules support basic AND/OR with 2-3 conditions (flat, no nesting). Advanced compound DSL (nested trees, N-of-M, temporal correlation) is future scope.
 - V1 performance boundary is single-instance: 200 concurrent viewport clients, 500,000 cells per source. Scaling beyond these limits is post-V1 architecture work.
-- M0 and M1 Packet A execute in parallel; M1-B onward starts after M0 gate is green.
+- P0 and P1 Packet A execute in parallel; P1-B onward starts after P0 gate is green.
 
 **Acceptance:** Implementers are not required to make architecture-level choices outside this document.
 
@@ -748,7 +748,7 @@ V1 scaling boundary (hard limit):
 - Horizontal scaling architecture (multi-instance, sharded spatial index, load balancing).
 - Expanded observability and long-term compliance reporting features.
 
-**Acceptance:** Deferred scope does not alter V1 red lines or milestones.
+**Acceptance:** Deferred scope does not alter V1 red lines or phases.
 
 ## Appendix A: Legacy Max/OSC Compatibility Notes (Historical)
 - Historical Max/OSC references are preserved for migration context only.

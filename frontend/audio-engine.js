@@ -220,6 +220,12 @@ function update(audioParams) {
     if (!audioCtx || suspended) return;
     if (!audioParams) return;
 
+    // Resume from auto-suspend (no-data timeout suspended the context
+    // but the user never clicked stop — suspended flag is still false)
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+
     const now = performance.now();
 
     if (Array.isArray(audioParams.busTargets)) {

@@ -77,6 +77,49 @@ function parseViewportBounds(bounds, clientLabel = 'request') {
     return { bounds };
 }
 
+/**
+ * Start HTTP server and resolve only after the port is successfully bound.
+ * @param {import('express').Express} expressApp
+ * @param {number} port
+ * @returns {Promise<import('http').Server>}
+ */
+function startHttpServer(expressApp, port) {
+    return new Promise((resolve, reject) => {
+        const server = expressApp.listen(port);
+        const onError = (err) => {
+            server.off('listening', onListening);
+            reject(err);
+        };
+        const onListening = () => {
+            server.off('error', onError);
+            resolve(server);
+        };
+        server.once('error', onError);
+        server.once('listening', onListening);
+    });
+}
+
+/**
+ * Start WebSocket server and resolve only after the port is successfully bound.
+ * @param {number} port
+ * @returns {Promise<WebSocketServer>}
+ */
+function startWsServer(port) {
+    return new Promise((resolve, reject) => {
+        const wss = new WebSocketServer({ port });
+        const onError = (err) => {
+            wss.off('listening', onListening);
+            reject(err);
+        };
+        const onListening = () => {
+            wss.off('error', onError);
+            resolve(wss);
+        };
+        wss.once('error', onError);
+        wss.once('listening', onListening);
+    });
+}
+
 // ============ Express Server ============
 const app = express();
 
@@ -167,15 +210,25 @@ async function startServer() {
         const { gridData, normalizeParams } = await loadGridData();
         spatial.init(gridData, normalizeParams);
 
+        // Start HTTP + WebSocket servers and only continue once both are bound.
+        httpServer = await startHttpServer(app, HTTP_PORT);
+        wssServer = await startWsServer(WS_PORT);
+        const wss = wssServer;
+
         dataLoaded = true;
 
-        // Start HTTP server
-        httpServer = app.listen(HTTP_PORT, () => {
-            console.log(`HTTP server running at http://localhost:${HTTP_PORT}`);
+        console.log(`HTTP server running at http://localhost:${HTTP_PORT}`);
+        console.log(`WebSocket server running at ws://localhost:${WS_PORT}`);
+
+        // Runtime HTTP errors should be logged to avoid unhandled 'error' events.
+        httpServer.on('error', (err) => {
+            console.error('HTTP server error:', err);
         });
 
-        // Start WebSocket server
-        const wss = (wssServer = new WebSocketServer({ port: WS_PORT }));
+        // Runtime WS errors should be logged, but startup readiness is already complete.
+        wss.on('error', (err) => {
+            console.error('WebSocket server error:', err);
+        });
 
         wss.on('connection', (ws) => {
             console.log('WebSocket client connected');
@@ -289,8 +342,6 @@ async function startServer() {
             });
         });
 
-        console.log(`WebSocket server running at ws://localhost:${WS_PORT}`);
-
         console.log(`
 ======================================
   Geo-Sonification Server Running
@@ -301,6 +352,23 @@ async function startServer() {
 ======================================
 `);
     } catch (err) {
+        dataLoaded = false;
+        if (wssServer) {
+            try {
+                wssServer.close();
+            } catch (closeErr) {
+                console.error('Failed to close WebSocket server after startup error:', closeErr);
+            }
+            wssServer = null;
+        }
+        if (httpServer) {
+            try {
+                httpServer.close();
+            } catch (closeErr) {
+                console.error('Failed to close HTTP server after startup error:', closeErr);
+            }
+            httpServer = null;
+        }
         console.error('Failed to start server:', err);
         process.exit(1);
     }
@@ -321,7 +389,17 @@ function gracefulShutdown(signal) {
     process.exit(0);
 }
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+if (require.main === module) {
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    startServer();
+}
 
-startServer();
+module.exports = {
+    app,
+    parseViewportBounds,
+    startHttpServer,
+    startWsServer,
+    startServer,
+    gracefulShutdown,
+};

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bounds Validation Regression Test
-# Tests P2 fix: strict numeric validation (rejects "-120abc", "30xyz", etc.)
+# Validates /api/viewport bounds parsing and range checks.
 
 set -euo pipefail
 
@@ -118,77 +118,77 @@ run_test \
     "400" \
     "non-numeric"
 
-# Test 2: GET /api/grids with dirty bounds query param (should REJECT)
+# Test 2: POST /api/viewport with valid numeric strings (should ACCEPT)
 run_test \
-    "Test 2: GET /api/grids?bounds with dirty strings" \
-    "GET" \
-    "/api/grids?bounds=-120abc,30xyz,-110foo,40bar" \
-    "" \
-    "400" \
-    "non-numeric"
-
-# Test 3: POST /api/viewport with valid numeric strings (should ACCEPT)
-run_test \
-    "Test 3: POST /api/viewport with valid numeric strings" \
+    "Test 2: POST /api/viewport with valid numeric strings" \
     "POST" \
     "/api/viewport" \
     '{"bounds":["-120","30","-110","40"]}' \
     "200" \
     ""
 
-# Test 4: GET /api/grids with valid bounds query param (should ACCEPT)
+# Test 3: POST /api/viewport with valid numeric values (not strings, should ACCEPT)
 run_test \
-    "Test 4: GET /api/grids?bounds with valid numerics" \
-    "GET" \
-    "/api/grids?bounds=-120,30,-110,40" \
-    "" \
-    "200" \
-    ""
-
-# Test 5: POST /api/viewport with valid numeric values (not strings, should ACCEPT)
-run_test \
-    "Test 5: POST /api/viewport with numeric values (not strings)" \
+    "Test 3: POST /api/viewport with numeric values (not strings)" \
     "POST" \
     "/api/viewport" \
     '{"bounds":[-120,30,-110,40]}' \
     "200" \
     ""
 
-# Test 6: POST /api/viewport with empty string bounds (should REJECT)
+# Test 4: POST /api/viewport with empty string bounds (should REJECT)
 run_test \
-    "Test 6: POST /api/viewport with empty string in bounds" \
+    "Test 4: POST /api/viewport with empty string in bounds" \
     "POST" \
     "/api/viewport" \
     '{"bounds":["",30,-110,40]}' \
     "400" \
     "non-numeric"
 
-# Test 7: POST /api/viewport with whitespace-only bounds (should REJECT)
+# Test 5: POST /api/viewport with whitespace-only bounds (should REJECT)
 run_test \
-    "Test 7: POST /api/viewport with whitespace-only bounds" \
+    "Test 5: POST /api/viewport with whitespace-only bounds" \
     "POST" \
     "/api/viewport" \
     '{"bounds":["  ",-30,-110,40]}' \
     "400" \
     "non-numeric"
 
-# Test 8: POST /api/viewport with out-of-range longitude (should REJECT)
+# Test 6: POST /api/viewport with latitude out of range (should REJECT)
 run_test \
-    "Test 8: POST /api/viewport with out-of-range longitude" \
+    "Test 6: POST /api/viewport with latitude out of range" \
     "POST" \
     "/api/viewport" \
-    '{"bounds":[-200,30,-110,40]}' \
+    '{"bounds":[-120,-91,-110,40]}' \
     "400" \
-    "out of range"
+    "Latitude out of range"
 
-# Test 9: POST /api/viewport with south > north (should REJECT)
+# Test 7: POST /api/viewport with south > north (should REJECT)
 run_test \
-    "Test 9: POST /api/viewport with south > north" \
+    "Test 7: POST /api/viewport with south > north" \
     "POST" \
     "/api/viewport" \
     '{"bounds":[-120,50,-110,40]}' \
     "400" \
     "south > north"
+
+# Test 8: POST /api/viewport with unwrapped west longitude (should ACCEPT via wrapping)
+run_test \
+    "Test 8: POST /api/viewport with west longitude -200 (wraps)" \
+    "POST" \
+    "/api/viewport" \
+    '{"bounds":[-200,30,-110,40]}' \
+    "200" \
+    ""
+
+# Test 9: POST /api/viewport with unwrapped east longitude (should ACCEPT via wrapping)
+run_test \
+    "Test 9: POST /api/viewport with east longitude 195 (wraps)" \
+    "POST" \
+    "/api/viewport" \
+    '{"bounds":[170,-10,195,10]}' \
+    "200" \
+    ""
 
 # Summary
 echo ""

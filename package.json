@@ -11,8 +11,8 @@
         "test": "npm --prefix server test",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "format": "prettier --cache --ignore-unknown --write .",
+        "format:check": "prettier --cache --ignore-unknown --check ."
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",

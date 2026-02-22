@@ -121,6 +121,9 @@ function notifyLoadingUpdate() {
  * @returns {Promise<void>}
  */
 async function loadSample(busIndex) {
+    // Skip buses that already loaded successfully (on stop/start retry cycle)
+    if (loadingStates[busIndex].status === 'ready' && buffers[busIndex]) return;
+
     const name = BUS_NAMES[busIndex];
     loadingStates[busIndex] = { status: 'loading', progress: 0, error: null };
     notifyLoadingUpdate();
@@ -329,6 +332,7 @@ function handleVisibilityChange() {
     if (!audioCtx) return;
 
     if (document.hidden) {
+        clearNoDataTimers(); // prevent no-data timer from zeroing targets while hidden
         if (audioCtx.state === 'running') {
             audioCtx.suspend();
         }
@@ -343,6 +347,7 @@ function handleVisibilityChange() {
             oceanSmoothed = oceanTarget;
             lastEmaTime = performance.now();
             startRaf();
+            resetNoDataTimeout(); // restart no-data watchdog after resuming
         }
     }
 }
@@ -395,6 +400,7 @@ async function stop() {
     suspended = true;
     cancelRaf();
     clearNoDataTimers();
+    loadingStarted = false; // allow retry of failed samples on next start()
 
     if (audioCtx && audioCtx.state === 'running') {
         await audioCtx.suspend();

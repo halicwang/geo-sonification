@@ -64,6 +64,7 @@ export function connectWebSocket(callbacks) {
 
     state.runtime.ws.onerror = (err) => {
         console.error('WebSocket error:', err);
-        if (callbacks.onDisconnect) callbacks.onDisconnect();
+        // onclose always fires after onerror — onDisconnect is handled there
+        // to avoid calling the callback twice per disconnect event.
     };
 }

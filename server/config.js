@@ -66,24 +66,6 @@ function parseNonNegativeInt(envVar, defaultValue, name) {
 }
 
 /**
- * Parse an env var as a positive integer (>0), exit on invalid.
- * @param {string} envVar - Environment variable name
- * @param {number} defaultValue - Fallback value
- * @param {string} name - Display name for error messages
- * @returns {number}
- */
-function parsePositiveInt(envVar, defaultValue, name) {
-    const value = process.env[envVar];
-    if (value === undefined || value === '') return defaultValue;
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-        console.error(`ERROR: Invalid ${name} "${value}". Must be a positive integer.`);
-        process.exit(1);
-    }
-    return parsed;
-}
-
-/**
  * Parse an env var as a boolean, exit on invalid.
  * Accepts: true/1 (→ true), false/0 (→ false).
  * @param {string} envVar - Environment variable name
@@ -260,8 +242,8 @@ console.log(
 //   zoom >= PROXIMITY_ZOOM_HIGH => 1 (zoomed in — land detail)
 //   zoom <= PROXIMITY_ZOOM_LOW  => 0 (zoomed out — ocean/distant)
 //   linear interpolation between
-const PROXIMITY_ZOOM_LOW = parseFloat(process.env.PROXIMITY_ZOOM_LOW) || 4;
-const PROXIMITY_ZOOM_HIGH = parseFloat(process.env.PROXIMITY_ZOOM_HIGH) || 6;
+const PROXIMITY_ZOOM_LOW = parseNonNegativeFloat('PROXIMITY_ZOOM_LOW', 4, 'PROXIMITY_ZOOM_LOW');
+const PROXIMITY_ZOOM_HIGH = parseNonNegativeFloat('PROXIMITY_ZOOM_HIGH', 6, 'PROXIMITY_ZOOM_HIGH');
 
 if (PROXIMITY_ZOOM_LOW >= PROXIMITY_ZOOM_HIGH) {
     console.error(

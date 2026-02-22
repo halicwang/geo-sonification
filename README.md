@@ -87,7 +87,10 @@ geo-sonification/
 │   │   └── normalize.json
 │   └── tiles/                            # PMTiles (built by scripts/build-tiles.js)
 │       └── grids.pmtiles
-├── docs/                                 # Dev notes and milestone proposals
+├── docs/
+│   ├── plans/                            # Design proposals, milestone specs
+│   ├── devlog/                           # Development logs and debugging records
+│   └── guides/                           # Implementation guides
 ├── gee/
 │   ├── README_EXPORT.md                  # GEE export instructions
 │   └── <continent>_grid.js               # GEE export scripts (one per continent)

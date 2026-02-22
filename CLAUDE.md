@@ -23,7 +23,9 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 | `data/raw/`   | GEE exports — source of truth, do not edit manually          | —                              |
 | `data/cache/` | Derived data, auto-rebuilt by server — do not edit or commit | —                              |
 | `gee/`        | Google Earth Engine export scripts                           | —                              |
-| `docs/`       | Design documents and dev logs                                | —                              |
+| `docs/plans/` | Design proposals, milestone specs, migration plans           | —                              |
+| `docs/devlog/`| Development logs and debugging records                       | —                              |
+| `docs/guides/`| Implementation guides and deployment instructions            | —                              |
 | `scripts/`    | Utility scripts                                              | —                              |
 
 ## Naming Conventions
@@ -51,8 +53,8 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 
 ## Documentation Update Policy
 
-- **Feature changes** (new modules, architectural adjustments) must update all three files: `DEVLOG.md`, `README.md`, and `ARCHITECTURE.md`.
-- **Bug fixes and internal refactors** only require a `DEVLOG.md` entry; update `README.md` and `ARCHITECTURE.md` as needed.
+- **Feature changes** (new modules, architectural adjustments) must: create a new entry in `docs/devlog/`, add it to the `DEVLOG.md` index, and update `README.md` and `ARCHITECTURE.md`.
+- **Bug fixes and internal refactors** only require a new `docs/devlog/` entry + index link; update `README.md` and `ARCHITECTURE.md` as needed.
 
 ## Development Workflow
 
@@ -64,8 +66,8 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 
 - System architecture: `ARCHITECTURE.md`
 - Design decisions: `DEVLOG.md`
-- Sound design: `docs/2026-02-19-sound-design-plan.md`
+- Sound design: `docs/plans/2026-02-19-sound-design-plan.md`
 - Data schema: `data/raw/SCHEMA.md`
-- Open platform spec: `docs/2026-02-21-MILESTONE-3-OPEN-PLATFORM-SPEC.md`
-- Migration plan: `docs/2026-02-21-MILESTONE-3-MIGRATION-PLAN.md`
-- Implementation guide: `docs/2026-02-22-MILESTONE-3-IMPLEMENTATION-GUIDE.md`
+- Open platform spec: `docs/plans/2026-02-21-MILESTONE-3-OPEN-PLATFORM-SPEC.md`
+- Migration plan: `docs/plans/2026-02-21-MILESTONE-3-MIGRATION-PLAN.md`
+- Implementation guide: `docs/guides/2026-02-22-MILESTONE-3-IMPLEMENTATION-GUIDE.md`

@@ -13,7 +13,7 @@ Milestone 2 turns those numbers into sound. This milestone extends the server wi
 
 ## 2. What Milestone 1 Established
 
-Milestone 1 (documented in `docs/2026-01-30-sonification-milestone-proposal.md`) delivered:
+Milestone 1 (documented in `docs/plans/2026-01-30-sonification-milestone-proposal.md`) delivered:
 
 - **GEE data export**: global 1°×1° grid CSV with landcover, nightlight, population, and forest metrics
 - **Node.js server**: loads CSVs, builds spatial index, computes viewport-level aggregated statistics on every pan/zoom

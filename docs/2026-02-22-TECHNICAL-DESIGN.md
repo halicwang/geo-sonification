@@ -15,6 +15,7 @@ If the lighthouse docs define what must be delivered, this companion defines why
 - Use `docs/2026-02-21-MIGRATION-PLAN.md` for milestone sequencing, evidence, and rollback gates.
 - Use `docs/2026-02-22-TECHNICAL-DESIGN.md` for design rationale, algorithm choices, and implementation traps.
 - Use `docs/2026-02-22-ENGINEERING-REFERENCE.md` for file-level execution sequencing.
+- UI workflow contracts are normative in SPEC; this document only explains rationale/invariants behind those contracts.
 
 ### 0.1 Mandatory Multi-Document Use (Human + AI)
 - This document MUST NOT be used as a standalone implementation source.
@@ -22,14 +23,15 @@ If the lighthouse docs define what must be delivered, this companion defines why
 - Conflict precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `TECHNICAL-DESIGN` > `ENGINEERING-REFERENCE`.
 Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.md` Section 0.1 acceptance criteria; this document provides rationale and constraints and MUST NOT redefine acceptance criteria.
 
-## Milestone Anchors (M0-M5)
-Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
+## Milestone Anchors (M0-M5 + M2-Prep Execution Stage)
+Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs plus one execution-only precondition stage (`M2-Prep`).
 `M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
 
 | Milestone ID | Primary Technical Anchors In This Document |
 | --- | --- |
 | `M0` | `8. WorldCover Baseline Manifest` |
 | `M1` | `3. Adapter Interface Contracts`, `4. Import Pipeline`, `5. Channel Registry` |
+| `M2-Prep` | `7. Engineering Pitfall Checklist` |
 | `M2` | `2. H3 Technical Deep Dive` |
 | `M3` | `6. Alert Engine Semantics` |
 | `M4` | `5.4 Audio Runtime Config Invariants` |
@@ -153,6 +155,16 @@ Critical performance constraint:
 Rationale:
 - Keeps spatial backend swappable, while preserving uniform contracts for ingestion and query code.
 
+### 2.6 SLO prerequisite boundary (M2+)
+
+Performance rationale:
+- V1 provisional SLO values are useful planning guardrails, but release-gate enforcement depends on the M2 data path.
+- Before M2, legacy grid path behavior can be measured for baseline and trend only.
+- After M2 exits, H3 index/query path is the normative target and supports stable p95/p99 gate enforcement.
+
+Implementation invariant:
+- Any statement claiming normative SLO compliance MUST identify the active spatial path and MUST NOT certify M2+ SLOs while legacy path is still the serving path.
+
 ## 3. [M1] Adapter Interface Contracts (Frozen Module Boundary)
 
 ### 3.1 DataAdapter contract
@@ -193,6 +205,42 @@ Engineering intent:
 - `StreamAdapter` extends, not replaces, DataAdapter semantics.
 - Runtime scheduler treats stream adapters as first-class registry participants.
 
+### 3.3 PushAdapter extension (V1 minimum)
+
+```js
+/**
+ * @typedef {Object} PushAdapter
+ * @extends DataAdapter
+ * @property {"stream"} temporalType
+ * @property {"stream_push"} mode
+ * @property {number} dedupWindowMs
+ * @property {number} maxBatchSize
+ * @property {number} maxQueueDepth
+ * @property {(records: PushEvent[], encoder: CellEncoder, precision: number) => Promise<PushIngestAck>} ingestPush
+ */
+```
+
+Engineering intent:
+- Push ingress is a first-class stream mode, not an ad-hoc side path.
+- `POST /api/sources` establishes source metadata/schema before data payloads arrive.
+- `POST /api/streams/push/:sourceId` accepts event batches only for pre-registered `mode=stream_push` sources.
+
+### 3.4 SourceDescriptor shape (control-plane metadata)
+
+```json
+{
+  "sourceId": "aq_stream",
+  "mode": "stream_push",
+  "schemaVersion": 1,
+  "ownerTeam": "ops_air",
+  "status": "active"
+}
+```
+
+Rationale:
+- Source lifecycle and push validity checks depend on stable metadata, not inferred runtime state.
+- `mode` disambiguates static/batch import sources from stream poll/push descriptors.
+
 ## 4. [M1] Import Pipeline Deep Semantics
 
 ### 4.1 CSV minimal contract
@@ -218,6 +266,20 @@ Required columns:
 - `sourceId` must be sanitized: lowercase, underscores, max length, safe chars.
 - Re-import with same `sourceId` replaces previous source atomically.
 - Manifest writes must use temp-file + rename to avoid crash corruption.
+
+### 4.4 Stream source registration boundary (`/api/import` vs `/api/sources`)
+
+Boundary rationale:
+- `POST /api/import` is optimized for static/batch file payloads and data-carrying registration.
+- `POST /api/sources` is metadata-only pre-registration for stream sources (poll/push).
+- Keeping them separate prevents ambiguous partial-registration states and simplifies validation/error contracts.
+
+Implementation invariants:
+- `/api/import` MUST parse payload and produce `DataRecord[]` in one transaction.
+- `/api/sources` MUST validate descriptor/schema without ingesting observation payload.
+- Push events MUST be rejected (`404`/`409`) when source registration state is absent or incompatible.
+- Static/batch source lifecycle persists in `data/imports/manifest.json`; stream source lifecycle persists in `stream_sources.json`.
+- `DELETE /api/sources/:id` MUST remove source entries from the applicable persistence store(s) and runtime registry atomically (all-or-nothing).
 
 ## 5. [M1] Channel Registry and Runtime Stability
 
@@ -273,6 +335,70 @@ Required semantics:
 Why this matters:
 - Without hysteresis/cooldown/dedup, operators get alert storms and stop trusting audio alerts.
 
+### 6.1 Push ingress payload and acknowledgement types
+
+`PushEvent` (technical type):
+
+```json
+{
+  "eventId": "evt-20260222-001",
+  "timestamp": "2026-02-22T06:31:10Z",
+  "cellId": "85283473fffffff",
+  "lat": 37.78,
+  "lon": -122.41,
+  "channelsRaw": { "pm25": 83.2, "temp_c": 29.5 },
+  "meta": { "sourceConfidence": 0.91 }
+}
+```
+
+Type rules:
+- `timestamp` is required.
+- Spatial key is `cellId` OR (`lat` + `lon`) with deterministic precedence documented in adapter logic.
+- `channelsRaw` is required; normalization is adapter/runtime responsibility, not producer responsibility.
+
+`PushIngestAck` (technical type):
+
+```json
+{
+  "accepted": 4980,
+  "deduped": 15,
+  "rejected": 5,
+  "ingestLatencyMs": 42,
+  "errors": [
+    { "index": 17, "code": "INVALID_COORDINATE", "message": "lat out of range" }
+  ]
+}
+```
+
+Ack rules:
+- Partial acceptance is allowed and MUST include per-record error details.
+- Ack counters MUST sum to input record count.
+- `ingestLatencyMs` MUST measure server-side processing window for the batch.
+
+### 6.2 Idempotency, dedup, and backpressure semantics
+
+Required semantics:
+- `Idempotency-Key` identifies retried push requests and MUST prevent duplicate ingestion in the dedup window.
+- Dedup window default (`dedupWindowMs`) is source-configurable with a V1 baseline default.
+- Queue depth cap enforces backpressure; exceeded cap MUST return `429`.
+- Oversized push batches MUST return `413` before expensive ingest work begins.
+
+Why this matters:
+- Without hard idempotency/dedup contracts, push retries create false alert storms and invalid trend signals.
+- Without backpressure, one noisy producer can destabilize all downstream alert/audio paths.
+
+### 6.3 Control workflow rationale (non-contract)
+
+Rationale for `Draft -> Validate -> Apply -> Rollback`:
+- Draft separates exploration from activation.
+- Validate prevents runtime corruption from invalid mapping/rule sets.
+- Apply is the explicit operational cutover point.
+- Rollback preserves operator trust under incident pressure.
+
+Boundary note:
+- The workflow itself is normative in SPEC.
+- This section exists only to explain why this workflow is safer than direct in-place edits.
+
 ## 7. Engineering Pitfall Checklist
 
 1. Do not drop `channelsRaw`; it breaks re-normalization flexibility.
@@ -282,6 +408,9 @@ Why this matters:
 5. Do not allow silent source overwrite with unsanitized IDs.
 6. Do not mutate channel indices without explicit reload notifications.
 7. Do not treat alert sounds as UI ornament; they are monitoring signals.
+8. Do not conflate `/api/import` with `/api/sources`; they solve different registration problems.
+9. Do not accept push retries without idempotency and dedup checks.
+10. Do not claim normative SLO compliance before M2 path activation and benchmark freeze.
 
 ## 8. [M0] WorldCover Baseline Manifest (Compatibility Contract)
 
@@ -317,8 +446,12 @@ Compatibility note:
 ## 9. Relationship to V1 Requirements
 
 - REQ-INGEST-001: Sections 3 and 4
+- REQ-STREAM-001: Sections 3.3 and 6.1/6.2
 - REQ-GRID-001: Sections 1 and 2
 - REQ-ALERT-001: Section 6
-- REQ-AUDIO-001: Sections 5 and 6 integration assumptions
+- REQ-AUDIO-001: Sections 5 and 6.3 integration assumptions
+- REQ-UX-001: Section 6.3 (rationale only; normative contract in SPEC)
 - REQ-COMPAT-001: Sections 5.2 and 8
 - REQ-GOV-001: Sections 4.3, 5.5, and pipeline hardening hooks
+- REQ-DEPLOY-001: deployment boundary is normative in SPEC; this document only provides integration assumptions (Sections 0 and 5.5 hooks)
+- REQ-PERF-001: Section 2.6 prerequisite boundary

@@ -27,10 +27,10 @@ Section numbers in this document are local structure only. Cross-document tracki
 | --- | --- | --- |
 | `M0` | Compatibility guardrails | `REQ-COMPAT-001`, `5.5` |
 | `M1` | Open ingestion + control plane | `REQ-INGEST-001`, `4.1`, `5.1` |
-| `M2` | Unified H3 spatial core | `REQ-GRID-001`, `3.2`, `5.2` |
-| `M3` | Monitoring + Alerting + Stream Loop | `REQ-ALERT-001`, `4.2 alert`, `5.3` |
-| `M4` | Configurable audio runtime | `REQ-AUDIO-001`, `4.3 audio_mapping.json`, `5.4` |
-| `M5` | Governance baseline | `REQ-GOV-001`, `5.6` |
+| `M2` | Unified H3 spatial core | `REQ-GRID-001`, `REQ-PERF-001`, `3.2`, `5.2`, `5.8` |
+| `M3` | Monitoring + Alerting + Stream Loop | `REQ-ALERT-001`, `REQ-STREAM-001`, `4.2 alert`, `5.3` |
+| `M4` | Configurable audio runtime | `REQ-AUDIO-001`, `REQ-UX-001`, `4.3 audio_mapping.json`, `5.4` |
+| `M5` | Governance baseline | `REQ-GOV-001`, `REQ-DEPLOY-001`, `5.6`, `5.7` |
 
 ## 0. Document Conventions
 
@@ -93,6 +93,26 @@ Refactoring MUST NOT break existing WorldCover demo behavior during migration.
 V1 MUST include baseline governance: authentication, request quotas/rate limits, and auditable operation logs.
 
 **Acceptance:** Unauthorized writes are blocked, import quotas are enforced, and import/delete/config changes are traceable through audit records.
+
+### REQ-STREAM-001: Dual Stream Ingestion (Poll + Push)
+V1 MUST support both poll-based stream ingestion and HTTPS JSON push ingestion under one source registry model.
+
+**Acceptance:** A `mode=stream_push` source created by `POST /api/sources` can receive events via `POST /api/streams/push/:sourceId` with idempotency, dedup, and backpressure semantics.
+
+### REQ-DEPLOY-001: Deployment Model Boundary (V1)
+V1 MUST explicitly target `single_org_multi_team` deployment and MUST NOT implicitly claim hard multi-tenant SaaS isolation.
+
+**Acceptance:** API/UI/docs expose the deployment model boundary consistently, and full tenant isolation remains outside V1 commitments.
+
+### REQ-UX-001: Minimum Operator Workflow for Audio Control
+V1 MUST provide a minimum operator workflow for runtime audio behavior updates without audio-engineering expertise.
+
+**Acceptance:** Operators can complete `Draft -> Validate -> Apply -> Rollback` for mapping/rule updates through the control surface and observe runtime effect without redeploy.
+
+### REQ-PERF-001: Quantified V1 Performance Envelope
+V1 MUST publish quantified capacity/latency limits as provisional targets, then freeze them to normative gates after benchmark validation.
+
+**Acceptance:** Provisional metrics are declared in SPEC, benchmark gate is defined, and metrics become release-blocking from `M2` exit onward.
 
 ## 2. Target System Architecture (Web Audio Primary)
 
@@ -240,11 +260,26 @@ Alert Engine           Audio Mapping Engine
 
 ## 4.1 REST APIs
 
+### API Responsibility Matrix
+
+| API | Primary Responsibility | Scope Boundary |
+| --- | --- | --- |
+| `POST /api/import` | **Data-carrying registration** for static/batch files | Upload file + parse + source create/replace in one call |
+| `POST /api/sources` | **Metadata-only pre-registration** for stream sources | Declare source schema/mode without observation payload |
+| `POST /api/streams/push/:sourceId` | **Incremental push ingestion** | Accept runtime event batches only for `mode=stream_push` |
+
+Responsibility lock:
+- `POST /api/import` and `POST /api/sources` MUST NOT be treated as interchangeable.
+- Static/batch onboarding MUST use `POST /api/import`.
+- Stream push onboarding MUST use `POST /api/sources` first, then `POST /api/streams/push/:sourceId`.
+
 ### `POST /api/import`
 - Purpose: runtime ingest CSV/GeoJSON.
 - Request: `multipart/form-data` (`file` required, `sourceId` optional, `resolution` optional).
 - Response `200` MUST include: `status`, `source`, `channels`, `cellCount`, `resolution`.
 - Response `400/413` MUST include: `status`, `message`.
+- Responsibility boundary: this endpoint performs **data-carrying registration** for static/batch ingestion paths.
+- Source behavior: if `sourceId` exists, import MUST atomically replace prior static/batch source data.
 
 Example success:
 ```json
@@ -258,17 +293,29 @@ Example success:
 }
 ```
 
+### `POST /api/sources`
+- Purpose: register or update a stream source descriptor before events arrive.
+- Request: `application/json` with `sourceId`, `mode`, `channels`, and schema/version metadata.
+- Supported modes in V1: `stream_poll`, `stream_push`.
+- Response `200` MUST include: `status`, `source`, `mode`, `schemaVersion`.
+- Response `400` MUST include: `status`, `message`.
+- Response `409` MUST be used for incompatible descriptor conflicts (for example mode/schema mismatch without replace flag).
+
 ### `GET /api/sources`
 - Purpose: list builtin + imported sources.
-- Response MUST include `sources[]` with `id`, `type`, `channelCount`, `cellCount`, `resolution`.
+- Response MUST include `sources[]` with `id`, `type`, `mode`, `schemaVersion`, `ownerTeam`, `channelCount`, `cellCount`, `resolution`, `status`.
 
 ### `GET /api/channels`
 - Purpose: expose registry and current channel indices.
 - Response MUST include `channels[]` with `index`, `key`, `source`, `name`, `label`, `unit`, `group`.
 
 ### `DELETE /api/sources/:id`
-- Purpose: remove imported source from memory + manifest.
+- Purpose: remove imported source from memory + persistence store(s).
 - MUST reject deletion of builtin sources with `400`.
+- Lifecycle rule:
+  - For static/batch sources, delete MUST remove source state from runtime registry and `data/imports/manifest.json`.
+  - For stream sources (`stream_poll`, `stream_push`), delete MUST remove source state from runtime registry and `stream_sources.json`.
+  - If a source has entries in both persistence stores due to migration/backfill operations, delete MUST remove both entries atomically or fail without partial state.
 
 ### `POST /api/audio-mapping/reload`
 - Purpose: hot-reload audio bus mapping.
@@ -276,10 +323,21 @@ Example success:
 
 ### `GET /api/streams`
 - Purpose: inspect stream adapter states.
-- Response MUST include stream `status`, `lastFetch`, `activeCells`, and poll/window config.
+- Response MUST include `status`, `mode`, and stream health metadata.
+- For `stream_poll`, response MUST include `lastFetch`, poll/window config, and active cell count.
+- For `stream_push`, response MUST include `lastEventAt`, `queueDepth`, `dedupWindowMs`, `errorRate1m`, and active cell count.
+
+### `POST /api/streams/push/:sourceId`
+- Purpose: accept event batches pushed by external systems for a pre-registered `mode=stream_push` source.
+- Request: `application/json` with `records[]`.
+- Required headers: `Authorization`, `Idempotency-Key`.
+- Response `200` MUST include `accepted`, `deduped`, `rejected`, `errors[]`, `ingestLatencyMs`.
+- Response `400/401/403/404/409/413/429` MUST include `status`, `message`, and error details.
+- Backpressure rule: when source queue depth exceeds configured cap, endpoint MUST return `429` and MUST NOT partially enqueue rejected records.
 
 ### `GET /api/config`
 - Purpose: client runtime config (`wsPort`, rendering metadata, capability flags).
+- Response MUST include `deploymentModel`, capability flags (`supportsStreamPoll`, `supportsStreamPush`), and active limit profile identifiers.
 
 ### `POST /api/viewport`
 - Purpose: viewport query fallback path.
@@ -378,6 +436,39 @@ Example success:
 }
 ```
 
+### `stream_sources.json` (frozen minimum)
+```json
+{
+  "version": 1,
+  "sources": [
+    {
+      "sourceId": "air_quality_stream",
+      "mode": "stream_push",
+      "schemaVersion": 1,
+      "channels": ["pm25", "temp_c"],
+      "dedupWindowMs": 600000
+    }
+  ]
+}
+```
+
+Persistence relationship (`manifest.json` vs `stream_sources.json`):
+- `data/imports/manifest.json` is the source of truth for static/batch import lifecycle (`POST /api/import`).
+- `stream_sources.json` is the source of truth for stream source descriptors (`POST /api/sources`).
+- `DELETE /api/sources/:id` MUST apply lifecycle cleanup to whichever store(s) contain the source entry according to endpoint rules.
+
+### `ingest_limits.json` (frozen minimum)
+```json
+{
+  "version": 1,
+  "maxImportBytes": 262144000,
+  "maxImportRows": 1000000,
+  "maxSourceCells": 500000,
+  "maxPushBatchRecords": 5000,
+  "maxPushQueueDepth": 20000
+}
+```
+
 - Config loaders MUST fail safely (reject invalid config, keep previous valid runtime config).
 
 **Acceptance:** Invalid config cannot corrupt runtime state; last valid config remains active.
@@ -393,6 +484,10 @@ Example success:
 **Target:** Runtime self-service import for CSV/GeoJSON with source/channel registration and persistence.  
 **Gap:** Build adapter framework, import manager, validation pipeline, and source lifecycle controls.
 
+Responsibility lock in this milestone:
+- `POST /api/import` = static/batch data-carrying registration.
+- `POST /api/sources` = stream source descriptor registration (no observation payload).
+
 **Acceptance:** New vendor data becomes queryable and audible in one running session without redeploy.
 
 ## 5.2 [M2] Unified Spatial Language (REQ-GRID-001)
@@ -402,17 +497,30 @@ Example success:
 
 **Acceptance:** Different sources align on shared H3 cells with deterministic merged snapshots.
 
-## 5.3 [M3] Monitoring and Alerting (REQ-ALERT-001)
+## 5.3 [M3] Monitoring and Alerting (REQ-ALERT-001 + REQ-STREAM-001)
 **Current:** Alerting semantics are not yet complete as a production control-plane feature.  
-**Target:** Rule-driven threshold alerts with hysteresis, cooldown, dedup, and auditable events.  
-**Gap:** Implement alert engine, runtime rule loading, and event dispatch contract.
+**Target:** Rule-driven threshold alerts with hysteresis, cooldown, dedup, auditable events, and dual stream ingestion (`poll + HTTPS push`).  
+**Gap:** Implement alert engine, runtime rule loading, event dispatch contract, and push ingress path (`POST /api/streams/push/:sourceId`).
+
+V1 stream scope lock:
+- V1 MUST support poll and HTTPS JSON push ingestion.
+- WebSocket ingress from external producers is explicitly deferred.
 
 **Acceptance:** Alert lifecycle is deterministic: `idle -> active -> cooldown -> idle`.
 
-## 5.4 [M4] Configurable Audio (REQ-AUDIO-001)
+## 5.4 [M4] Configurable Audio (REQ-AUDIO-001 + REQ-UX-001)
 **Current:** Core Web Audio path exists, but business-level runtime configurability is limited.  
 **Target:** Non-audio engineers can configure channel/bus mapping and alert-sonification behavior.  
 **Gap:** Deliver stable mapping schema, hot reload path, and minimum console workflows.
+
+Minimum control workflow contract for V1:
+- Workflow state machine: `Draft -> Validate -> Apply -> Rollback`.
+- Required operator tasks:
+  - edit channel-to-bus mapping;
+  - validate mapping/rules before activation;
+  - apply changes without redeploy;
+  - rollback to last-known-good config;
+  - inspect active version and recent change history.
 
 **Acceptance:** Mapping change is applied at runtime and reflected in output without deployment.
 
@@ -430,6 +538,31 @@ Example success:
 
 **Acceptance:** Unauthorized writes fail, quota breaches are blocked, and key operations are traceable.
 
+## 5.7 [M5] Deployment Model Boundary (REQ-DEPLOY-001)
+**Current:** Deployment boundary is not consistently documented across API/UX/ops artifacts.  
+**Target:** V1 is explicitly `single_org_multi_team` with no implied hard tenant isolation guarantees.  
+**Gap:** Align API docs, config flags, and operator runbooks to one deployment boundary statement.
+
+**Acceptance:** All public artifacts expose the same deployment model boundary without ambiguity.
+
+## 5.8 [M2+] Performance Envelope (REQ-PERF-001)
+**Current:** Performance monitoring language exists, but quantified acceptance targets are not yet frozen.  
+**Target:** Publish provisional SLO/capacity targets, validate with benchmark gate, and freeze as normative gates from `M2` exit.  
+**Gap:** Define metric table, benchmark method, freeze criteria, and release-gate enforcement boundary.
+
+Provisional V1 targets (subject to benchmark freeze):
+
+| Metric | Provisional Target | Gate Activation |
+| --- | --- | --- |
+| Active viewport clients (per instance) | `>= 200` | Normative after `M2` exit |
+| `POST /api/viewport` latency | `p95 <= 250ms`, `p99 <= 500ms` | Normative after `M2` exit |
+| Single import size | `<= 250MB`, `<= 1,000,000 rows` | Normative after `M2` exit |
+| Source unique cells | `<= 500,000` | Normative after `M2` exit |
+| Push batch size | `<= 5,000` records | Normative after `M2` exit |
+| Push queue depth cap | `20,000` (`429` above cap) | Normative after `M2` exit |
+
+Benchmark note (informative, non-commitment): a local 80-request smoke sample on 2026-02-22 observed `p50=1.622ms`, `p95=2.059ms`, `p99=10.331ms` for one fixed viewport. This sample is sanity input only, not release certification.
+
 ## 6. Quality Gates for This Spec
 
 ### Reality Snapshot (as of 2026-02-22)
@@ -445,6 +578,9 @@ Example success:
 8. Audio scenario: runtime configuration MUST affect output without redeploy.
 9. Governance scenario: auth/rate-limit/audit controls MUST be demonstrable.
 10. Readability: the executive intro MUST communicate value in 3 minutes; the body MUST be implementation-ready.
+11. API responsibility boundary: `POST /api/import`, `POST /api/sources`, and `POST /api/streams/push/:sourceId` MUST have non-overlapping responsibilities.
+12. Control workflow contract: the `Draft -> Validate -> Apply -> Rollback` workflow MUST be testable end-to-end.
+13. SLO governance: provisional performance targets MUST include benchmark freeze rule and explicit gate activation boundary (`M2` exit).
 
 **Acceptance:** Reviewers can derive implementation and QA plans from this document without unresolved decisions.
 
@@ -457,8 +593,12 @@ Example success:
 - V1 main renderer MUST be Web Audio.
 - Max/OSC MUST be treated as historical compatibility appendix only.
 - V1 MUST include baseline governance but MAY defer full multi-tenant isolation.
+- V1 deployment model is locked to `single_org_multi_team`.
 - Data ingest MVP MUST support CSV + GeoJSON first.
+- V1 stream ingestion MUST support `poll + HTTPS JSON push`.
+- External producer WebSocket ingress is future scope, not V1.
 - H3 is the sole internal spatial language for merged operations.
+- Performance targets are provisional before benchmark freeze and become normative release gates from `M2` exit.
 
 **Acceptance:** Implementers are not required to make architecture-level choices outside this document.
 
@@ -471,6 +611,7 @@ Example success:
 - KML/GPX adapters and richer geometry semantics.
 - AOI bucketed strategies for many concurrent global viewports.
 - Full tenant isolation model (tenant-aware access control and data boundaries).
+- External producer WebSocket ingress path.
 - Compound alert expressions (AND/OR trees across channels).
 - Expanded observability and long-term compliance reporting features.
 
@@ -487,4 +628,7 @@ Example success:
 - **ChannelManifest:** adapter-declared metadata for channels.
 - **AlertRule:** declarative threshold rule.
 - **AlertEvent:** emitted runtime alert transition event.
+- **SourceDescriptor:** source metadata object including `mode`, schema version, and status.
+- **PushEvent:** runtime event payload accepted by push ingestion endpoint.
+- **PushIngestAck:** push endpoint ingestion acknowledgement summary.
 - **Control Plane:** APIs that manage source/channel/audio/stream/alert configuration.

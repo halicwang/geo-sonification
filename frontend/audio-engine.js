@@ -240,7 +240,6 @@ function update(audioParams) {
         busSmoothed[i] += alpha * (busTargets[i] - busSmoothed[i]);
     }
     oceanSmoothed += alpha * (oceanTarget - oceanSmoothed);
-
 }
 
 // ════════════════════════════════════════════════════════════════════

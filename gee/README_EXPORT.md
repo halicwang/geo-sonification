@@ -52,7 +52,7 @@ Current resolution is 0.5°×0.5° (~78k cells globally). For even finer resolut
 3. In the **Tasks** tab, click **Run** on the export task. Choose folder `geo_sonification` (or create it).
 4. Wait for completion (per continent ~5–15 min). Download the CSV from Google Drive.
 5. Place CSVs in the project `data/raw/` directory with names: `south_america_grid.csv`, `africa_grid.csv`, `asia_grid.csv`, `europe_grid.csv`, `north_america_grid.csv`, `oceania_grid.csv`.
-   - Optional: you can also export `antarctica_grid.csv` for offline analysis, but current server startup and `npm run check:csv` do not require it.
+    - Optional: you can also export `antarctica_grid.csv` for offline analysis, but current server startup and `npm run check:csv` do not require it.
 
 ## Run prerequisites (before starting Node)
 

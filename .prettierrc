@@ -9,9 +9,9 @@
     "arrowParens": "always",
     "overrides": [
         {
-            "files": "sonification/**/*.js",
+            "files": "frontend/config.local.js.example",
             "options": {
-                "singleQuote": false
+                "parser": "babel"
             }
         }
     ]

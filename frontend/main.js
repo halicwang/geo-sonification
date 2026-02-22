@@ -3,15 +3,16 @@
  *
  * Mapbox GL map that tracks the user's viewport and streams bounds
  * to the Node server. The server aggregates grid stats and sends
- * them back (via WebSocket or HTTP fallback) for the info panel,
- * and forwards normalized values to MaxMSP via OSC.
+ * them back (via WebSocket or HTTP fallback) for the info panel
+ * and the Web Audio engine.
  *
  * Data flow:
  *   User pans/zooms map
  *     --> onViewportChange() debounces, sends bounds via WebSocket
- *     --> server calculates stats (spatial.js)
- *     --> server responds with stats JSON + sends OSC to Max
+ *     --> server calculates stats (spatial.js) + audioParams (audio-metrics.js)
+ *     --> server responds with stats JSON
  *     --> updateUI() renders landcover breakdown in the side panel
+ *     --> audio-engine receives audioParams for sonification
  *
  * @module frontend/main
  */

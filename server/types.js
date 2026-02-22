@@ -78,23 +78,7 @@
  * @property {string} scale - "log" or "linear"
  */
 
-// ============ OSC types (used by osc_schema.js + osc.js) ============
-
-/**
- * A single OSC argument.
- * @typedef {Object} OscArg
- * @property {string} type - OSC type tag: 'f' (float), 'i' (int), 's' (string)
- * @property {number|string} value
- */
-
-/**
- * A single OSC message packet.
- * @typedef {Object} OscPacket
- * @property {string} address - OSC address string (e.g. '/landcover')
- * @property {OscArg[]} args
- */
-
-// ============ Per-client state types (used by delta-state.js, mode-manager.js, viewport-processor.js, osc-metrics.js) ============
+// ============ Per-client state types (used by delta-state.js, mode-manager.js, viewport-processor.js, audio-metrics.js) ============
 
 /**
  * Per-client landcover snapshot for delta computation.

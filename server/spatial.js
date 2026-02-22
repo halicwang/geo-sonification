@@ -10,7 +10,7 @@
  *   - Legacy:        simple average across grid count
  *   - Area-weighted: weighted by land_area_km2 * landFractionWeight()
  *
- * The final stats are sent to MaxMSP (via osc.js) for sonification.
+ * The final stats are used for sonification via the Web Audio engine.
  */
 
 const { normalizeOscValues } = require('./normalize');

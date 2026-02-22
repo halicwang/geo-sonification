@@ -191,7 +191,6 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
 
 /**
  * Map raw viewport/cell averages to 0-1 using p1/p99 percentile params.
- * These normalized values are what MaxMSP receives via OSC.
  *
  * @param {number} avgNightlightP90
  * @param {number} avgPopulation — population density (or per-cell value)

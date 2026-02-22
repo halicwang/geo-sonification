@@ -26,7 +26,7 @@ cleanup() {
 # Only trap EXIT to avoid double cleanup (EXIT fires on any exit, including INT/TERM)
 trap cleanup EXIT
 
-## Source .env if present (so ENABLE_OSC, ports, etc. are available)
+## Source .env if present (so ports, etc. are available)
 if [[ -f ".env" ]]; then
   set -a
   # shellcheck disable=SC1091
@@ -36,7 +36,6 @@ fi
 
 HTTP_PORT=${HTTP_PORT:-3000}
 WS_PORT=${WS_PORT:-3001}
-ENABLE_OSC=${ENABLE_OSC:-true}
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "ERROR: $1 not found. $2"; exit 1; }
@@ -49,7 +48,7 @@ require_cmd curl  "This script needs curl to probe server readiness."
 
 # 1. Ensure server deps installed
 if [[ ! -d "server/node_modules" ]]; then
-  echo "[0/3] Installing server dependencies (first run)..."
+  echo "[0/2] Installing server dependencies (first run)..."
   npm --prefix server install
   echo ""
 fi
@@ -83,7 +82,7 @@ kill_port "$HTTP_PORT" "HTTP" || exit 1
 kill_port "$WS_PORT" "WebSocket" || exit 1
 
 # 3. Start Node.js server in background
-echo "[1/3] Starting Node.js server..."
+echo "[1/2] Starting Node.js server..."
 node server/index.js &
 SERVER_PID=$!
 
@@ -106,32 +105,8 @@ if [[ "$SERVER_READY" != "true" ]]; then
 fi
 echo "  OK: Server is ready"
 
-# 4. Open MaxMSP patch (skip when OSC is disabled — Web Audio only)
-PATCH_FILE="sonification/max_wav_osc.maxpat"
-PATCH_STATUS="(disabled — Web Audio mode)"
-
-OSC_LOWER=$(echo "$ENABLE_OSC" | tr '[:upper:]' '[:lower:]')
-if [[ "$OSC_LOWER" == "true" || "$ENABLE_OSC" == "1" ]]; then
-  echo "[2/3] Opening MaxMSP patch..."
-  if [[ -f "$PATCH_FILE" ]]; then
-    if open -a "Max" "$PATCH_FILE" >/dev/null 2>&1; then
-      PATCH_STATUS="$PATCH_FILE"
-      # Wait for Max to open
-      sleep 2
-    else
-      PATCH_STATUS="(not opened - could not open with Max)"
-      echo "  WARN: Could not open MaxMSP patch (is Max installed?): $PATCH_FILE"
-    fi
-  else
-    PATCH_STATUS="(not opened - patch file not found)"
-    echo "  WARN: Max patch not found: $PATCH_FILE (skipping)"
-  fi
-else
-  echo "[2/3] Skipping MaxMSP (ENABLE_OSC=false, Web Audio mode)"
-fi
-
-# 5. Open browser
-echo "[3/3] Opening browser..."
+# 4. Open browser
+echo "[2/2] Opening browser..."
 # Include ws_port parameter so frontend knows the correct WebSocket port
 open "http://localhost:${HTTP_PORT}?ws_port=${WS_PORT}"
 
@@ -141,8 +116,7 @@ echo "  All systems launched!"
 echo "========================================"
 echo ""
 echo "  - Server:  http://localhost:${HTTP_PORT}"
-echo "  - MaxMSP:  $PATCH_STATUS"
-echo "  - Audio:   $(if [[ "$OSC_LOWER" == "true" || "$ENABLE_OSC" == "1" ]]; then echo "Max/MSP + Web Audio"; else echo "Web Audio only"; fi)"
+echo "  - Audio:   Web Audio (browser)"
 echo "  - Browser: Should open automatically"
 echo ""
 echo "  Press Ctrl+C to stop the server"

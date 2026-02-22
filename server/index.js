@@ -1,17 +1,15 @@
 /**
  * Geo-Sonification Server — entry point.
  *
- * Connects the Mapbox frontend to MaxMSP for real-time sonification.
- *
  * Data flow:
  *   Frontend (Mapbox)
  *     --WebSocket/HTTP--> this server (viewport bounds)
  *     --> spatial.js      (aggregate stats)
- *     --> osc.js           (send to MaxMSP via UDP)
- *     <-- response         (stats JSON back to frontend)
+ *     --> audio-metrics.js (compute audio parameters)
+ *     <-- response         (stats + audioParams JSON back to frontend)
  *
  * This file only handles HTTP routes, WebSocket, and startup/shutdown.
- * All data loading, spatial queries, OSC, and mode switching are in separate modules.
+ * All data loading, spatial queries, and mode switching are in separate modules.
  */
 
 const express = require('express');
@@ -20,21 +18,10 @@ const WebSocket = require('ws');
 const { WebSocketServer } = WebSocket;
 const path = require('path');
 
-const {
-    HTTP_PORT,
-    WS_PORT,
-    OSC_HOST,
-    OSC_PORT,
-    ALLOWED_ORIGINS,
-    BROADCAST_STATS,
-    GRID_SIZE,
-    ENABLE_OSC,
-} = require('./config');
+const { HTTP_PORT, WS_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
-const { isOscReady, sendToMax, closeOsc } = require('./osc');
 const { loadGridData } = require('./data-loader');
 const spatial = require('./spatial');
-const { getLcFractionsFromDistribution } = require('./osc-metrics');
 const {
     createDeltaState,
     getHttpDeltaState,
@@ -119,18 +106,13 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 app.use('/tiles', express.static(path.join(__dirname, '../data/tiles')));
 
 // Serve ambience audio samples for Web Audio frontend.
-// Scoped to ambience/ only — not all of sonification/samples/.
-app.use(
-    '/audio/ambience',
-    express.static(path.join(__dirname, '../sonification/samples/ambience'))
-);
+app.use('/audio/ambience', express.static(path.join(__dirname, '../frontend/audio/ambience')));
 
 // Health check (used by start.command readiness probe)
 app.get('/health', (req, res) => {
     res.status(200).json({
         ok: true,
         dataLoaded,
-        oscReady: isOscReady(),
     });
 });
 
@@ -139,7 +121,6 @@ app.get('/api/config', (req, res) => {
     res.json({
         wsPort: WS_PORT,
         httpPort: HTTP_PORT,
-        oscReady: isOscReady(),
         gridSize: GRID_SIZE,
         landcoverMeta: LANDCOVER_META,
     });
@@ -175,23 +156,6 @@ app.post('/api/viewport', (req, res) => {
         console.log(`[HTTP mode] ${modeClientKey}: ${previousMode} -> ${modeState.currentMode}`);
     }
     res.json(result.stats);
-});
-
-// API: Manual control (for testing)
-app.post('/api/manual', (req, res) => {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const lcRaw = Number(body.landcover);
-    const nlRaw = Number(body.nightlight);
-    const popRaw = Number(body.population);
-    const frRaw = Number(body.forest);
-
-    const lc = Number.isFinite(lcRaw) ? lcRaw : 10;
-    const nl = Number.isFinite(nlRaw) ? nlRaw : 0;
-    const pop = Number.isFinite(popRaw) ? popRaw : 0;
-    const fr = Number.isFinite(frRaw) ? frRaw : 0;
-
-    sendToMax(lc, nl, pop, fr, getLcFractionsFromDistribution({}));
-    res.json({ success: true, landcover: lc, nightlight: nl, population: pop, forest: fr });
 });
 
 // ============ Startup ============
@@ -333,8 +297,7 @@ async function startServer() {
 ======================================
   HTTP API:    http://localhost:${HTTP_PORT}
   WebSocket:   ws://localhost:${WS_PORT}
-  OSC:         ${ENABLE_OSC ? `${OSC_HOST}:${OSC_PORT}` : 'disabled (ENABLE_OSC=false)'}
-${ENABLE_OSC ? `\n  Make sure MaxMSP is listening on UDP port ${OSC_PORT}` : ''}
+  Audio:       Web Audio (browser)
 ======================================
 `);
     } catch (err) {
@@ -344,7 +307,7 @@ ${ENABLE_OSC ? `\n  Make sure MaxMSP is listening on UDP port ${OSC_PORT}` : ''}
 }
 
 /**
- * Graceful shutdown: close WS clients, HTTP server, and OSC port.
+ * Graceful shutdown: close WS clients and HTTP server.
  * @param {string} signal - POSIX signal name (e.g. 'SIGTERM')
  * @returns {void}
  */
@@ -355,7 +318,6 @@ function gracefulShutdown(signal) {
         wssServer.close();
     }
     if (httpServer) httpServer.close();
-    closeOsc();
     process.exit(0);
 }
 

@@ -1,5 +1,7 @@
 # Engineering Migration Plan: Open Platform Refactor
 
+> **Status (2026-02-22):** Max/MSP code has been fully removed. The system now uses Web Audio exclusively. The OSC engine, Max/MSP renderer, and `sonification/` directory referenced below no longer exist. This document is retained for historical context.
+
 **Author:** Zixiao Wang (Halic)
 **Date:** February 21, 2026
 **Based on:** OPEN-PLATFORM-SPEC.md — file-level change list and phase breakdown. Each phase preserves existing demo functionality on completion.

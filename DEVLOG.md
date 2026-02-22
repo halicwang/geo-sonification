@@ -15,6 +15,52 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 ---
 
+## 2026-02-22 — Refactor: Remove Max/MSP Code
+
+Removed all Max/MSP and OSC-related code from the project. With Web Audio fully functional (Phase W, 2026-02-21), Max/MSP is no longer needed. The system now uses Web Audio exclusively for sonification.
+
+### Changes
+
+- Deleted `sonification/` directory entirely (6 ES5 JS scripts, 2 .maxpat patches, sample placeholders)
+- Deleted `server/osc.js` (UDP transport to Max) and `server/osc_schema.js` (OSC packet definitions)
+- Deleted `scripts/osc_simulator.js` (OSC test tool)
+- Deleted 3 OSC-specific test files: `osc.test.js`, `osc-disabled.test.js`, `osc-schema.test.js`
+- Renamed `server/osc-metrics.js` → `server/audio-metrics.js` (inlined `LC_CLASS_ORDER` and `clamp01`)
+- Renamed test files: `osc-metrics.test.js` → `audio-metrics.test.js`, `osc-metrics-bus.test.js` → `audio-metrics-bus.test.js`
+- Removed `ENABLE_OSC`, `OSC_HOST`, `OSC_PORT`, `DEBUG_OSC` from `server/config.js` and `.env.example`
+- Removed all OSC send calls from `server/viewport-processor.js`
+- Removed OSC imports, `/api/manual` endpoint, and `oscReady` from `server/index.js`
+- Removed `osc` npm dependency from `server/package.json`
+- Simplified `start.command` (removed Max patch opening logic)
+- Relocated audio sample directory: `sonification/samples/ambience/` → `frontend/audio/ambience/`
+- Updated all documentation: `CLAUDE.md`, `ARCHITECTURE.md`, `README.md`
+
+### Files changed
+
+- `sonification/` — entire directory deleted
+- `server/osc.js` — deleted
+- `server/osc_schema.js` — deleted
+- `scripts/osc_simulator.js` — deleted
+- `server/__tests__/osc.test.js` — deleted
+- `server/__tests__/osc-disabled.test.js` — deleted
+- `server/__tests__/osc-schema.test.js` — deleted
+- `server/osc-metrics.js` → `server/audio-metrics.js` — renamed, inlined LC_CLASS_ORDER and clamp01 (modified)
+- `server/__tests__/osc-metrics.test.js` → `server/__tests__/audio-metrics.test.js` — renamed (modified)
+- `server/__tests__/osc-metrics-bus.test.js` → `server/__tests__/audio-metrics-bus.test.js` — renamed (modified)
+- `server/viewport-processor.js` — removed OSC send calls (modified)
+- `server/index.js` — removed OSC imports, /api/manual, oscReady (modified)
+- `server/config.js` — removed OSC config variables (modified)
+- `server/package.json` — removed `osc` dependency (modified)
+- `.env.example` — removed OSC variables (modified)
+- `start.command` — removed Max/MSP logic (modified)
+- `frontend/audio-engine.js` — removed Max references in comments (modified)
+- `frontend/audio/ambience/.gitkeep` — new (relocated from sonification/samples/ambience/)
+- `CLAUDE.md` — updated (modified)
+- `ARCHITECTURE.md` — rewritten for Web Audio only (modified)
+- `README.md` — rewritten for Web Audio only (modified)
+
+---
+
 ## 2026-02-22 — Fix: Web Audio & WebSocket Bug Fixes (3 rounds)
 
 Three rounds of bug fixes following the Web Audio migration, covering `audio-engine.js`, `websocket.js`, `server/config.js`, and two Max JS scripts.

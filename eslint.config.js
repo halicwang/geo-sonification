@@ -5,14 +5,7 @@ const prettierConfig = require('eslint-config-prettier');
 module.exports = [
     // Global ignores
     {
-        ignores: [
-            'node_modules/',
-            'server/node_modules/',
-            'data/',
-            'gee/',
-            'sonification/samples/',
-            '*.maxpat',
-        ],
+        ignores: ['node_modules/', 'server/node_modules/', 'data/', 'gee/'],
     },
 
     // server/**/*.js — Node.js ES2020
@@ -73,42 +66,6 @@ module.exports = [
         },
         rules: {
             ...js.configs.recommended.rules,
-        },
-    },
-
-    // sonification/**/*.js — ES5 only
-    {
-        files: ['sonification/**/*.js'],
-        languageOptions: {
-            ecmaVersion: 5,
-            sourceType: 'script',
-            globals: {
-                // Max/MSP global objects
-                post: 'readonly',
-                outlet: 'readonly',
-                inlet: 'readonly',
-                inlets: 'writable',
-                outlets: 'writable',
-                autowatch: 'writable',
-                jsarguments: 'readonly',
-                messagename: 'readonly',
-                arrayfromargs: 'readonly',
-                setinletassist: 'readonly',
-                setoutletassist: 'readonly',
-                Dict: 'readonly',
-                Global: 'readonly',
-                Task: 'readonly',
-                MaxobjPtr: 'readonly',
-                patcher: 'readonly',
-                max: 'readonly',
-                mgraphics: 'readonly',
-            },
-        },
-        rules: {
-            ...js.configs.recommended.rules,
-            // Max/MSP invokes message handlers by name (bang, msg_float, anything, etc.);
-            // these functions appear "unused" in-file but are external entry points
-            'no-unused-vars': 'off',
         },
     },
 

@@ -24,7 +24,7 @@ const NUM_BUSES = 5;
 const BUS_NAMES = Object.freeze(['tree', 'crop', 'urban', 'bare', 'water']);
 const WATER_BUS_INDEX = 4;
 
-/** EMA time constant in ms (matches crossfade_controller.js default). */
+/** EMA time constant in ms. */
 const SMOOTHING_TIME_MS = 500;
 
 /** If dt exceeds this, snap to target instead of smoothing. */
@@ -285,7 +285,6 @@ function rafLoop() {
     for (let i = 0; i < NUM_BUSES; i++) {
         if (gains[i] && buffers[i]) {
             // Water bus: max(LC-fraction water, ocean detector)
-            // Mirrors Max patch [maximum] wiring
             const value =
                 i === WATER_BUS_INDEX ? Math.max(busSmoothed[i], oceanSmoothed) : busSmoothed[i];
             gains[i].gain.value = value;

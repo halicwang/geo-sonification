@@ -54,6 +54,17 @@ This plan uses RFC 2119 terms and traceability IDs:
 
 No milestone is considered complete without all of: `DoD + Evidence + Rollback readiness`.
 
+### 0.1 Mandatory Four-Document Execution Gate (Human + AI)
+- Implementation agents (human or AI) MUST consult all four lighthouse documents before executing any milestone work:
+  - `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
+  - `docs/2026-02-21-MIGRATION-PLAN.md`
+  - `docs/2026-02-22-TECHNICAL-DESIGN.md`
+  - `docs/2026-02-22-ENGINEERING-REFERENCE.md`
+- Each milestone ticket/PR MUST include a trace tuple: `REQ-*` + `M*` + technical section anchor + engineering packet anchor.
+- If document conflicts are found, execution MUST stop and conflict resolution MUST occur before continuing milestone delivery.
+- Precedence MUST follow the paired SPEC definition: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `TECHNICAL-DESIGN` > `ENGINEERING-REFERENCE`.
+Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.md` Section 0.1 acceptance criteria and enforced here via milestone gates (`DoD`, `EVID-*`, rollback).
+
 ## 1. Baseline and Gap Statement
 
 ### Reality Snapshot (as of 2026-02-22)

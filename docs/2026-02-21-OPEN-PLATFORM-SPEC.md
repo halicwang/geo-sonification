@@ -46,6 +46,18 @@ This document uses [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords:
 
 All requirements are traceable by `REQ-*` IDs and are referenced by milestones in the migration plan.
 
+### 0.1 Mandatory Four-Document Protocol (Human + AI)
+- Any implementation agent (human or AI) MUST consult all four lighthouse documents before planning or coding:
+  - `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
+  - `docs/2026-02-21-MIGRATION-PLAN.md`
+  - `docs/2026-02-22-TECHNICAL-DESIGN.md`
+  - `docs/2026-02-22-ENGINEERING-REFERENCE.md`
+- Every implementation plan, task, or PR MUST include a trace tuple: at least one `REQ-*`, one `M*`, one technical section anchor, and one engineering packet anchor.
+- Document precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `TECHNICAL-DESIGN` > `ENGINEERING-REFERENCE`.
+- If cross-document conflict is detected, implementation MUST pause and the document conflict MUST be resolved (or explicitly decision-locked) before merge.
+
+**Acceptance:** Delivery artifacts include a four-doc trace tuple and no unresolved cross-document conflicts.
+
 ## 1. North Star Requirements (V1 Red Lines)
 
 ### Reality Snapshot (as of 2026-02-22)

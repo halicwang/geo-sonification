@@ -11,9 +11,17 @@ Recommended reading order: lighthouse migration document first, then this refere
 
 ## 0. How To Use This With Lighthouse Plan
 
+- Use `docs/2026-02-21-OPEN-PLATFORM-SPEC.md` for normative contracts and requirement authority (`MUST/SHOULD/MAY`).
 - Use `docs/2026-02-21-MIGRATION-PLAN.md` for milestone outcomes (`M0..M5`).
 - Use `docs/2026-02-22-ENGINEERING-REFERENCE.md` for implementation sequencing and detailed work packets.
 - Use `docs/2026-02-22-TECHNICAL-DESIGN.md` for model/algorithm rationale.
+
+### 0.1 Mandatory Multi-Document Use (Human + AI)
+- This document MUST NOT be used as a standalone execution source.
+- Any implementation agent (human or AI) MUST consult all four lighthouse documents before changing code.
+- Execution artifacts MUST include a trace tuple: `REQ-*`, `M*`, technical section anchor, and engineering packet anchor.
+- Conflict precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `TECHNICAL-DESIGN` > `ENGINEERING-REFERENCE`.
+Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.md` Section 0.1 acceptance criteria; this document provides execution detail and MUST NOT redefine acceptance criteria.
 
 ## Milestone Mapping (M0-M5)
 Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.

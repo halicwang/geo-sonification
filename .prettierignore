@@ -1,5 +1,9 @@
 node_modules/
 server/node_modules/
-data/
+data/**/*.csv
+data/cache/
+data/tiles/
 *.maxpat
-sonification/samples/
+.claude/
+package-lock.json
+server/package-lock.json

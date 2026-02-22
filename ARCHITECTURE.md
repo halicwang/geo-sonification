@@ -89,7 +89,7 @@ On `document.hidden`: cancel rAF and suspend `AudioContext`. On visible (if user
 
 ## Timing Constants
 
-| Constant             | Value   | Location        | Purpose                          |
-| -------------------- | ------- | --------------- | -------------------------------- |
-| `SMOOTHING_TIME_MS`  | 500 ms  | audio-engine.js | EMA time constant                |
-| `SNAP_THRESHOLD_MS`  | 2000 ms | audio-engine.js | Snap-to-target when dt too large |
+| Constant            | Value   | Location        | Purpose                          |
+| ------------------- | ------- | --------------- | -------------------------------- |
+| `SMOOTHING_TIME_MS` | 500 ms  | audio-engine.js | EMA time constant                |
+| `SNAP_THRESHOLD_MS` | 2000 ms | audio-engine.js | Snap-to-target when dt too large |

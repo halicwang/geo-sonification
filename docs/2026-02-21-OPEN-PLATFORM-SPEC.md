@@ -15,7 +15,8 @@ Geo-Sonification is an **auditory monitoring layer for geographic situational aw
 **Primary scenario — Air quality monitoring:** An operations center monitors regional PM2.5 levels from a network of sensors (e.g., PurpleAir). Each sensor reading is encoded to an H3 cell and fed into the platform via the adapter pipeline. As the operator pans the map, ambient tonal shifts reflect the spatial gradient of pollution levels across the viewport. When any cell crosses an AQI threshold, an auditory icon fires immediately — no dashboard tab-switching or visual scanning required. Land cover data provides a semantic context layer (urban, forest, water) so the operator hears both the environmental baseline and the anomaly.
 
 **Additional use cases:**
-- **Wildfire situational monitoring** — ingest authoritative fire hotspot data (NASA FIRMS near real-time active fire detections, Copernicus EFFIS) as point events (lat/lon + time + fire radiative power + detection confidence). Each hotspot is encoded to an H3 cell and aggregated within a sliding time window (e.g., 6–24 hours). Per-cell metrics — active fire count, peak intensity (FRP), and recency of latest detection — drive auditory icon triggers and ambient tension. The platform does *not* perform fire detection from raw satellite imagery (that is the job of upstream remote sensing pipelines such as VIIRS/MODIS); it monitors and sonifies the processed, authoritative outputs of those pipelines.
+
+- **Wildfire situational monitoring** — ingest authoritative fire hotspot data (NASA FIRMS near real-time active fire detections, Copernicus EFFIS) as point events (lat/lon + time + fire radiative power + detection confidence). Each hotspot is encoded to an H3 cell and aggregated within a sliding time window (e.g., 6–24 hours). Per-cell metrics — active fire count, peak intensity (FRP), and recency of latest detection — drive auditory icon triggers and ambient tension. The platform does _not_ perform fire detection from raw satellite imagery (that is the job of upstream remote sensing pipelines such as VIIRS/MODIS); it monitors and sonifies the processed, authoritative outputs of those pipelines.
 - **Maritime patrol** — AIS vessel density sonified as continuous texture; anomalous clustering or route deviation triggers alerts.
 - **Power grid outage monitoring** — outage event feeds mapped to H3 cells; auditory cues track affected area expansion and restoration.
 - **Accessibility** — non-visual exploration of geographic data for visually impaired users.
@@ -115,19 +116,19 @@ The following diagram shows the end-state data flow after all migration phases a
 
 **Layer summary:**
 
-| Layer | Responsibility | Key Modules |
-| ----- | -------------- | ----------- |
-| Data Sources | External data in various formats | CSV, GeoJSON, KML/GPX (future), REST API, WebSocket |
-| Adapter Layer | Format parsing, WGS84 conversion, channel declaration, DataRecord production | `server/adapters/*` |
-| H3 Encoding | Coordinate-to-cell encoding, parent/child resolution, viewport enumeration | `server/grid/*` |
-| Spatial Index | Cell storage, viewport queries, runtime data append | `server/spatial.js` |
-| Channel Registry | Namespaced index assignment, OSC channel mapping | `server/channel-registry.js` |
-| Time Window | Sliding window aggregation for stream adapters | `server/time-window.js` |
-| OSC Engine | Protocol dispatch to Max/MSP (compat + generic + alert addresses) | `server/osc.js`, `server/osc_schema.js` |
-| Alert Engine | Threshold evaluation, state machine, cooldown/dedup | `server/alert-engine.js` |
-| Max/MSP Renderer | Synthesis, crossfade, icon triggers, spatialization | `sonification/*` |
-| Frontend | Map visualization, hex rendering, channel metadata | `frontend/*` |
-| Control Plane | REST API for runtime state inspection and management | `server/index.js` endpoints |
+| Layer            | Responsibility                                                               | Key Modules                                         |
+| ---------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- |
+| Data Sources     | External data in various formats                                             | CSV, GeoJSON, KML/GPX (future), REST API, WebSocket |
+| Adapter Layer    | Format parsing, WGS84 conversion, channel declaration, DataRecord production | `server/adapters/*`                                 |
+| H3 Encoding      | Coordinate-to-cell encoding, parent/child resolution, viewport enumeration   | `server/grid/*`                                     |
+| Spatial Index    | Cell storage, viewport queries, runtime data append                          | `server/spatial.js`                                 |
+| Channel Registry | Namespaced index assignment, OSC channel mapping                             | `server/channel-registry.js`                        |
+| Time Window      | Sliding window aggregation for stream adapters                               | `server/time-window.js`                             |
+| OSC Engine       | Protocol dispatch to Max/MSP (compat + generic + alert addresses)            | `server/osc.js`, `server/osc_schema.js`             |
+| Alert Engine     | Threshold evaluation, state machine, cooldown/dedup                          | `server/alert-engine.js`                            |
+| Max/MSP Renderer | Synthesis, crossfade, icon triggers, spatialization                          | `sonification/*`                                    |
+| Frontend         | Map visualization, hex rendering, channel metadata                           | `frontend/*`                                        |
+| Control Plane    | REST API for runtime state inspection and management                         | `server/index.js` endpoints                         |
 
 ---
 
@@ -139,7 +140,7 @@ The following diagram shows the end-state data flow after all migration phases a
 - Elevation is optional, stored as a third dimension: `[lon, lat, alt]`.
 - All import adapters must perform coordinate conversion at the entry point.
 
-> **Note on parameter vs. storage order:** The `[lon, lat]` convention applies to coordinate *arrays* and GeoJSON output. Function call signatures (h3-js `latLngToCell()`, `CellEncoder.encode()`) use the geographic convention `(lat, lon)`. Callers must be aware of the difference — arrays are `[lon, lat]`, function parameters are `(lat, lon)`.
+> **Note on parameter vs. storage order:** The `[lon, lat]` convention applies to coordinate _arrays_ and GeoJSON output. Function call signatures (h3-js `latLngToCell()`, `CellEncoder.encode()`) use the geographic convention `(lat, lon)`. Callers must be aware of the difference — arrays are `[lon, lat]`, function parameters are `(lat, lon)`.
 
 ---
 
@@ -151,26 +152,29 @@ All data within the system is unified into the following structure (JSON represe
 
 ```jsonc
 {
-  "cellId": "85283473fffffff", // H3 hexagonal Cell ID (see §4)
-  "source": "worldcover",      // Data source identifier
-  "channels": {                // Normalized values (0–1), computed from channelsRaw + ChannelManifest rules
-    "tree": 0.42,
-    "urban": 0.15,
-    "bare": 0.03
-    // ... keys are bare channel names from the adapter's ChannelManifest
-  },
-  "channelsRaw": {             // Original values in source units (preserved for re-normalization)
-    "tree": 0.42,              // WorldCover: raw == normalized (already 0–1 fractions)
-    "urban": 0.15,
-    "bare": 0.03
-  },
-  "resolution": 4,             // H3 resolution at which this cell was encoded (native resolution)
-  "timestamp": null,           // ISO 8601 or null (static data)
-  "temporalType": "static",   // "static" | "stream" | "timeseries"
-  "meta": {                    // Optional metadata
-    "land_area_km2": 1523.4,
-    "confidence": 0.87
-  }
+    "cellId": "85283473fffffff", // H3 hexagonal Cell ID (see §4)
+    "source": "worldcover", // Data source identifier
+    "channels": {
+        // Normalized values (0–1), computed from channelsRaw + ChannelManifest rules
+        "tree": 0.42,
+        "urban": 0.15,
+        "bare": 0.03,
+        // ... keys are bare channel names from the adapter's ChannelManifest
+    },
+    "channelsRaw": {
+        // Original values in source units (preserved for re-normalization)
+        "tree": 0.42, // WorldCover: raw == normalized (already 0–1 fractions)
+        "urban": 0.15,
+        "bare": 0.03,
+    },
+    "resolution": 4, // H3 resolution at which this cell was encoded (native resolution)
+    "timestamp": null, // ISO 8601 or null (static data)
+    "temporalType": "static", // "static" | "stream" | "timeseries"
+    "meta": {
+        // Optional metadata
+        "land_area_km2": 1523.4,
+        "confidence": 0.87,
+    },
 }
 ```
 
@@ -184,20 +188,22 @@ A `CellSnapshot` is the **query-layer / output-layer merged view** of a cell, pr
 
 ```jsonc
 {
-  "cellId": "85283473fffffff",
-  "resolution": 4,                    // Query resolution (may differ from native resolution of individual sources)
-  "channels": {                       // Merged, namespaced keys: sourceId.channelName
-    "worldcover.tree": 0.42,
-    "worldcover.urban": 0.15,
-    "air_quality.pm25": 0.65
-  },
-  "sources": ["worldcover", "air_quality"]  // Which adapters contributed data to this cell
+    "cellId": "85283473fffffff",
+    "resolution": 4, // Query resolution (may differ from native resolution of individual sources)
+    "channels": {
+        // Merged, namespaced keys: sourceId.channelName
+        "worldcover.tree": 0.42,
+        "worldcover.urban": 0.15,
+        "air_quality.pm25": 0.65,
+    },
+    "sources": ["worldcover", "air_quality"], // Which adapters contributed data to this cell
 }
 ```
 
 **Design principle: "Storage is per-source (`DataRecord`); output is per-cell (`CellSnapshot`)."**
 
 The query layer (e.g., `queryByH3()`) builds a `CellSnapshot` by:
+
 1. Looking up all `DataRecord`s for the given `cellId` (one per source).
 2. Prefixing each record's bare channel keys with `sourceId.` to produce namespaced keys.
 3. Merging all namespaced channels into a single `channels` object.
@@ -207,11 +213,11 @@ The spatial index is keyed by `(cellId, source)`, i.e., `Map<cellId, Map<sourceI
 
 ### 3.3 Temporal Dimension Classification
 
-| `temporalType` | Meaning | Aggregation Strategy | Examples |
-| -------------- | ------- | -------------------- | -------- |
-| `static` | Update cycle >= 1 year | Spatial aggregation, no time window | WorldCover, terrain |
-| `stream` | Real-time updates (seconds to hours) | Sliding time-window aggregation | Flight tracks, real-time air quality |
-| `timeseries` | Historical time series | Time-slice playback | Annual forest loss |
+| `temporalType` | Meaning                              | Aggregation Strategy                | Examples                             |
+| -------------- | ------------------------------------ | ----------------------------------- | ------------------------------------ |
+| `static`       | Update cycle >= 1 year               | Spatial aggregation, no time window | WorldCover, terrain                  |
+| `stream`       | Real-time updates (seconds to hours) | Sliding time-window aggregation     | Flight tracks, real-time air quality |
+| `timeseries`   | Historical time series               | Time-slice playback                 | Annual forest loss                   |
 
 Phase 1 implements `static`. Phase 4 implements `stream` (poll scheduler + sliding time window). `timeseries` is reserved for future extension.
 
@@ -223,19 +229,19 @@ Phase 1 implements `static`. Phase 4 implements `stream` (poll scheduler + slidi
 
 ```jsonc
 {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-55.25, -10.25] },
-      "properties": {
-        "cellId": "85283473fffffff",
-        "source": "worldcover",
-        "channels": { "tree": 0.42, "urban": 0.15 },  // Bare channel names (single-source DataRecord)
-        "temporalType": "static"
-      }
-    }
-  ]
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": { "type": "Point", "coordinates": [-55.25, -10.25] },
+            "properties": {
+                "cellId": "85283473fffffff",
+                "source": "worldcover",
+                "channels": { "tree": 0.42, "urban": 0.15 }, // Bare channel names (single-source DataRecord)
+                "temporalType": "static",
+            },
+        },
+    ],
 }
 ```
 
@@ -247,15 +253,15 @@ This guarantees interoperability with external GIS tools — any tool that reads
 
 ### 4.1 Selection Rationale
 
-| Factor | H3 | Quadkey | Geohash |
-| ------ | -- | ------- | ------- |
-| Industry ecosystem adoption | Widest (BigQuery, Snowflake, CARTO, Databricks native support) | Map tile ecosystem only | Database indexing is widespread, analytics ecosystem is weak |
-| Area consistency | Highly consistent (within the same resolution) | Varies with latitude (Mercator) | Varies with latitude |
-| Neighbor queries | Native kRing, 6 equidistant neighbors | Requires computation, 4 neighbors with corner adjacency | Requires boundary-jump handling |
-| Hierarchical nesting | Approximate (7 child hexes, not exact tessellation) | Exact quadtree | Exact prefix truncation |
-| Viewport enumeration | `polygonToCells()`, millisecond-level | Two nested for-loops, extremely fast | Moderate |
-| Mapbox alignment | Not directly aligned; requires `cellToBoundary()` conversion to GeoJSON polygon | Fully aligned | Not aligned |
-| Third-party data interop | Strongest — an increasing number of data vendors publish H3 cell IDs directly | Weak | Moderate |
+| Factor                      | H3                                                                              | Quadkey                                                 | Geohash                                                      |
+| --------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
+| Industry ecosystem adoption | Widest (BigQuery, Snowflake, CARTO, Databricks native support)                  | Map tile ecosystem only                                 | Database indexing is widespread, analytics ecosystem is weak |
+| Area consistency            | Highly consistent (within the same resolution)                                  | Varies with latitude (Mercator)                         | Varies with latitude                                         |
+| Neighbor queries            | Native kRing, 6 equidistant neighbors                                           | Requires computation, 4 neighbors with corner adjacency | Requires boundary-jump handling                              |
+| Hierarchical nesting        | Approximate (7 child hexes, not exact tessellation)                             | Exact quadtree                                          | Exact prefix truncation                                      |
+| Viewport enumeration        | `polygonToCells()`, millisecond-level                                           | Two nested for-loops, extremely fast                    | Moderate                                                     |
+| Mapbox alignment            | Not directly aligned; requires `cellToBoundary()` conversion to GeoJSON polygon | Fully aligned                                           | Not aligned                                                  |
+| Third-party data interop    | Strongest — an increasing number of data vendors publish H3 cell IDs directly   | Weak                                                    | Moderate                                                     |
 
 **Conclusion:** H3 has a clear ecosystem advantage for an open platform with multi-source data integration. Third-party data vendors (air quality, traffic, population heatmaps) increasingly publish data with H3 cell IDs, enabling zero-conversion direct consumption. Viewport enumeration performance is fully adequate at this system's update frequency (200–500 ms). Mapbox integration is achieved through `cellToBoundary()` conversion to GeoJSON polygons, which Mapbox renders natively.
 
@@ -266,8 +272,14 @@ H3 divides the Earth's surface into hexagonal grids (plus a small number of pent
 Core API (`h3-js` npm package):
 
 ```javascript
-const { latLngToCell, cellToBoundary, cellToParent,
-        gridDisk, polygonToCells, getResolution } = require('h3-js');
+const {
+    latLngToCell,
+    cellToBoundary,
+    cellToParent,
+    gridDisk,
+    polygonToCells,
+    getResolution,
+} = require('h3-js');
 
 // Lat/lon → H3 cell ID
 const cellId = latLngToCell(37.7749, -122.4194, 5);
@@ -282,11 +294,19 @@ const boundary = cellToBoundary(cellId);
 const parent = cellToParent(cellId, 3);
 
 // Neighbor ring (radius k cells)
-const neighbors = gridDisk(cellId, 1);  // self + 6 neighbors
+const neighbors = gridDisk(cellId, 1); // self + 6 neighbors
 
 // Viewport rectangle → all covered cells
 const cells = polygonToCells(
-    [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
+    [
+        [
+            [west, south],
+            [east, south],
+            [east, north],
+            [west, north],
+            [west, south],
+        ],
+    ],
     resolution
 );
 ```
@@ -295,14 +315,14 @@ const cells = polygonToCells(
 
 ### 4.3 Resolution and Existing System Comparison
 
-| Resolution | Hex Edge Length | Hex Area | Use Case | Relation to Existing System |
-| ---------- | --------------- | -------- | -------- | --------------------------- |
-| 1 | ~418 km | ~607,221 km² | Continental | — |
-| 2 | ~158 km | ~86,746 km² | Large regions | — |
-| 3 | ~60 km | ~12,393 km² | Country/province level | ~4× larger than 0.5° grid — too coarse for migration |
-| 4 | ~23 km | ~1,770 km² | Metropolitan areas | **Closest to existing 0.5° grid (~3,080 km² at equator); same order of magnitude** |
-| 5 | ~8 km | ~253 km² | City level | Per-grid mode trigger range |
-| 7 | ~1.2 km | ~5.16 km² | Neighborhood level | Future fine-grained soundscapes |
+| Resolution | Hex Edge Length | Hex Area     | Use Case               | Relation to Existing System                                                        |
+| ---------- | --------------- | ------------ | ---------------------- | ---------------------------------------------------------------------------------- |
+| 1          | ~418 km         | ~607,221 km² | Continental            | —                                                                                  |
+| 2          | ~158 km         | ~86,746 km²  | Large regions          | —                                                                                  |
+| 3          | ~60 km          | ~12,393 km²  | Country/province level | ~4× larger than 0.5° grid — too coarse for migration                               |
+| 4          | ~23 km          | ~1,770 km²   | Metropolitan areas     | **Closest to existing 0.5° grid (~3,080 km² at equator); same order of magnitude** |
+| 5          | ~8 km           | ~253 km²     | City level             | Per-grid mode trigger range                                                        |
+| 7          | ~1.2 km         | ~5.16 km²    | Neighborhood level     | Future fine-grained soundscapes                                                    |
 
 **Default operating level:** Resolution 4 (closest to the existing 0.5° grid; hex area ~1,770 km² vs. grid cell ~3,080 km² at equator).
 **Configurable:** Via `DEFAULT_H3_RESOLUTION` in `config.js`.
@@ -310,12 +330,12 @@ const cells = polygonToCells(
 
 **User-facing scale labels:** H3 resolution numbers (3, 4, 5, 7) are meaningless to non-GIS users. All UI surfaces that expose resolution selection (import wizard, config API, console) must display a human-readable label alongside the numeric value:
 
-| Resolution | Label | Description |
-| ---------- | ----- | ----------- |
-| 3 | Province / State | ~60 km edge, ~12,400 km² — one hex covers a small country or large province |
-| 4 | Metro area (default) | ~23 km edge, ~1,770 km² — one hex covers a metropolitan region |
-| 5 | City | ~8 km edge, ~253 km² — one hex covers a city or district |
-| 7 | Neighborhood | ~1.2 km edge, ~5.2 km² — one hex covers a neighborhood or campus |
+| Resolution | Label                | Description                                                                 |
+| ---------- | -------------------- | --------------------------------------------------------------------------- |
+| 3          | Province / State     | ~60 km edge, ~12,400 km² — one hex covers a small country or large province |
+| 4          | Metro area (default) | ~23 km edge, ~1,770 km² — one hex covers a metropolitan region              |
+| 5          | City                 | ~8 km edge, ~253 km² — one hex covers a city or district                    |
+| 7          | Neighborhood         | ~1.2 km edge, ~5.2 km² — one hex covers a neighborhood or campus            |
 
 These labels are defined in a `H3_RESOLUTION_LABELS` constant in `config.js` and served via `/api/config` for frontend consumption.
 
@@ -328,10 +348,10 @@ These labels are defined in a `H3_RESOLUTION_LABELS` constant in `config.js` and
 3. **Upsampling** (query res > stored res — e.g., querying res 7 but data is stored at res 4): Broadcast the parent cell's value to all child cells uniformly. No spatial interpolation — the child cells inherit the parent's value. This is visually obvious (all children show the same color/value) and avoids fabricating false spatial detail.
 
 4. **Cross-resolution lookups use `cellToParent()` in both directions:**
-   - **Downsampling** (query res < stored res): group stored cells by `cellToParent(storedCell, queryRes)`, then aggregate each group using the channel's fold method.
-   - **Upsampling** (query res > stored res): for each viewport cell at query res, look up `cellToParent(viewportCell, storedRes)` and inherit the parent's value.
+    - **Downsampling** (query res < stored res): group stored cells by `cellToParent(storedCell, queryRes)`, then aggregate each group using the channel's fold method.
+    - **Upsampling** (query res > stored res): for each viewport cell at query res, look up `cellToParent(viewportCell, storedRes)` and inherit the parent's value.
 
-   > **Implementation constraint:** `cellToChildren()` is **NOT** used in the real-time query path. Enumerating children is O(7^(targetRes−nativeRes)) per cell — going from res 4 to res 7 produces ~343 children per stored cell, which can cause combinatorial explosion across many cells. The parent-lookup approach is O(1) per viewport cell regardless of resolution gap. `cellToChildren()` may be used offline (e.g., pre-warming a cache) but never in the viewport pipeline.
+    > **Implementation constraint:** `cellToChildren()` is **NOT** used in the real-time query path. Enumerating children is O(7^(targetRes−nativeRes)) per cell — going from res 4 to res 7 produces ~343 children per stored cell, which can cause combinatorial explosion across many cells. The parent-lookup approach is O(1) per viewport cell regardless of resolution gap. `cellToChildren()` may be used offline (e.g., pre-warming a cache) but never in the viewport pipeline.
 
 5. **Same-resolution** (query res == stored res): Direct lookup, no conversion needed. This is the common case when `DEFAULT_H3_RESOLUTION` is used consistently.
 
@@ -450,6 +470,7 @@ The `stream-scheduler` manages the lifecycle of all stream adapters:
 **Memory safeguards:** Configure `MAX_EVENTS_PER_CELL` (default: 1000) and `MAX_STREAM_CELLS` (default: 50000). When a cell exceeds the per-cell limit, oldest events are evicted regardless of window expiry. When total active cells exceed the global limit, least-recently-updated cells are evicted. These limits prevent unbounded memory growth from high-frequency or wide-window data sources.
 
 **Error handling strategy:**
+
 - On transient failure (network timeout, 5xx): retry with exponential backoff up to `maxRetries`.
 - On permanent failure (4xx, malformed data): log the error, emit an OSC `/adapter/error` message, and continue operating with stale data.
 - On adapter crash: the channel registry keeps the last known values; the adapter can be restarted without affecting other adapters.
@@ -520,23 +541,123 @@ module.exports = {
     temporalType: 'static',
     channels: [
         // Land cover distribution channels (sum to ~1 within each cell)
-        { name: 'tree',     label: 'Tree / Forest',    range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'shrub',    label: 'Shrubland',        range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'grass',    label: 'Grassland',        range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'crop',     label: 'Cropland',         range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'urban',    label: 'Urban / Built-up', range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'bare',     label: 'Bare / Sparse',    range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'snow',     label: 'Snow / Ice',       range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'water',    label: 'Water',            range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'wetland',  label: 'Herbaceous Wetland', range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'mangrove', label: 'Mangroves',        range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
-        { name: 'moss',     label: 'Moss / Lichen',    range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'distribution' },
+        {
+            name: 'tree',
+            label: 'Tree / Forest',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'shrub',
+            label: 'Shrubland',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'grass',
+            label: 'Grassland',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'crop',
+            label: 'Cropland',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'urban',
+            label: 'Urban / Built-up',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'bare',
+            label: 'Bare / Sparse',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'snow',
+            label: 'Snow / Ice',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'water',
+            label: 'Water',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'wetland',
+            label: 'Herbaceous Wetland',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'mangrove',
+            label: 'Mangroves',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
+        {
+            name: 'moss',
+            label: 'Moss / Lichen',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'distribution',
+        },
         // Independent metric channels (each independently normalized)
-        { name: 'nightlight', label: 'Nightlight',     range: [0, 1], unit: 'normalized', normalization: 'percentile', group: 'metric' },
-        { name: 'population', label: 'Population',     range: [0, 1], unit: 'normalized', normalization: 'log', group: 'metric' },
-        { name: 'forest',     label: 'Forest Cover',   range: [0, 1], unit: 'fraction', normalization: 'linear', group: 'metric' },
+        {
+            name: 'nightlight',
+            label: 'Nightlight',
+            range: [0, 1],
+            unit: 'normalized',
+            normalization: 'percentile',
+            group: 'metric',
+        },
+        {
+            name: 'population',
+            label: 'Population',
+            range: [0, 1],
+            unit: 'normalized',
+            normalization: 'log',
+            group: 'metric',
+        },
+        {
+            name: 'forest',
+            label: 'Forest Cover',
+            range: [0, 1],
+            unit: 'fraction',
+            normalization: 'linear',
+            group: 'metric',
+        },
     ],
-    ingest(csvRows, encoder, precision) { /* ... */ },
+    ingest(csvRows, encoder, precision) {
+        /* ... */
+    },
     importFormats: { csv: parseContinentCsv },
 };
 ```
@@ -545,13 +666,13 @@ module.exports = {
 
 When users import custom CSV data, the system requires:
 
-| Column | Required | Type | Description |
-| ------ | -------- | ---- | ----------- |
-| `lat` | Yes | float | Latitude (WGS84, -90 to 90) |
-| `lon` | Yes | float | Longitude (WGS84, -180 to 180) |
-| `timestamp` | No | ISO 8601 or unix ms | Event time |
-| `alt` | No | float | Elevation (meters) |
-| `*` | No | float | Any numeric column is auto-registered as a channel |
+| Column      | Required | Type                | Description                                        |
+| ----------- | -------- | ------------------- | -------------------------------------------------- |
+| `lat`       | Yes      | float               | Latitude (WGS84, -90 to 90)                        |
+| `lon`       | Yes      | float               | Longitude (WGS84, -180 to 180)                     |
+| `timestamp` | No       | ISO 8601 or unix ms | Event time                                         |
+| `alt`       | No       | float               | Elevation (meters)                                 |
+| `*`         | No       | float               | Any numeric column is auto-registered as a channel |
 
 Automatic processing logic:
 
@@ -562,20 +683,20 @@ Automatic processing logic:
 
 ### 5.7 Import Validation and Preview
 
-Importing arbitrary CSVs with zero feedback is a recipe for silent data corruption. The import pipeline includes a **preview step** that analyzes the file and returns a structured report *before* committing data to the spatial index. The user (or calling system) reviews the preview and either confirms or adjusts parameters.
+Importing arbitrary CSVs with zero feedback is a recipe for silent data corruption. The import pipeline includes a **preview step** that analyzes the file and returns a structured report _before_ committing data to the spatial index. The user (or calling system) reviews the preview and either confirms or adjusts parameters.
 
 **Preview report contents:**
 
-| Check | What It Detects | Response |
-| ----- | --------------- | -------- |
-| Column role detection | Auto-assigns `lat`, `lon`, `timestamp`, `alt` by column name; remaining numeric columns flagged as candidate channels | User can override role assignments (e.g., reassign `x` → `lon`, `y` → `lat`) |
-| Non-numeric columns | String or mixed-type columns that cannot be channels | Listed in preview; excluded from channel registration with a warning |
-| Missing values | Rows with `null` / empty / `NaN` in lat, lon, or channel columns | Count reported; rows with missing lat/lon are dropped; missing channel values use `NaN` (excluded from aggregation) |
-| Coordinate sanity | lat outside [-90, 90], lon outside [-180, 180], or lat/lon columns appear swapped (e.g., lon values in lat range) | Warning with suggested swap; if > 50% of rows fail range check, import is blocked with an error |
-| Coordinate system hint | Coordinates that look like projected (UTM, state plane) rather than WGS84 — detected by value magnitude (e.g., lat > 90 suggests non-WGS84) | Error: "Coordinates do not appear to be WGS84. Please convert to WGS84 (EPSG:4326) before importing." |
-| Resolution preview | Shows approximate hex scale for the selected H3 resolution | Human-readable label (see §4.3 scale hints) so the user understands spatial granularity |
-| Row/cell summary | Total rows parsed, unique H3 cells generated, rows per cell (min/mean/max) | Helps user judge whether resolution is appropriate for their data density |
-| Resolution mismatch | Data density vs. selected resolution: if average rows per cell < 1.5 (too sparse) or > 500 (too dense), the data may not match the chosen resolution | Warning: "Data density may not match resolution {res}. Consider resolution {suggestedRes} for better coverage." Computed from row/cell ratio heuristics. Does not block import. |
+| Check                  | What It Detects                                                                                                                                      | Response                                                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Column role detection  | Auto-assigns `lat`, `lon`, `timestamp`, `alt` by column name; remaining numeric columns flagged as candidate channels                                | User can override role assignments (e.g., reassign `x` → `lon`, `y` → `lat`)                                                                                                    |
+| Non-numeric columns    | String or mixed-type columns that cannot be channels                                                                                                 | Listed in preview; excluded from channel registration with a warning                                                                                                            |
+| Missing values         | Rows with `null` / empty / `NaN` in lat, lon, or channel columns                                                                                     | Count reported; rows with missing lat/lon are dropped; missing channel values use `NaN` (excluded from aggregation)                                                             |
+| Coordinate sanity      | lat outside [-90, 90], lon outside [-180, 180], or lat/lon columns appear swapped (e.g., lon values in lat range)                                    | Warning with suggested swap; if > 50% of rows fail range check, import is blocked with an error                                                                                 |
+| Coordinate system hint | Coordinates that look like projected (UTM, state plane) rather than WGS84 — detected by value magnitude (e.g., lat > 90 suggests non-WGS84)          | Error: "Coordinates do not appear to be WGS84. Please convert to WGS84 (EPSG:4326) before importing."                                                                           |
+| Resolution preview     | Shows approximate hex scale for the selected H3 resolution                                                                                           | Human-readable label (see §4.3 scale hints) so the user understands spatial granularity                                                                                         |
+| Row/cell summary       | Total rows parsed, unique H3 cells generated, rows per cell (min/mean/max)                                                                           | Helps user judge whether resolution is appropriate for their data density                                                                                                       |
+| Resolution mismatch    | Data density vs. selected resolution: if average rows per cell < 1.5 (too sparse) or > 500 (too dense), the data may not match the chosen resolution | Warning: "Data density may not match resolution {res}. Consider resolution {suggestedRes} for better coverage." Computed from row/cell ratio heuristics. Does not block import. |
 
 **Column mapping and unit declaration (optional overrides):**
 
@@ -583,13 +704,18 @@ By default, auto-detection handles most CSVs. For advanced use, the preview resp
 
 ```jsonc
 {
-  "columnMapping": {
-    "latitude":  { "role": "lat" },
-    "longitude": { "role": "lon" },
-    "pm25":      { "role": "channel", "unit": "μg/m³", "normalization": "log", "range": [0, 500] },
-    "temp_c":    { "role": "channel", "unit": "°C",    "normalization": "linear", "range": [-40, 50] },
-    "station_id": { "role": "ignore" }
-  }
+    "columnMapping": {
+        "latitude": { "role": "lat" },
+        "longitude": { "role": "lon" },
+        "pm25": { "role": "channel", "unit": "μg/m³", "normalization": "log", "range": [0, 500] },
+        "temp_c": {
+            "role": "channel",
+            "unit": "°C",
+            "normalization": "linear",
+            "range": [-40, 50],
+        },
+        "station_id": { "role": "ignore" },
+    },
 }
 ```
 
@@ -645,6 +771,7 @@ When multiple adapters coexist, bare channel names (e.g., `tree`, `temperature`)
 **Internal key format:** `sourceId.channelName` (dot-separated). The `sourceId` is the adapter's `id` property; `channelName` is the channel's `name` from its manifest. Examples: `worldcover.tree`, `purpleair.pm25`, `usgs_earthquake.quake_mag`.
 
 This namespaced key is the canonical identifier used in:
+
 - The channel registry (the `key` field above)
 - `CellSnapshot.channels` objects (see §3.2) — the merged query/output layer
 - Bus mapping configuration (see §7.1)
@@ -702,36 +829,43 @@ Users define channel-to-audio mapping via a JSON configuration file:
 ```jsonc
 // audio_mapping.json
 {
-  "version": "1.0",
-  "buses": [
-    {
-      "name": "nature",
-      "channels": ["worldcover.tree", "worldcover.shrub", "worldcover.grass", "worldcover.wetland", "worldcover.mangrove", "worldcover.moss"],
-      "foldMethod": "sum",           // "sum" | "max" | "weighted"
-      "sample": "samples/ambience/tree.wav",
-      "volume": { "min": 0.0, "max": 1.0 }
+    "version": "1.0",
+    "buses": [
+        {
+            "name": "nature",
+            "channels": [
+                "worldcover.tree",
+                "worldcover.shrub",
+                "worldcover.grass",
+                "worldcover.wetland",
+                "worldcover.mangrove",
+                "worldcover.moss",
+            ],
+            "foldMethod": "sum", // "sum" | "max" | "weighted"
+            "sample": "samples/ambience/tree.wav",
+            "volume": { "min": 0.0, "max": 1.0 },
+        },
+        {
+            "name": "city",
+            "channels": ["worldcover.urban", "worldcover.nightlight"],
+            "foldMethod": "max",
+            "sample": "samples/ambience/urban.wav",
+            "volume": { "min": 0.0, "max": 1.0 },
+        },
+        // ... users can freely add/remove buses
+    ],
+    "icons": [
+        {
+            "triggerChannel": "worldcover.tree",
+            "threshold": 0.3,
+            "cooldownMs": 3000,
+            "samples": ["samples/icons/tree/bird1.wav", "samples/icons/tree/bird2.wav"],
+        },
+    ],
+    "smoothing": {
+        "emaTimeConstant": 500,
+        "volumeRampMs": 20,
     },
-    {
-      "name": "city",
-      "channels": ["worldcover.urban", "worldcover.nightlight"],
-      "foldMethod": "max",
-      "sample": "samples/ambience/urban.wav",
-      "volume": { "min": 0.0, "max": 1.0 }
-    }
-    // ... users can freely add/remove buses
-  ],
-  "icons": [
-    {
-      "triggerChannel": "worldcover.tree",
-      "threshold": 0.3,
-      "cooldownMs": 3000,
-      "samples": ["samples/icons/tree/bird1.wav", "samples/icons/tree/bird2.wav"]
-    }
-  ],
-  "smoothing": {
-    "emaTimeConstant": 500,
-    "volumeRampMs": 20
-  }
 }
 ```
 
@@ -755,13 +889,13 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 
 ## 8. Import Format Support Roadmap
 
-| Format | Priority | Phase | Notes |
-| ------ | -------- | ----- | ----- |
-| CSV (lat/lon + arbitrary numeric columns) | P0 | 1.5 | Lowest barrier, immediate support via `POST /api/import` |
-| GeoJSON (FeatureCollection with Point/LineString/Polygon) | P0 | 1.5 | FeatureCollection parsing + geometry rasterization via §8.1 rules; numeric `properties` auto-registered as channels |
-| KML | P1 | Future | OGC standard, WGS84 natively — only need Point/LineString/Polygon coordinate extraction. Key for Fog of World / Google Earth ecosystem interop. |
-| GPX | P1 | Future | Similar XML structure to KML — `<trkpt lat="" lon="">` elements. Key for track-based apps (FR24, Strava, etc.). |
-| API adapter (HTTP poll / WebSocket) | P2 | 4 | Integration with real-time data sources (earthquakes, air quality, flights, etc.) |
+| Format                                                    | Priority | Phase  | Notes                                                                                                                                           |
+| --------------------------------------------------------- | -------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSV (lat/lon + arbitrary numeric columns)                 | P0       | 1.5    | Lowest barrier, immediate support via `POST /api/import`                                                                                        |
+| GeoJSON (FeatureCollection with Point/LineString/Polygon) | P0       | 1.5    | FeatureCollection parsing + geometry rasterization via §8.1 rules; numeric `properties` auto-registered as channels                             |
+| KML                                                       | P1       | Future | OGC standard, WGS84 natively — only need Point/LineString/Polygon coordinate extraction. Key for Fog of World / Google Earth ecosystem interop. |
+| GPX                                                       | P1       | Future | Similar XML structure to KML — `<trkpt lat="" lon="">` elements. Key for track-based apps (FR24, Strava, etc.).                                 |
+| API adapter (HTTP poll / WebSocket)                       | P2       | 4      | Integration with real-time data sources (earthquakes, air quality, flights, etc.)                                                               |
 
 > **Note:** KML and GPX have been deferred to Future Work for the course timeline. They remain critical for the "open platform" interoperability narrative — particularly KML for Fog of World integration. Both formats store coordinates in WGS84 natively, so no CRS conversion is needed. Implementation scope is limited to coordinate extraction from Point/LineString/Polygon geometries; KML style parsing and GPX extensions are out of scope.
 
@@ -769,11 +903,11 @@ Changes are pushed in real time via WebSocket to the Node.js server, which then 
 
 When importing non-point geometries (LineString, Polygon), the system must convert them into H3 cell sets. Without deterministic rules, different imports produce inconsistent coverage. The following rules apply:
 
-| Geometry Type | Rasterization Method | Notes |
-| ------------- | -------------------- | ----- |
-| Point / `<wpt>` | `latLngToCell(lat, lon, res)` | Direct encoding, one cell per point |
+| Geometry Type                       | Rasterization Method                                                                                                                                                          | Notes                                                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Point / `<wpt>`                     | `latLngToCell(lat, lon, res)`                                                                                                                                                 | Direct encoding, one cell per point                                                                                                                  |
 | LineString / `<trkseg>` / GPX track | Distance-based sampling: take a point every `IMPORT_LINE_SAMPLE_METERS` (default: 250, configurable in `config.js`), encode each sampled point, deduplicate resulting cellIds | Avoids over-sampling dense tracks and under-sampling sparse ones. The 250m default produces reasonable density at res 5–7 without flooding the index |
-| Polygon / `<Polygon>` | `polygonToCells(boundary, res)` from h3-js | Interior fill. Polygon holes are ignored initially (future: subtract hole cells from the filled set) |
+| Polygon / `<Polygon>`               | `polygonToCells(boundary, res)` from h3-js                                                                                                                                    | Interior fill. Polygon holes are ignored initially (future: subtract hole cells from the filled set)                                                 |
 
 `IMPORT_LINE_SAMPLE_METERS` is defined in `config.js`. GPX tracks with `<time>` elements preserve timestamps per sampled point for future `timeseries` temporal type support.
 
@@ -845,23 +979,23 @@ Generic channel addresses (`/ch/*`) are added in `osc_schema.js` while retaining
 
 ## 11. Glossary
 
-| Term | Definition |
-| ---- | ---------- |
-| Cell | The smallest spatial unit produced by grid encoding |
-| Cell ID | Unique identifier for a cell (H3 hexadecimal string in Phase 1) |
-| DataRecord | Single-source, atomic storage record for one cell — contains bare channel keys and a `source` field (§3.1) |
-| CellSnapshot | Merged query-layer view of a cell, combining DataRecords from multiple sources — contains namespaced channel keys (§3.2) |
-| Channel | A single normalized data dimension (e.g., "tree", "pm25") |
-| Bus | An audio output channel, produced by folding one or more channels |
-| Adapter | A module that converts an external data source into DataRecords |
-| Fold | The operation of combining multiple channel values into a single bus volume |
-| Canonical | The unified internal data representation format |
-| Namespace | Dot-separated prefix (`sourceId.channelName`) that uniquely identifies a channel across adapters; applied at the query/merge layer, not in storage |
-| Alias | A user-facing display name mapped to a namespaced channel key |
-| Adapter Manifest | The combination of `id`, `version`, `channels`, `temporalType`, and `requiredConfig` that describes an adapter to the registry |
-| Native Resolution | The H3 resolution at which a data source's cells were originally encoded; stored per DataRecord for cross-resolution queries |
-| AOI | Area of Interest — a spatial bounding box used to filter stream adapter data requests to a specific region |
-| Fold-mapper | The server's role in computing bus values from channels; Max receives pre-folded results (Design Goal 5) |
-| Alert Rule | A declarative threshold + hysteresis + cooldown definition that triggers an auditory alert when a channel crosses a boundary (see migration plan §7.5 — Phase 4.5) |
-| Control Plane | REST endpoints for inspecting and managing runtime state (`/api/sources`, `/api/channels`, `/api/streams`) as distinct from data-plane endpoints (`/api/import`, WebSocket viewport) |
-| Compound Rule | A future extension to the alert rule schema supporting AND/OR logic across multiple channels (e.g., fire only when `fire_count > X AND fire_intensity > Y`). See migration plan §8.5. |
+| Term              | Definition                                                                                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cell              | The smallest spatial unit produced by grid encoding                                                                                                                                   |
+| Cell ID           | Unique identifier for a cell (H3 hexadecimal string in Phase 1)                                                                                                                       |
+| DataRecord        | Single-source, atomic storage record for one cell — contains bare channel keys and a `source` field (§3.1)                                                                            |
+| CellSnapshot      | Merged query-layer view of a cell, combining DataRecords from multiple sources — contains namespaced channel keys (§3.2)                                                              |
+| Channel           | A single normalized data dimension (e.g., "tree", "pm25")                                                                                                                             |
+| Bus               | An audio output channel, produced by folding one or more channels                                                                                                                     |
+| Adapter           | A module that converts an external data source into DataRecords                                                                                                                       |
+| Fold              | The operation of combining multiple channel values into a single bus volume                                                                                                           |
+| Canonical         | The unified internal data representation format                                                                                                                                       |
+| Namespace         | Dot-separated prefix (`sourceId.channelName`) that uniquely identifies a channel across adapters; applied at the query/merge layer, not in storage                                    |
+| Alias             | A user-facing display name mapped to a namespaced channel key                                                                                                                         |
+| Adapter Manifest  | The combination of `id`, `version`, `channels`, `temporalType`, and `requiredConfig` that describes an adapter to the registry                                                        |
+| Native Resolution | The H3 resolution at which a data source's cells were originally encoded; stored per DataRecord for cross-resolution queries                                                          |
+| AOI               | Area of Interest — a spatial bounding box used to filter stream adapter data requests to a specific region                                                                            |
+| Fold-mapper       | The server's role in computing bus values from channels; Max receives pre-folded results (Design Goal 5)                                                                              |
+| Alert Rule        | A declarative threshold + hysteresis + cooldown definition that triggers an auditory alert when a channel crosses a boundary (see migration plan §7.5 — Phase 4.5)                    |
+| Control Plane     | REST endpoints for inspecting and managing runtime state (`/api/sources`, `/api/channels`, `/api/streams`) as distinct from data-plane endpoints (`/api/import`, WebSocket viewport)  |
+| Compound Rule     | A future extension to the alert rule schema supporting AND/OR logic across multiple channels (e.g., fire only when `fire_count > X AND fire_intensity > Y`). See migration plan §8.5. |

@@ -37,7 +37,7 @@
 /**
  * Stats returned to the frontend from a viewport query.
  * @typedef {Object} ViewportStats
- * @property {number|null} dominantLandcover - Most common ESA land class in viewport (null = no land data; OSC sends 0)
+ * @property {number|null} dominantLandcover - Most common ESA land class in viewport (null = no land data)
  * @property {number} nightlightNorm - 0-1 normalized nightlight brightness
  * @property {number} populationNorm - 0-1 normalized population density
  * @property {number} forestNorm - 0-1 normalized forest cover

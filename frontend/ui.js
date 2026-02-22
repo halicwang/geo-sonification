@@ -29,7 +29,7 @@ export function updateUI(stats) {
         els.gridCount.textContent = gc;
     }
 
-    // OSC mode indicator
+    // Mode indicator (aggregated vs per-grid)
     if (els.oscMode) {
         if (stats.mode === 'per-grid') {
             els.oscMode.textContent = `Per-Grid (${stats.gridCount || 0} cells)`;
@@ -90,11 +90,7 @@ export function updateConnectionStatus(connected) {
         els.wsStatus.classList.remove('disconnected');
         els.wsStatus.classList.add('connected');
         els.landcoverList.closest('#info-panel')?.classList.remove('stale');
-        if (state.config.oscReady) {
-            els.wsText.textContent = 'Connected to server / OSC: ready(approx)';
-        } else {
-            els.wsText.textContent = 'Connected to server / OSC: not ready';
-        }
+        els.wsText.textContent = 'Connected to server';
     } else {
         els.wsStatus.classList.remove('connected');
         els.wsStatus.classList.add('disconnected');

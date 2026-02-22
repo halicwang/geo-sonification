@@ -13,7 +13,7 @@
  * The final stats are used for sonification via the Web Audio engine.
  */
 
-const { normalizeOscValues } = require('./normalize');
+const { normalizeValues } = require('./normalize');
 const {
     VALID_LANDCOVER_CLASSES,
     WATER_CLASS,
@@ -214,7 +214,7 @@ function queryGridsInBounds(bounds) {
 }
 
 /**
- * Assemble the stats object returned to the frontend and OSC pipeline.
+ * Assemble the stats object returned to the frontend.
  *
  * @param {{ dominantLandcover?: number|null, nightlightNorm?: number, populationNorm?: number, forestNorm?: number, avgForestPct?: number, avgPopulationDensity?: number, avgNightlightMean?: number, avgNightlightP90?: number, gridCount?: number, lcCounts?: Object<string, number>, displayItems?: import('./types').LandcoverBreakdownItem[] }} params
  * @returns {import('./types').ViewportStats}
@@ -249,7 +249,7 @@ function buildStatsResult({
 
 /**
  * Default stats when viewport has no grid data (e.g. open ocean).
- * dominantLandcover is 80 (Water); OSC sends /landcover 80, /lc/80 1.0.
+ * dominantLandcover defaults to 80 (Water) with 100% distribution.
  *
  * @param {number} [gridCount=0]
  * @returns {import('./types').ViewportStats}
@@ -377,7 +377,7 @@ function calculateLegacyStats(gridsInView) {
         lcCounts,
         validCount > 0 ? validCount : 1
     );
-    const { nightlightNorm, populationNorm, forestNorm } = normalizeOscValues(
+    const { nightlightNorm, populationNorm, forestNorm } = normalizeValues(
         avgNightlightP90,
         avgPopulation,
         avgForest,
@@ -482,7 +482,7 @@ function calculateAreaWeightedStats(gridsInView) {
     const avgPopulation = sumLandAreaKm2 > 0 ? sumPopulationTotal / sumLandAreaKm2 : 0;
     const avgForest = sumLandAreaKm2 > 0 ? sumForestPctWeighted / sumLandAreaKm2 : 0;
 
-    const { nightlightNorm, populationNorm, forestNorm } = normalizeOscValues(
+    const { nightlightNorm, populationNorm, forestNorm } = normalizeValues(
         avgNightlightP90,
         avgPopulation,
         avgForest,
@@ -554,7 +554,7 @@ function getGridData() {
 }
 
 /**
- * Get the normalization params (for per-grid OSC).
+ * Get the normalization params (for per-grid mode).
  * @returns {import('./types').NormalizeParams|null}
  */
 function getNormalizeParams() {

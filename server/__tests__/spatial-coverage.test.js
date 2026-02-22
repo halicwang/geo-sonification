@@ -4,7 +4,7 @@
  */
 
 jest.mock('../normalize', () => ({
-    normalizeOscValues: () => ({ nightlightNorm: 0, populationNorm: 0, forestNorm: 0 }),
+    normalizeValues: () => ({ nightlightNorm: 0, populationNorm: 0, forestNorm: 0 }),
 }));
 
 const { init, calculateViewportStats } = require('../spatial');

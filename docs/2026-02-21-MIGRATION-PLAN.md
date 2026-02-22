@@ -42,10 +42,18 @@ Section numbers in this document are local structure only. Cross-document tracki
 
 ## 0. Execution Conventions
 
-### Reality Snapshot (as of 2026-02-22)
+### Baseline Reality Statement (as of 2026-02-22)
 - Existing codebase is stable for the current WorldCover demo.
 - Open platform capabilities exist mainly as design intent and partial implementation.
 - This plan converts intent into decision-complete delivery milestones.
+- Runtime APIs focus on current demo path; Web Audio renderer is active; legacy WorldCover path is the known stable behavior.
+- Key gaps to V1: runtime open ingestion, unified H3 path, operational alerting, dual stream ingress, runtime audio configurability, enterprise governance, deployment-boundary disclosure, and staged SLO activation.
+- Guardrails are not yet formalized as release blockers (M0 addresses this).
+- Alerting, monitoring, governance, and audio configurability are not yet fully operationalized (M3-M5 address these).
+- Prior planning did not enforce one consistent release discipline (§4 addresses this).
+- Requirement-to-evidence mapping was previously implicit and fragmented (§5 addresses this).
+- Core risks are known but must be tied to milestone controls (§6 addresses this).
+- Deferred items are intentionally separated from V1 commitments (§7 addresses this).
 
 This plan uses RFC 2119 terms and traceability IDs:
 - Requirement IDs: `REQ-*` (defined in the paired SPEC).
@@ -53,41 +61,11 @@ This plan uses RFC 2119 terms and traceability IDs:
 
 No milestone is considered complete without all of: `DoD + Evidence + Rollback readiness`.
 
-### 0.1 Mandatory Three-Document Execution Gate (Human + AI)
-- Implementation agents (human or AI) MUST consult all three lighthouse documents before executing any milestone work:
-  - `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
-  - `docs/2026-02-21-MIGRATION-PLAN.md`
-  - `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`
+### 0.1 Three-Document Execution Gate
+The Three-Document Protocol is defined authoritatively in `OPEN-PLATFORM-SPEC` §0.1. All milestone execution is bound by that protocol. Additional execution-context rule:
 - Each milestone ticket/PR MUST include a trace tuple: `REQ-*` + `M*` + implementation guide section anchor.
-- If document conflicts are found, execution MUST stop and conflict resolution MUST occur before continuing milestone delivery.
-- Precedence MUST follow: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `IMPLEMENTATION-GUIDE`.
-Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.md` Section 0.1 acceptance criteria and enforced here via milestone gates (`DoD`, `EVID-*`, rollback).
 
-## 1. Baseline and Gap Statement
-
-### Reality Snapshot (as of 2026-02-22)
-**Current baseline:**
-- Runtime APIs focus on current demo path.
-- Web Audio renderer is active.
-- Legacy WorldCover path is the known stable behavior.
-
-**Key gaps to V1:**
-- Runtime open ingestion and source/channel lifecycle management.
-- Unified H3-aligned end-to-end path.
-- Operational alert engine semantics.
-- Dual stream ingress path (poll + HTTPS push) with deterministic runtime behavior.
-- Runtime audio configurability for non-audio specialists.
-- Enterprise baseline governance (auth/quota/audit).
-- Explicit deployment-boundary disclosure (`single_org_multi_team`) and staged SLO gate activation.
-
-**Acceptance:** Baseline is explicit enough to define non-regression and migration scope.
-
-## 2. Milestone Map (M0-M5)
-
-### Reality Snapshot (as of 2026-02-22)
-- Previous plan mixed phase and future items.
-- This map is now milestone-driven and business-demonstrable.
-- M0 and M1-A execute in parallel for faster initial delivery.
+## 1. Milestone Map (M0-M5)
 
 | Milestone | Goal | Covered Requirements | Exit Evidence |
 | --- | --- | --- | --- |
@@ -95,18 +73,14 @@ Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.
 | M1 | Open Ingestion + Control Plane | REQ-INGEST-001, REQ-COMPAT-001 | EVID-M1-001..009 |
 | M2 | Unified H3 Spatial Core (includes structural decoupling) | REQ-GRID-001, REQ-PERF-001, REQ-COMPAT-001 | EVID-M2-001..013 |
 | M3 | Monitoring + Alerting + Stream Loop | REQ-ALERT-001, REQ-STREAM-001, REQ-COMPAT-001 | EVID-M3-001..009 |
-| M4 | Configurable Audio Runtime (includes sample management) | REQ-AUDIO-001, REQ-UX-001, REQ-COMPAT-001 | EVID-M4-001..008 |
+| M4 | Configurable Audio Runtime (includes sample management) | REQ-AUDIO-001, REQ-UX-001, REQ-COMPAT-001 | EVID-M4-001..009 |
 | M5 | Enterprise Baseline Governance | REQ-GOV-001, REQ-DEPLOY-001, REQ-COMPAT-001 | EVID-M5-001..007 |
 
 **Acceptance:** Every V1 requirement is covered by at least one milestone and evidence set.
 
-## 3. Milestone Details
+## 2. Milestone Details
 
 ## [M0] M0 — Compatibility Guardrails First (Parallel Start with M1-A)
-
-### Reality Snapshot (as of 2026-02-22)
-- WorldCover path is the stability anchor.
-- Guardrails are not yet formalized as release blockers.
 
 ### Objective
 Lock current behavior as golden baseline before platform refactor begins.
@@ -147,9 +121,6 @@ M0 and M1 Packet A (adapter/registry foundation) start in parallel. M1-A is pure
 ---
 
 ## [M1] M1 — Open Ingestion + Control Plane (M1-A Parallel with M0)
-
-### Reality Snapshot (as of 2026-02-22)
-- Runtime import/control-plane contract is not complete.
 
 ### Objective
 Enable self-service runtime data onboarding without code edits/redeploy.
@@ -208,10 +179,6 @@ Packet M1-A (adapter/registry foundation) starts in parallel with M0. M1-B, M1-C
 ---
 
 ## [M2] M2 — Unified H3 Spatial Core (includes Structural Decoupling)
-
-### Reality Snapshot (as of 2026-02-22)
-- Legacy grid semantics still influence runtime behavior.
-- `server/spatial.js` and `server/data-loader.js` are high-coupling modules and the main risk concentration.
 
 ### Objective
 Establish H3 as the single internal spatial language across ingest/query/render, starting with structural decoupling of legacy modules.
@@ -279,9 +246,6 @@ Phase 2 evidence:
 
 ## [M3] M3 — Monitoring + Alerting + Stream Loop
 
-### Reality Snapshot (as of 2026-02-22)
-- Alerting and real-time monitoring semantics are not yet fully operationalized for production monitoring.
-
 ### Objective
 Deliver operator-grade alerting and real-time stream-driven monitoring from spatial channel signals.
 
@@ -344,10 +308,6 @@ Deliver operator-grade alerting and real-time stream-driven monitoring from spat
 
 ## [M4] M4 — Configurable Audio Runtime (No Redeploy, includes Sample Management)
 
-### Reality Snapshot (as of 2026-02-22)
-- Web Audio is active, but runtime configurability for business users is not complete.
-- Audio sample files are hardcoded; no mechanism for custom sample upload.
-
 ### Objective
 Allow non-audio engineers to tune mapping, trigger behavior, and audio samples safely at runtime.
 
@@ -358,12 +318,11 @@ Allow non-audio engineers to tune mapping, trigger behavior, and audio samples s
 
 ### In Scope
 - `audio_mapping.json` schema enforcement (including per-bus `sampleUrl` field for custom samples).
-- `POST /api/audio-mapping/reload` hot reload path.
+- Audio mapping workflow REST API endpoints (SPEC-frozen): `GET /api/audio-mapping`, `/draft`, `/validate`, `/apply`, `/rollback`, `/history`.
 - WebSocket `bus_config_update` event.
-- REST API control endpoints for channel-to-bus mapping and threshold tuning (no GUI required in V1).
-- SPEC-frozen workflow contract: `Draft -> Validate -> Apply -> Rollback`.
+- SPEC-frozen workflow contract: `Draft -> Validate -> Apply -> Rollback` via the frozen REST endpoint set (no GUI required in V1).
 - Runtime validation and rollback to last-known-good mapping.
-- Audio sample management: `POST /api/audio-samples/upload` for custom WAV/OGG files, stored in `data/samples/` with format/size validation. Frontend loads samples from configured URL.
+- Audio sample management: `POST /api/audio-samples/upload` for custom WAV/OGG files, `GET /api/audio-samples` for listing available samples, stored in `data/samples/` with format/size validation. Frontend loads samples from configured URL.
 
 ### Out of Scope
 - Advanced DAW-grade authoring interfaces.
@@ -377,14 +336,15 @@ Allow non-audio engineers to tune mapping, trigger behavior, and audio samples s
 - Compatibility guardrail remains green.
 
 ### Evidence
-- EVID-M4-001: API tests for reload success/failure and schema errors.
+- EVID-M4-001: API tests for apply success/failure and schema errors via frozen workflow endpoints.
 - EVID-M4-002: Runtime config update propagation test.
-- EVID-M4-003: API workflow test for mapping update (`Draft -> Validate -> Apply -> Rollback` via REST endpoints).
+- EVID-M4-003: API workflow test for mapping update (`Draft -> Validate -> Apply -> Rollback` via frozen REST endpoints).
 - EVID-M4-004: Last-known-good fallback test.
 - EVID-M4-005: Audio behavior change verification script.
 - EVID-M4-006: Compatibility regression report.
 - EVID-M4-007: Audio sample upload API test (format validation, size limits).
 - EVID-M4-008: Custom sample playback verification (upload -> reference in mapping -> audible output).
+- EVID-M4-009: Audio sample listing API test (upload sample -> list -> verify presence and metadata).
 
 ### Rollback
 - Revert to previous valid audio mapping at runtime; disable new control API endpoint if needed.
@@ -397,9 +357,6 @@ Allow non-audio engineers to tune mapping, trigger behavior, and audio samples s
 ---
 
 ## [M5] M5 — Enterprise Baseline Governance
-
-### Reality Snapshot (as of 2026-02-22)
-- Governance controls are not yet complete for enterprise onboarding.
 
 ### Objective
 Provide minimum enterprise gatekeeping and traceability required for production adoption.
@@ -443,10 +400,7 @@ Provide minimum enterprise gatekeeping and traceability required for production 
 - Monitoring: auth failures, throttling rates, audit pipeline health.
 - Rollback trigger: governance outage affecting critical operations.
 
-## 4. Cross-Milestone Release Train Rules
-
-### Reality Snapshot (as of 2026-02-22)
-- Prior planning did not enforce one consistent release discipline.
+## 3. Cross-Milestone Release Train Rules
 
 For every milestone:
 1. **Build:** all milestone tests + compatibility gate MUST pass.
@@ -462,10 +416,7 @@ SLO gate staging (`REQ-PERF-001`):
 
 **Acceptance:** No milestone is considered done without canary evidence and rollback readiness.
 
-## 5. Requirement Traceability Matrix
-
-### Reality Snapshot (as of 2026-02-22)
-- Requirement-to-evidence mapping was implicit and fragmented.
+## 4. Requirement Traceability Matrix
 
 | Requirement | Implemented In | Primary Evidence |
 | --- | --- | --- |
@@ -474,15 +425,15 @@ SLO gate staging (`REQ-PERF-001`):
 | REQ-GRID-001 | M2 (Phase 1 + Phase 2) | EVID-M2-001..013 |
 | REQ-ALERT-001 | M3 | EVID-M3-001..009 |
 | REQ-STREAM-001 | M3 | EVID-M3-001..009 |
-| REQ-AUDIO-001 | M4 | EVID-M4-001..008 |
-| REQ-UX-001 | M4 | EVID-M4-001..008 |
+| REQ-AUDIO-001 | M4 | EVID-M4-001..009 |
+| REQ-UX-001 | M4 | EVID-M4-001..009 |
 | REQ-GOV-001 | M5 | EVID-M5-001..007 |
 | REQ-DEPLOY-001 | M5 | EVID-M5-007 |
 | REQ-PERF-001 | M0/M1 observe + M2 freeze gate | EVID-M0-004 + EVID-M2-012..013 |
 
 **Acceptance:** Every REQ has explicit milestone ownership and objective evidence.
 
-## 5.1 Milestone Boundary Ownership Table
+## 4.1 Milestone Boundary Ownership Table
 
 This table enforces single ownership for each new API contract to prevent overlap across milestones.
 
@@ -495,18 +446,15 @@ This table enforces single ownership for each new API contract to prevent overla
 | H3 query/merge/render semantics | M2 Phase 2 | Unified spatial language delivery |
 | `POST /api/streams/push/:sourceId` | M3 | Push ingress contract, idempotency, backpressure |
 | `GET /api/streams` expanded status contract | M3 | Poll + push operational health contract |
-| `POST /api/audio-mapping/reload` + workflow `Draft -> Validate -> Apply -> Rollback` | M4 | Runtime audio control plane API behavior (no GUI in V1) |
-| `POST /api/audio-samples/upload` + sample management | M4 | Custom audio sample upload and reference |
+| Audio mapping workflow API (`GET`, `/draft`, `/validate`, `/apply`, `/rollback`, `/history`) | M4 | Runtime audio control plane (no GUI in V1) |
+| `POST /api/audio-samples/upload` + `GET /api/audio-samples` | M4 | Custom audio sample upload, listing, and reference |
 | Auth/quota/audit + deployment boundary disclosure | M5 | Governance and boundary clarity |
 
 Milestone boundary check rule:
 - Every new API MUST have exactly one owning milestone.
 - A milestone MAY depend on prior APIs but MUST NOT re-own or redefine existing API contracts.
 
-## 6. Risk Register and Mitigations
-
-### Reality Snapshot (as of 2026-02-22)
-- Core risks are known but must be tied to milestone controls.
+## 5. Risk Register and Mitigations
 
 1. **Spatial migration risk (M2):** incorrect H3 parity.  
 Mitigation: dual-path verification + tolerance checks + rollback flag.
@@ -522,17 +470,14 @@ Mitigation: staged canary, emergency bypass procedure, policy verification tests
 Mitigation: force structural decoupling as M2 Phase 1 before H3 semantics in Phase 2, and track scope as range-based estimates with parity checkpoints.
 7. **API-boundary ambiguity risk (M1/M3):** `/api/import`, `/api/sources`, and push ingress responsibilities are interpreted inconsistently.
 Mitigation: freeze API responsibility matrix in SPEC and enforce milestone boundary ownership checks in every review.
-8. **Total change-volume ratio risk (M1..M4):** current range estimate is roughly `~6,610-12,570 LOC` touched across new+modified code, which is large relative to current application code footprint (planning heuristic: ~50%-85% rewrite-equivalent).
+8. **Total change-volume ratio risk (M1..M4):** current range estimate is roughly `~8,320-15,670 LOC` touched across new+modified code, which is large relative to current application code footprint (planning heuristic: ~55%-90% rewrite-equivalent).
 Mitigation: keep staged delivery (`M1` additive -> `M2` Phase 1 decoupling -> `M2` Phase 2 semantic migration), enforce per-phase rollback gates, and require scope rebasing when realized change volume exceeds upper-range assumptions.
 9. **Scaling boundary risk (M2+):** V1 is designed for single-instance deployment (200 concurrent clients, 500K cells per source). Users exceeding these limits will hit performance degradation without clear error signals.
 Mitigation: document hard limits in API docs and `/api/config` metadata, add runtime monitoring for client count and cell count approaching limits, return clear error responses when limits are exceeded.
 
 **Acceptance:** Each risk has explicit mitigation and rollback linkage.
 
-## 7. Deferred / Future Work (Single Consolidated Chapter)
-
-### Reality Snapshot (as of 2026-02-22)
-- Deferred items are intentionally separated from V1 commitments.
+## 6. Deferred / Future Work (Single Consolidated Chapter)
 
 - Priority-ordered format roadmap (post-V1):
   1. **Shapefile** (.shp) — highest demand from GIS enterprise workflows.

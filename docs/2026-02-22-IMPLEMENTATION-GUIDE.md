@@ -20,13 +20,8 @@ The project uses three lighthouse documents:
 | `MIGRATION-PLAN` | Milestone sequencing, evidence, rollback | Second — defines delivery order |
 | `IMPLEMENTATION-GUIDE` | Technical rationale + engineering packets | Third — defines why and how |
 
-### 0.1 Mandatory Three-Document Use (Human + AI)
-
-- Any implementation agent (human or AI) MUST consult all three lighthouse documents before planning or coding.
-- Every implementation plan, task, or PR MUST include a trace tuple: at least one `REQ-*`, one `M*`, and one implementation guide section anchor.
-- Document precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `IMPLEMENTATION-GUIDE`.
-- Validation authority MUST be inherited from `OPEN-PLATFORM-SPEC` Section 0.1 acceptance criteria.
-- If cross-document conflict is detected, implementation MUST pause and conflict MUST be resolved before merge.
+### 0.1 Three-Document Use
+The Three-Document Protocol is defined authoritatively in `OPEN-PLATFORM-SPEC` §0.1. This document inherits all protocol rules and adds no overrides.
 
 ## 1. Milestone Anchors
 
@@ -296,6 +291,7 @@ Required columns: `lat`, `lon` (or aliases `latitude`, `longitude`). Any additio
 - `sourceId` must be sanitized: lowercase, underscores, max length, safe chars.
 - Re-import with same `sourceId` replaces previous source atomically.
 - Manifest writes must use temp-file + rename to avoid crash corruption.
+- Manifest MUST persist discovered channel names (bare keys) per source. On restart, channel registry is rebuilt from manifest metadata without re-parsing source files. If source file is re-parsed (e.g., cache miss), channel list MUST match manifest declaration or trigger a validation warning.
 
 ### 7.4 API boundary (`/api/import` vs `/api/sources`)
 
@@ -329,7 +325,17 @@ Used in: channel registry records, CellSnapshot channels, audio mapping config, 
 
 ### 8.3 Notification invariants
 
-On registry change: emit `channel_update` (WebSocket), emit reload signal for downstream consumers, `GET /api/channels` is source of truth.
+On registry change:
+- Emit `channel_update` (WebSocket) with incremented `version`.
+- Emit reload signal for downstream consumers.
+- `GET /api/channels` is source of truth.
+
+On audio mapping change:
+- Emit `bus_config_update` (WebSocket) with incremented `version`.
+
+Ordering rule: if a single operation triggers both `channel_update` and `bus_config_update`, the server MUST send `channel_update` first on each client connection before sending `bus_config_update`. This ensures clients can update their channel index before processing new bus assignments.
+
+Anti-pattern: sending `bus_config_update` referencing channels that the client hasn't yet received via `channel_update`.
 
 ### 8.4 Audio Runtime Config Invariants
 
@@ -344,6 +350,14 @@ On registry change: emit `channel_update` (WebSocket), emit reload signal for do
 - Import and control mutations should be designed for auth middleware insertion points.
 - Import path must expose quota/rate-limit decision hooks before expensive parse/ingest work.
 - Change operations should emit auditable events (import/delete/reload/rule updates).
+
+### 8.6 Channel Resolution Invariants
+
+- Channel registry is dynamic: sources may arrive and depart at runtime.
+- All consumers of channel values (alert engine, audio mapping engine) MUST check resolution status before evaluation.
+- Unresolved channel → value is undefined (not 0, not NaN).
+- Re-evaluation trigger: source online/offline events MUST propagate to alert engine and audio mapping engine for rule/mapping re-check.
+- Anti-pattern: treating unresolved channels as 0 silently suppresses alerts and produces incorrect audio output.
 
 ## 9. Alert Engine Semantics
 
@@ -374,6 +388,12 @@ Implementation constraint: V1 MUST NOT support nested compound rules (compound r
 
 Why flat-only: Nested compound rules create exponential state complexity and make operator debugging extremely difficult. The 2-3 condition limit is sufficient for common multi-channel monitoring scenarios (e.g., "high pollution AND high temperature").
 
+### 9.0.2 Unresolved Channel Handling in Alert Evaluation
+
+- If a simple rule's channel is unresolved, the rule stays in `idle` and does not evaluate.
+- If a compound AND rule has any unresolved condition, the rule stays in `idle`.
+- If a compound OR rule has some resolved and some unresolved conditions, only resolved conditions are evaluated. If all are unresolved, the rule stays in `idle`.
+
 ### 9.1 Push ingress payload and acknowledgement types
 
 `PushEvent` (technical type):
@@ -393,7 +413,11 @@ Why flat-only: Nested compound rules create exponential state complexity and mak
 Type rules:
 
 - `timestamp` is required.
-- Spatial key is `cellId` OR (`lat` + `lon`) with deterministic precedence documented in adapter logic.
+- Spatial key precedence (deterministic):
+  1. If `cellId` is present and non-null: use `cellId` directly; `lat`/`lon` are ignored.
+  2. If `cellId` is absent/null and both `lat`+`lon` are present: encode cell from coordinates using source's declared resolution.
+  3. If neither `cellId` nor `lat`+`lon` are present: reject record with code `MISSING_SPATIAL_KEY`.
+  4. If `cellId` is present but is not a valid H3 index: reject record with code `INVALID_CELL_ID`.
 - `channelsRaw` is required; normalization is adapter/runtime responsibility, not producer responsibility.
 
 `PushIngestAck` (technical type):
@@ -636,24 +660,26 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 
 ### 10.5 [M4] Configurable Audio Runtime (includes Sample Management)
 
-#### Packet M4-A: Mapping reload baseline
+#### Packet M4-A: Mapping engine + apply baseline
 
 - New file:
     - `server/audio-mapping.js`
-- API:
-    - `POST /api/audio-mapping/reload`
+- API (SPEC-frozen):
+    - `GET /api/audio-mapping` (active config retrieval)
+    - `POST /api/audio-mapping/apply` (runtime apply, replaces prior reload semantics)
 - Behavior:
     - runtime config validation and in-memory swap
     - fallback to previous valid config on error
+    - emit `bus_config_update` WebSocket event on successful apply
 - Risk: Medium (runtime audio continuity).
 
 #### Packet M4-B: Control API workflow endpoints
 
 - Scope:
-    - REST API endpoints implementing workflow state machine: `Draft -> Validate -> Apply -> Rollback`
-    - channel-to-bus mapping edits via API
-    - threshold and basic intensity controls via API
-    - version visibility and rollback target selection via API
+    - Remaining SPEC-frozen workflow endpoints: `POST /api/audio-mapping/draft`, `POST /api/audio-mapping/validate`, `POST /api/audio-mapping/rollback`, `GET /api/audio-mapping/history`
+    - channel-to-bus mapping edits via draft API
+    - threshold and basic intensity controls via draft API
+    - version visibility and rollback target selection via history/rollback APIs
     - No graphical UI required; operators interact via HTTP clients or scripts.
 - Risk: Medium (API contract correctness + runtime sync).
 
@@ -662,6 +688,7 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 - Scope:
     - Allow per-bus sample file override via `audio_mapping.json` (`sampleUrl` field).
     - `POST /api/audio-samples/upload` for uploading custom WAV/OGG files.
+    - `GET /api/audio-samples` for operators to discover available sample files before editing mapping config.
     - Sample files stored in `data/samples/` with source/bus namespacing.
     - Validation: format check (WAV/OGG only), max duration limit, max file size limit.
     - Frontend audio engine loads sample from configured URL instead of hardcoded path.
@@ -692,23 +719,31 @@ Phase 1 exit criteria: decoupled module boundaries are merged and covered by reg
 
 | Packet | Approx New LOC | Approx Modified LOC | Risk |
 | --- | --- | --- | --- |
-| H3 foundation (M2-A) | ~250-400 | ~30-80 | Very low |
+| Golden baseline harness (M0-A) | ~150-250 | ~20-50 | Low |
+| Provisional SLO benchmark (M0-B) | ~100-200 | ~10-30 | Low |
 | Adapter + registry (M1-A) | ~900-1300 | ~120-220 | Medium |
 | Runtime import + boundary (M1-B + M1-C) | ~950-1500 | ~90-220 | Medium |
 | Degraded demo (M1-D) | ~100-200 | ~50-100 | Low |
 | Structural decoupling (M2 Phase 1) | ~200-450 | ~600-1400 | High |
+| H3 foundation (M2-A) | ~250-400 | ~30-80 | Very low |
 | Spatial H3 migration (M2-B) | ~300-700 | ~500-1300 | High |
 | Frontend hex rendering (M2-C) | ~380-700 | ~180-420 | Medium |
+| Alert engine + compound rules (M3-A) | ~420-650 | ~60-150 | Medium |
 | Stream pipeline poll (M3-B) | ~600-1000 | ~100-260 | Medium |
 | Push ingress pipeline (M3-C) | ~450-850 | ~80-220 | Medium-high |
-| Alert engine + compound rules (M3-A) | ~420-650 | ~60-150 | Medium |
+| Mapping engine + apply baseline (M4-A) | ~200-350 | ~80-150 | Medium |
+| Control API workflow (M4-B) | ~350-600 | ~50-120 | Medium |
 | Audio sample management (M4-C) | ~200-350 | ~50-100 | Low-medium |
+| Auth and access control (M5-A) | ~200-350 | ~60-120 | Medium |
+| Quotas and throttling (M5-B) | ~150-250 | ~40-80 | Low-medium |
+| Audit trail (M5-C) | ~200-350 | ~30-60 | Low-medium |
+| Deployment boundary (M5-D) | ~50-100 | ~20-40 | Low |
 
 Cumulative planning envelope (matrix sum):
 
-- Approx new LOC: `~4,750-8,100`
-- Approx modified LOC: `~1,860-4,470`
-- Approx total touched LOC: `~6,610-12,570`
+- Approx new LOC: `~6,150-10,550`
+- Approx modified LOC: `~2,170-5,120`
+- Approx total touched LOC: `~8,320-15,670`
 
 Execution warning: Keep structural decoupling (M2 Phase 1) mandatory before H3 semantics migration. Treat all estimates as ranges; do not commit to lower-bound values without parity evidence checkpoints.
 
@@ -786,6 +821,7 @@ The baseline WorldCover compatibility set is the contract protected by M0 regres
 10. Do not claim normative SLO compliance before M2 path activation and benchmark freeze.
 11. Do not allow nested compound alert rules; V1 supports flat AND/OR with 2-3 conditions only.
 12. Do not apply cooldown per-condition in compound rules; cooldown is per `(ruleId, cellId)` at the compound rule level.
+13. Do not treat unresolved channel references as zero; absent channels must be distinguishable from channels with value 0.
 
 ## 16. Compatibility Gate Checklist (Must Pass Every Milestone)
 
@@ -809,7 +845,9 @@ curl -X POST http://localhost:3000/api/import \
 
 curl http://localhost:3000/api/channels
 
-curl -X POST http://localhost:3000/api/audio-mapping/reload
+curl -X POST http://localhost:3000/api/audio-mapping/apply \
+  -H "Content-Type: application/json" \
+  -d '{"draftId":"current"}'
 
 curl http://localhost:3000/api/sources
 ```

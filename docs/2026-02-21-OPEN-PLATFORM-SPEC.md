@@ -33,10 +33,16 @@ Section numbers in this document are local structure only. Cross-document tracki
 
 ## 0. Document Conventions
 
-### Reality Snapshot (as of 2026-02-22)
+### Baseline Reality Statement (as of 2026-02-22)
 - Current system is a stable WorldCover-focused demo with Web Audio rendering.
 - Only a limited API surface exists in runtime today (`/health`, `/api/config`, `/api/viewport`).
 - Open-platform capabilities below are normative target requirements and must be implemented through the migration plan.
+- Existing runtime model is grid/landcover focused; canonical cross-source objects in §3 are frozen target interfaces.
+- The current runtime does not yet expose the full control plane; interfaces in §4 are frozen target contracts.
+- Capabilities are currently uneven across ingestion, alignment, alerting, configurability, and governance; §5 defines mandatory target behavior and explicit gap statements.
+- Prior drafts mixed design notes and roadmap ideas; quality gates in §6 are now normative.
+- Decision locks in §7 freeze defaults for execution; no open design slots remain.
+- Deferred items in §8 are centralized to avoid contaminating V1 commitments.
 
 This document uses [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords:
 - **MUST**: mandatory for compliance.
@@ -57,10 +63,6 @@ All requirements are traceable by `REQ-*` IDs and are referenced by milestones i
 **Acceptance:** Delivery artifacts include a three-doc trace tuple and no unresolved cross-document conflicts.
 
 ## 1. North Star Requirements (V1 Red Lines)
-
-### Reality Snapshot (as of 2026-02-22)
-- Product intent is clear, but V1 red lines were previously spread across multiple sections and statuses.
-- This section is now the single source of truth for V1 commitments.
 
 ### REQ-INGEST-001: Open Self-Service Ingestion
 Any company/team MUST be able to upload supported files (CSV, GeoJSON) and use them immediately without changing source code or redeploying services.
@@ -114,11 +116,6 @@ V1 MUST publish quantified capacity/latency limits as provisional targets, then 
 
 ## 2. Target System Architecture (Web Audio Primary)
 
-### Reality Snapshot (as of 2026-02-22)
-- Web Audio is already the active rendering path.
-- Prior documents mixed historical Max/OSC architecture into the mainline narrative.
-- Mainline architecture is now explicitly Web Audio-first; Max/OSC is historical compatibility appendix only.
-
 ## 2.1 Mainline Data Flow
 
 ```text
@@ -161,10 +158,6 @@ Alert Engine           Audio Mapping Engine
 **Acceptance:** No module bypasses H3 alignment or writes ad-hoc channel formats directly to renderer logic.
 
 ## 3. Canonical Domain Model and Spatial Language
-
-### Reality Snapshot (as of 2026-02-22)
-- Existing runtime model is grid/landcover focused.
-- Canonical cross-source objects are defined here as frozen target interfaces.
 
 ## 3.1 Frozen Types
 
@@ -266,6 +259,7 @@ V1 compound rule constraints:
 - Coordinate arrays MUST use GeoJSON order `[lon, lat]`.
 - H3 function invocation order MUST follow library contracts (`lat, lon` where required).
 - Import pipeline MUST reject invalid coordinates and malformed geometries.
+- Push event spatial key resolution MUST follow deterministic precedence: `cellId` (if present) > `lat`/`lon` encoding > rejection.
 
 ## 3.3 Merge and Namespace Rules
 - Storage key model MUST be `(cellId, sourceId)`.
@@ -274,11 +268,20 @@ V1 compound rule constraints:
 
 **Acceptance:** Multi-source merge behavior is deterministic, namespaced, and reproducible across restarts.
 
-## 4. Frozen Public Interfaces (Contract Baseline)
+## 3.4 Channel Resolution Policy
+- Configuration artifacts (`alert_rules.json`, `audio_mapping.json`) MUST accept references to channels not currently registered in the channel registry (lazy resolution).
+- At evaluation time, unresolved channel references MUST be treated as absent (value = undefined), not as zero.
+- Alert rules with unresolved channels:
+  - Simple rules: MUST NOT fire while the referenced channel is unresolved.
+  - Compound AND rules: MUST NOT fire if any condition channel is unresolved.
+  - Compound OR rules: MUST evaluate only resolved conditions; if all conditions are unresolved, the rule MUST NOT fire.
+- Audio mapping with unresolved channels: bus target contribution MUST be 0 for unresolved channels; resolved channels in the same bus MUST still function normally.
+- When a source comes online or goes offline, the runtime MUST re-evaluate all rules and mappings that reference channels from that source.
+- Runtime SHOULD log a warning for each unresolved channel reference at config load and at periodic health check intervals.
 
-### Reality Snapshot (as of 2026-02-22)
-- The current runtime does not yet expose the full control plane below.
-- The interfaces in this section are frozen target contracts for V1.
+**Acceptance:** Operators can configure rules/mappings referencing future data sources without causing runtime errors; rules activate automatically when referenced sources come online.
+
+## 4. Frozen Public Interfaces (Contract Baseline)
 
 ## 4.1 REST APIs
 
@@ -295,11 +298,29 @@ Responsibility lock:
 - Static/batch onboarding MUST use `POST /api/import`.
 - Stream push onboarding MUST use `POST /api/sources` first, then `POST /api/streams/push/:sourceId`.
 
+### Error Response Envelope (Frozen)
+
+All error responses (4xx, 5xx) across REST APIs MUST use this envelope:
+
+```json
+{
+  "status": "error",
+  "code": "UPPER_SNAKE_CASE error code",
+  "message": "Human-readable description",
+  "errors": []
+}
+```
+
+- `code` MUST be a stable, machine-readable `UPPER_SNAKE_CASE` identifier.
+- `message` is informational and MAY change across versions.
+- `errors[]` is OPTIONAL; used for batch endpoints (push ingress) or multi-field validation failures. Each entry MUST include `index` (if batch), `code`, and `message`.
+- Success responses use `"status": "ok"` and are endpoint-specific.
+
 ### `POST /api/import`
 - Purpose: runtime ingest CSV/GeoJSON.
 - Request: `multipart/form-data` (`file` required, `sourceId` optional, `resolution` optional).
 - Response `200` MUST include: `status`, `source`, `channels`, `cellCount`, `resolution`.
-- Response `400/413` MUST include: `status`, `message`.
+- Response `400/413` MUST use error envelope.
 - Responsibility boundary: this endpoint performs **data-carrying registration** for static/batch ingestion paths.
 - Source behavior: if `sourceId` exists, import MUST atomically replace prior static/batch source data.
 
@@ -320,8 +341,8 @@ Example success:
 - Request: `application/json` with `sourceId`, `mode`, `channels`, and schema/version metadata.
 - Supported modes in V1: `stream_poll`, `stream_push`.
 - Response `200` MUST include: `status`, `source`, `mode`, `schemaVersion`.
-- Response `400` MUST include: `status`, `message`.
-- Response `409` MUST be used for incompatible descriptor conflicts (for example mode/schema mismatch without replace flag).
+- Response `400` MUST use error envelope.
+- Response `409` MUST use error envelope for incompatible descriptor conflicts (for example mode/schema mismatch without replace flag).
 
 ### `GET /api/sources`
 - Purpose: list builtin + imported sources.
@@ -338,10 +359,53 @@ Example success:
   - For static/batch sources, delete MUST remove source state from runtime registry and `data/imports/manifest.json`.
   - For stream sources (`stream_poll`, `stream_push`), delete MUST remove source state from runtime registry and `stream_sources.json`.
   - If a source has entries in both persistence stores due to migration/backfill operations, delete MUST remove both entries atomically or fail without partial state.
+- Response `200` MUST include: `status`, `deletedSource`, `cleanedStores[]`.
+- Response `400` (builtin source) MUST use error envelope with code `BUILTIN_SOURCE`.
+- Response `404` (source not found) MUST use error envelope with code `SOURCE_NOT_FOUND`.
 
-### `POST /api/audio-mapping/reload`
-- Purpose: hot-reload audio bus mapping.
-- `200` MUST include `status`, `buses`, `channels`.
+Example success:
+```json
+{
+  "status": "ok",
+  "deletedSource": "air_quality",
+  "cleanedStores": ["manifest"]
+}
+```
+
+### Audio Mapping Control Workflow APIs
+
+#### `GET /api/audio-mapping`
+- Purpose: retrieve active mapping config and version metadata.
+- Response `200` MUST include: `version`, `config` (full `audio_mapping` object), `appliedAt`.
+
+#### `POST /api/audio-mapping/draft`
+- Purpose: create a draft mapping from active config or from request body.
+- Request: `application/json` with optional `config` body. If omitted, clones active config.
+- Response `200` MUST include: `status`, `draftId`, `config`, `createdAt`.
+- Response `400` MUST use error envelope.
+
+#### `POST /api/audio-mapping/validate`
+- Purpose: validate a draft mapping without applying it.
+- Request: `application/json` with `draftId` or inline `config`.
+- Response `200` MUST include: `status`, `valid` (boolean), `warnings[]`, `errors[]`.
+- Response `400` MUST use error envelope.
+
+#### `POST /api/audio-mapping/apply`
+- Purpose: apply a validated draft to runtime. Replaces prior `reload` semantics.
+- Request: `application/json` with `draftId`.
+- Response `200` MUST include: `status`, `version`, `appliedAt`, `buses`, `channels`.
+- Response `400/409` MUST use error envelope.
+- Behavior: MUST reject unvalidated drafts. On success, MUST emit `bus_config_update` WebSocket event.
+
+#### `POST /api/audio-mapping/rollback`
+- Purpose: rollback to a previous mapping version.
+- Request: `application/json` with optional `targetVersion`. If omitted, rolls back to immediately previous version.
+- Response `200` MUST include: `status`, `version`, `rolledBackFrom`, `appliedAt`.
+- Behavior: MUST emit `bus_config_update` WebSocket event on success.
+
+#### `GET /api/audio-mapping/history`
+- Purpose: list recent mapping versions for rollback selection.
+- Response `200` MUST include: `versions[]` with `version`, `appliedAt`, `channelCount`, `busCount`.
 
 ### `GET /api/streams`
 - Purpose: inspect stream adapter states.
@@ -354,7 +418,7 @@ Example success:
 - Request: `application/json` with `records[]`.
 - Required headers: `Authorization`, `Idempotency-Key`.
 - Response `200` MUST include `accepted`, `deduped`, `rejected`, `errors[]`, `ingestLatencyMs`.
-- Response `400/401/403/404/409/413/429` MUST include `status`, `message`, and error details.
+- Response `400/401/403/404/409/413/429` MUST use error envelope.
 - Backpressure rule: when source queue depth exceeds configured cap, endpoint MUST return `429` and MUST NOT partially enqueue rejected records.
 
 ### `GET /api/config`
@@ -403,6 +467,14 @@ Example success:
 
 - Producers MUST treat these events as contract-stable for V1.
 
+### Event Ordering and Consistency Semantics
+- Server MUST send events in causal order within the same connection: `channel_update` MUST precede `bus_config_update` when both result from the same operation.
+- `bus_config_update` MUST precede any `alert` events that depend on the updated configuration.
+- Events carry no cross-event atomicity guarantee: the client MAY observe intermediate states between related events.
+- Client mitigation: the existing EMA smoothing in the audio engine provides transient-state tolerance. Clients SHOULD apply events immediately in receive order and rely on smoothing to mask parameter jumps.
+- Server SHOULD minimize the window between related events but MAY NOT guarantee zero-gap delivery in V1.
+- `channel_update` and `bus_config_update` events MUST include a monotonic `version` field (integer) so clients can detect stale or out-of-order delivery.
+
 **Acceptance:** Frontend can drive visualization/audio/alert UX from these four event types only.
 
 ## 4.3 Configuration Schemas
@@ -434,15 +506,17 @@ Example success:
 - Request: `multipart/form-data` (`file` required, `busName` optional).
 - Validation: format MUST be WAV or OGG only; max file size MUST be enforced (configurable, default 10 MB); max duration MUST be enforced (configurable, default 30 seconds).
 - Response `200` MUST include: `status`, `filename`, `url`, `format`, `durationMs`.
-- Response `400/413` MUST include: `status`, `message`.
+- Response `400/413` MUST use error envelope.
 - Uploaded files MUST be stored in `data/samples/` with safe filename sanitization.
 
-```
-```
+### `GET /api/audio-samples`
+- Purpose: list available audio sample files for mapping configuration.
+- Response `200` MUST include: `samples[]` with `filename`, `url`, `format`, `durationMs`, `sizeBytes`, `uploadedAt`.
 
 ### `alert_rules.json` (frozen minimum)
 ```json
 {
+  "version": 1,
   "rules": [
     {
       "ruleId": "pm25_warning",
@@ -479,6 +553,7 @@ Example success:
       "sourceId": "air_quality",
       "file": "air_quality.csv",
       "format": "csv",
+      "channels": ["pm25", "temp_c"],
       "resolution": 4,
       "importedAt": "2026-02-22T06:20:00Z"
     }
@@ -525,10 +600,6 @@ Persistence relationship (`manifest.json` vs `stream_sources.json`):
 
 ## 5. V1 Capability Specifications
 
-### Reality Snapshot (as of 2026-02-22)
-- Capabilities are currently uneven across ingestion, alignment, alerting, configurability, and governance.
-- This section defines mandatory target behavior and explicit gap statements.
-
 ## 5.1 [M1] Open Ingestion (REQ-INGEST-001)
 **Current:** Runtime import/control-plane endpoints are not fully available in production path.  
 **Target:** Runtime self-service import for CSV/GeoJSON with source/channel registration and persistence.  
@@ -565,7 +636,7 @@ V1 alert scope lock:
 ## 5.4 [M4] Configurable Audio (REQ-AUDIO-001 + REQ-UX-001)
 **Current:** Core Web Audio path exists, but business-level runtime configurability is limited. Audio samples are hardcoded.
 **Target:** Non-audio engineers can configure channel/bus mapping, alert-sonification behavior, and custom audio samples.
-**Gap:** Deliver stable mapping schema, hot reload path, REST API control endpoints for the `Draft -> Validate -> Apply -> Rollback` workflow (no GUI required in V1), and sample upload/management.
+**Gap:** Deliver stable mapping schema, frozen audio mapping workflow REST API endpoints (`GET /api/audio-mapping`, `/draft`, `/validate`, `/apply`, `/rollback`, `/history`), sample upload/management (`POST /api/audio-samples/upload`, `GET /api/audio-samples`), and the `Draft -> Validate -> Apply -> Rollback` operator workflow (no GUI required in V1).
 
 Minimum control workflow contract for V1:
 - Workflow state machine: `Draft -> Validate -> Apply -> Rollback`.
@@ -625,9 +696,6 @@ V1 scaling boundary (hard limit):
 
 ## 6. Quality Gates for This Spec
 
-### Reality Snapshot (as of 2026-02-22)
-- Prior drafts mixed design notes and roadmap ideas; this quality gate is now normative.
-
 1. Interface consistency: SPEC, migration plan, and implementation guide MUST not conflict on API/type/schema names.
 2. Reality alignment: each core chapter MUST include `Current/Target/Gap`.
 3. Traceability: every milestone MUST map to at least one `REQ-*`.
@@ -645,10 +713,6 @@ V1 scaling boundary (hard limit):
 **Acceptance:** Reviewers can derive implementation and QA plans from this document without unresolved decisions.
 
 ## 7. Explicit Decision Locks (No Open Design Slots)
-
-### Reality Snapshot (as of 2026-02-22)
-- Some earlier sections used optional pathways as if still undecided.
-- This section freezes defaults for execution.
 
 - V1 main renderer MUST be Web Audio.
 - Max/OSC MUST be treated as historical compatibility appendix only.
@@ -669,10 +733,6 @@ V1 scaling boundary (hard limit):
 **Acceptance:** Implementers are not required to make architecture-level choices outside this document.
 
 ## 8. Future Work (Single Consolidated Chapter)
-
-### Reality Snapshot (as of 2026-02-22)
-- Deferred items were previously scattered.
-- Future scope is now centralized to avoid contaminating V1 commitments.
 
 - Priority-ordered format roadmap (post-V1):
   1. **Shapefile** (.shp) — highest demand from GIS enterprise workflows.

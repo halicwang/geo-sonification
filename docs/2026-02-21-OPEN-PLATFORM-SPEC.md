@@ -15,8 +15,7 @@ This document uses RFC 2119 terms (MUST/SHOULD/MAY) to drive implementation and 
 Any critical interface, type, or configuration not frozen here must not be invented ad hoc during implementation.  
 
 ## Companion Detailed Docs
-- Technical rationale and algorithm-level details: `docs/2026-02-22-TECHNICAL-DESIGN.md`
-- File-level engineering execution details: `docs/2026-02-22-ENGINEERING-REFERENCE.md`
+- Technical rationale and engineering execution: `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`
 - Milestone execution contract: `docs/2026-02-21-MIGRATION-PLAN.md`
 
 ## Milestone Mapping (M0-M5)
@@ -29,7 +28,7 @@ Section numbers in this document are local structure only. Cross-document tracki
 | `M1` | Open ingestion + control plane | `REQ-INGEST-001`, `4.1`, `5.1` |
 | `M2` | Unified H3 spatial core | `REQ-GRID-001`, `REQ-PERF-001`, `3.2`, `5.2`, `5.8` |
 | `M3` | Monitoring + Alerting + Stream Loop | `REQ-ALERT-001`, `REQ-STREAM-001`, `4.2 alert`, `5.3` |
-| `M4` | Configurable audio runtime | `REQ-AUDIO-001`, `REQ-UX-001`, `4.3 audio_mapping.json`, `5.4` |
+| `M4` | Configurable audio runtime (includes sample management) | `REQ-AUDIO-001`, `REQ-UX-001`, `4.3 audio_mapping.json`, `5.4` |
 | `M5` | Governance baseline | `REQ-GOV-001`, `REQ-DEPLOY-001`, `5.6`, `5.7` |
 
 ## 0. Document Conventions
@@ -46,17 +45,16 @@ This document uses [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords:
 
 All requirements are traceable by `REQ-*` IDs and are referenced by milestones in the migration plan.
 
-### 0.1 Mandatory Four-Document Protocol (Human + AI)
-- Any implementation agent (human or AI) MUST consult all four lighthouse documents before planning or coding:
+### 0.1 Mandatory Three-Document Protocol (Human + AI)
+- Any implementation agent (human or AI) MUST consult all three lighthouse documents before planning or coding:
   - `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
   - `docs/2026-02-21-MIGRATION-PLAN.md`
-  - `docs/2026-02-22-TECHNICAL-DESIGN.md`
-  - `docs/2026-02-22-ENGINEERING-REFERENCE.md`
-- Every implementation plan, task, or PR MUST include a trace tuple: at least one `REQ-*`, one `M*`, one technical section anchor, and one engineering packet anchor.
-- Document precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `TECHNICAL-DESIGN` > `ENGINEERING-REFERENCE`.
+  - `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`
+- Every implementation plan, task, or PR MUST include a trace tuple: at least one `REQ-*`, one `M*`, and one implementation guide section anchor.
+- Document precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `IMPLEMENTATION-GUIDE`.
 - If cross-document conflict is detected, implementation MUST pause and the document conflict MUST be resolved (or explicitly decision-locked) before merge.
 
-**Acceptance:** Delivery artifacts include a four-doc trace tuple and no unresolved cross-document conflicts.
+**Acceptance:** Delivery artifacts include a three-doc trace tuple and no unresolved cross-document conflicts.
 
 ## 1. North Star Requirements (V1 Red Lines)
 
@@ -79,10 +77,10 @@ The platform MUST support operational alerting (not only artistic sonification) 
 
 **Acceptance:** Threshold crossings emit alert events, clears are emitted on exit threshold, and duplicate storms are prevented for the same `(ruleId, cellId)`.
 
-### REQ-AUDIO-001: Fully Configurable Audio Mapping
-Business users MUST be able to configure what triggers sound, mapping behavior, and severity behavior via configuration/control plane without audio-engineering expertise.
+### REQ-AUDIO-001: Fully Configurable Audio Mapping and Samples
+Business users MUST be able to configure what triggers sound, mapping behavior, severity behavior, and audio samples via configuration/control plane without audio-engineering expertise.
 
-**Acceptance:** Updating `audio_mapping.json` and alert/audio settings via control APIs changes runtime audio behavior without redeploy.
+**Acceptance:** Updating `audio_mapping.json` (including per-bus sample references) and alert/audio settings via control APIs changes runtime audio behavior without redeploy. Custom audio samples can be uploaded and referenced in bus mapping.
 
 ### REQ-COMPAT-001: WorldCover Compatibility Guardrail
 Refactoring MUST NOT break existing WorldCover demo behavior during migration.
@@ -396,11 +394,26 @@ Example success:
       "name": "nature",
       "channels": ["worldcover.tree", "worldcover.grass"],
       "foldMethod": "sum",
-      "volume": { "min": 0.0, "max": 1.0 }
+      "volume": { "min": 0.0, "max": 1.0 },
+      "sampleUrl": "/audio/ambience/tree.wav"
     }
   ],
   "smoothing": { "emaTimeConstantMs": 500, "volumeRampMs": 20 }
 }
+```
+
+- `sampleUrl` MAY reference a built-in sample path or a custom uploaded sample path (`/api/audio-samples/<filename>`).
+- If `sampleUrl` is omitted, the bus MUST use the default built-in sample for that bus index.
+
+### `POST /api/audio-samples/upload` (frozen minimum)
+- Purpose: upload custom audio sample files for bus mapping.
+- Request: `multipart/form-data` (`file` required, `busName` optional).
+- Validation: format MUST be WAV or OGG only; max file size MUST be enforced (configurable, default 10 MB); max duration MUST be enforced (configurable, default 30 seconds).
+- Response `200` MUST include: `status`, `filename`, `url`, `format`, `durationMs`.
+- Response `400/413` MUST include: `status`, `message`.
+- Uploaded files MUST be stored in `data/samples/` with safe filename sanitization.
+
+```
 ```
 
 ### `alert_rules.json` (frozen minimum)
@@ -488,7 +501,7 @@ Responsibility lock in this milestone:
 - `POST /api/import` = static/batch data-carrying registration.
 - `POST /api/sources` = stream source descriptor registration (no observation payload).
 
-**Acceptance:** New vendor data becomes queryable and audible in one running session without redeploy.
+**Acceptance:** New vendor data becomes queryable and audible in one running session without redeploy. M1 includes a degraded end-to-end demo (using existing grid overlay, no H3) to validate the "upload -> see -> hear" loop at the earliest possible milestone.
 
 ## 5.2 [M2] Unified Spatial Language (REQ-GRID-001)
 **Current:** Existing behavior is still tied to legacy grid logic in parts of the runtime path.  
@@ -509,9 +522,9 @@ V1 stream scope lock:
 **Acceptance:** Alert lifecycle is deterministic: `idle -> active -> cooldown -> idle`.
 
 ## 5.4 [M4] Configurable Audio (REQ-AUDIO-001 + REQ-UX-001)
-**Current:** Core Web Audio path exists, but business-level runtime configurability is limited.  
-**Target:** Non-audio engineers can configure channel/bus mapping and alert-sonification behavior.  
-**Gap:** Deliver stable mapping schema, hot reload path, and minimum console workflows.
+**Current:** Core Web Audio path exists, but business-level runtime configurability is limited. Audio samples are hardcoded.
+**Target:** Non-audio engineers can configure channel/bus mapping, alert-sonification behavior, and custom audio samples.
+**Gap:** Deliver stable mapping schema, hot reload path, minimum console workflows, and sample upload/management.
 
 Minimum control workflow contract for V1:
 - Workflow state machine: `Draft -> Validate -> Apply -> Rollback`.
@@ -568,7 +581,7 @@ Benchmark note (informative, non-commitment): a local 80-request smoke sample on
 ### Reality Snapshot (as of 2026-02-22)
 - Prior drafts mixed design notes and roadmap ideas; this quality gate is now normative.
 
-1. Interface consistency: SPEC and migration plan MUST not conflict on API/type/schema names.
+1. Interface consistency: SPEC, migration plan, and implementation guide MUST not conflict on API/type/schema names.
 2. Reality alignment: each core chapter MUST include `Current/Target/Gap`.
 3. Traceability: every milestone MUST map to at least one `REQ-*`.
 4. Compatibility: `REQ-COMPAT-001` MUST be explicitly testable.
@@ -599,6 +612,9 @@ Benchmark note (informative, non-commitment): a local 80-request smoke sample on
 - External producer WebSocket ingress is future scope, not V1.
 - H3 is the sole internal spatial language for merged operations.
 - Performance targets are provisional before benchmark freeze and become normative release gates from `M2` exit.
+- V1 npm dependencies are pre-approved (no per-packet gate needed): `h3-js`, `multer` or `busboy`, `ajv` or equivalent, `express-rate-limit` or equivalent. Future dependencies (e.g. `fast-xml-parser` for KML/GPX) require explicit approval.
+- Audio sample customization is V1 scope: custom WAV/OGG upload via `POST /api/audio-samples/upload` and per-bus `sampleUrl` in `audio_mapping.json`.
+- M0 and M1 Packet A execute in parallel; M1-B onward starts after M0 gate is green.
 
 **Acceptance:** Implementers are not required to make architecture-level choices outside this document.
 

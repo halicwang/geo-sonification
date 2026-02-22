@@ -68,5 +68,4 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 - Data schema: `data/raw/SCHEMA.md`
 - Open platform spec: `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
 - Migration plan: `docs/2026-02-21-MIGRATION-PLAN.md`
-- Technical design: `docs/2026-02-22-TECHNICAL-DESIGN.md`
-- Engineering reference: `docs/2026-02-22-ENGINEERING-REFERENCE.md`
+- Implementation guide: `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`

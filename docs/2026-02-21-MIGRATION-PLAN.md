@@ -6,44 +6,39 @@
 **Paired Spec:** `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
 
 ## Executive Intro (Execution Lighthouse)
-This document is the second lighthouse and defines the execution order for delivering the North Star.  
-It is no longer a loose phase narrative; it is a deliverable M0-M5 milestone execution plan with one explicit precondition stage (`M2-Prep`) between M1 and M2.  
-Each milestone binds requirement IDs (`REQ-*`), acceptance definitions (DoD), evidence IDs (`EVID-*`), and rollback plans.  
-Execution principle: protect WorldCover compatibility first, then progressively deliver open ingestion, unified H3, alerting loop closure, audio configurability, and governance baseline.  
-Every release must include observability metrics and rollback triggers to avoid \"implemented but not operational\" outcomes.  
+This document is the second lighthouse and defines the execution order for delivering the North Star.
+It is a deliverable M0-M5 milestone execution plan where M0 and M1 Packet A start in parallel for faster initial delivery.
+Each milestone binds requirement IDs (`REQ-*`), acceptance definitions (DoD), evidence IDs (`EVID-*`), and rollback plans.
+Execution principle: protect WorldCover compatibility first, then progressively deliver open ingestion, unified H3, alerting loop closure, audio configurability, and governance baseline.
+Every release must include observability metrics and rollback triggers to avoid "implemented but not operational" outcomes.  
 
 ## Companion Detailed Docs
 - Normative requirement source: `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
-- Technical rationale and invariants: `docs/2026-02-22-TECHNICAL-DESIGN.md`
-- Engineering execution packets and scripts: `docs/2026-02-22-ENGINEERING-REFERENCE.md`
+- Technical rationale and engineering execution: `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`
 
-## Milestone Mapping (M0-M5 + M2-Prep Execution Stage)
-Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs plus one execution-only precondition stage (`M2-Prep`).
+## Milestone Mapping (M0-M5)
+Section numbers in this document are local structure only. Cross-document tracking uses `M0..M5` milestone IDs.
 `M0..M5` are progress labels only; normative requirement strength is defined exclusively by RFC 2119 keywords (`MUST/SHOULD/MAY`).
 
-| Milestone ID | Milestone |
-| --- | --- |
-| `M0` | Compatibility guardrails |
-| `M1` | Open ingestion + control plane |
-| `M2-Prep` | Structural decoupling gate (between `M1` and `M2`) |
-| `M2` | Unified H3 spatial core |
-| `M3` | Monitoring + Alerting + Stream Loop |
-| `M4` | Configurable audio runtime |
-| `M5` | Governance baseline |
-
-`M2-Prep` is an execution stage, not a separate requirement milestone. It exists to de-risk `M2` delivery by decoupling high-risk legacy modules after `M1` exits.
+| Milestone ID | Milestone | Execution Note |
+| --- | --- | --- |
+| `M0` | Compatibility guardrails | Parallel start with M1-A |
+| `M1` | Open ingestion + control plane | M1-A parallel with M0; M1-B+ after M0 gate |
+| `M2` | Unified H3 spatial core (includes structural decoupling) | Phase 1: decoupling, Phase 2: H3 migration |
+| `M3` | Monitoring + Alerting + Stream Loop | |
+| `M4` | Configurable audio runtime (includes sample management) | |
+| `M5` | Governance baseline | |
 
 ### Cross-Document Milestone Alignment Matrix
 
-| Milestone ID | Spec Anchor | Migration Anchor | Technical Anchor | Engineering Anchor |
-| --- | --- | --- | --- | --- |
-| `M0` | `5.5 [M0]` | `[M0] M0` | `8. [M0] WorldCover Baseline Manifest` | `3.1 [M0] M0 Compatibility Guardrails` |
-| `M1` | `5.1 [M1]` | `[M1] M1` | `3/4/5 [M1]` | `3.2 [M1] M1 Open Ingestion + Control Plane` |
-| `M2-Prep` | `5.2 [M2]` (precondition path) | `[M2-Prep] M2-Prep` | `7. Engineering Pitfall Checklist` | `3.3 [M2-Prep] Structural Decoupling Gate` |
-| `M2` | `5.2 [M2]` | `[M2] M2` | `2. [M2] H3 Technical Deep Dive` | `3.4 [M2] M2 Unified H3 Spatial Core` |
-| `M3` | `5.3 [M3]` | `[M3] M3` | `6. [M3] Alert Engine Semantics` | `3.5 [M3] M3 Monitoring + Alerting + Stream Loop` |
-| `M4` | `5.4 [M4]` | `[M4] M4` | `5.4 [M4] Audio Runtime Config Invariants` | `3.6 [M4] M4 Configurable Audio Runtime` |
-| `M5` | `5.6 [M5]` | `[M5] M5` | `5.5 [M5] Governance Baseline Hooks` | `3.7 [M5] M5 Enterprise Governance Baseline` |
+| Milestone ID | Spec Anchor | Migration Anchor | Implementation Guide Anchor |
+| --- | --- | --- | --- |
+| `M0` | `5.5 [M0]` | `[M0] M0` | `10.1 [M0]`, `14. WorldCover Baseline Manifest` |
+| `M1` | `5.1 [M1]` | `[M1] M1` | `10.2 [M1]`, `6. Adapter Contracts`, `7. Import Pipeline` |
+| `M2` | `5.2 [M2]` | `[M2] M2` | `10.3 [M2]`, `4. H3 Technical Deep Dive` |
+| `M3` | `5.3 [M3]` | `[M3] M3` | `10.4 [M3]`, `9. Alert Engine Semantics` |
+| `M4` | `5.4 [M4]` | `[M4] M4` | `10.5 [M4]`, `8.4 Audio Runtime Config Invariants` |
+| `M5` | `5.6 [M5]` | `[M5] M5` | `10.6 [M5]`, `8.5 Governance Baseline Hooks` |
 
 ## 0. Execution Conventions
 
@@ -58,15 +53,14 @@ This plan uses RFC 2119 terms and traceability IDs:
 
 No milestone is considered complete without all of: `DoD + Evidence + Rollback readiness`.
 
-### 0.1 Mandatory Four-Document Execution Gate (Human + AI)
-- Implementation agents (human or AI) MUST consult all four lighthouse documents before executing any milestone work:
+### 0.1 Mandatory Three-Document Execution Gate (Human + AI)
+- Implementation agents (human or AI) MUST consult all three lighthouse documents before executing any milestone work:
   - `docs/2026-02-21-OPEN-PLATFORM-SPEC.md`
   - `docs/2026-02-21-MIGRATION-PLAN.md`
-  - `docs/2026-02-22-TECHNICAL-DESIGN.md`
-  - `docs/2026-02-22-ENGINEERING-REFERENCE.md`
-- Each milestone ticket/PR MUST include a trace tuple: `REQ-*` + `M*` + technical section anchor + engineering packet anchor.
+  - `docs/2026-02-22-IMPLEMENTATION-GUIDE.md`
+- Each milestone ticket/PR MUST include a trace tuple: `REQ-*` + `M*` + implementation guide section anchor.
 - If document conflicts are found, execution MUST stop and conflict resolution MUST occur before continuing milestone delivery.
-- Precedence MUST follow the paired SPEC definition: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `TECHNICAL-DESIGN` > `ENGINEERING-REFERENCE`.
+- Precedence MUST follow: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `IMPLEMENTATION-GUIDE`.
 Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.md` Section 0.1 acceptance criteria and enforced here via milestone gates (`DoD`, `EVID-*`, rollback).
 
 ## 1. Baseline and Gap Statement
@@ -88,27 +82,27 @@ Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.
 
 **Acceptance:** Baseline is explicit enough to define non-regression and migration scope.
 
-## 2. Milestone Map (M0-M5 + M2-Prep Execution Stage)
+## 2. Milestone Map (M0-M5)
 
 ### Reality Snapshot (as of 2026-02-22)
 - Previous plan mixed phase and future items.
 - This map is now milestone-driven and business-demonstrable.
+- M0 and M1-A execute in parallel for faster initial delivery.
 
 | Milestone | Goal | Covered Requirements | Exit Evidence |
 | --- | --- | --- | --- |
 | M0 | Compatibility Guardrails | REQ-COMPAT-001 | EVID-M0-001..004 |
-| M1 | Open Ingestion + Control Plane | REQ-INGEST-001, REQ-COMPAT-001 | EVID-M1-001..008 |
-| M2-Prep | Structural Decoupling Gate | (precondition stage for REQ-GRID-001) | EVID-M2P-001..005 |
-| M2 | Unified H3 Spatial Core | REQ-GRID-001, REQ-PERF-001, REQ-COMPAT-001 | EVID-M2-001..008 |
+| M1 | Open Ingestion + Control Plane | REQ-INGEST-001, REQ-COMPAT-001 | EVID-M1-001..009 |
+| M2 | Unified H3 Spatial Core (includes structural decoupling) | REQ-GRID-001, REQ-PERF-001, REQ-COMPAT-001 | EVID-M2-001..013 |
 | M3 | Monitoring + Alerting + Stream Loop | REQ-ALERT-001, REQ-STREAM-001, REQ-COMPAT-001 | EVID-M3-001..008 |
-| M4 | Configurable Audio Runtime | REQ-AUDIO-001, REQ-UX-001, REQ-COMPAT-001 | EVID-M4-001..006 |
+| M4 | Configurable Audio Runtime (includes sample management) | REQ-AUDIO-001, REQ-UX-001, REQ-COMPAT-001 | EVID-M4-001..008 |
 | M5 | Enterprise Baseline Governance | REQ-GOV-001, REQ-DEPLOY-001, REQ-COMPAT-001 | EVID-M5-001..007 |
 
 **Acceptance:** Every V1 requirement is covered by at least one milestone and evidence set.
 
 ## 3. Milestone Details
 
-## [M0] M0 — Compatibility Guardrails First
+## [M0] M0 — Compatibility Guardrails First (Parallel Start with M1-A)
 
 ### Reality Snapshot (as of 2026-02-22)
 - WorldCover path is the stability anchor.
@@ -116,6 +110,9 @@ Validation authority MUST be inherited from `docs/2026-02-21-OPEN-PLATFORM-SPEC.
 
 ### Objective
 Lock current behavior as golden baseline before platform refactor begins.
+
+### Parallel Execution Note
+M0 and M1 Packet A (adapter/registry foundation) start in parallel. M1-A is purely additive and does not touch existing behavior, so it can proceed safely while M0 establishes the regression harness. M1-B onward starts only after M0 gate is green.
 
 ### Covers
 - REQ-COMPAT-001
@@ -149,13 +146,16 @@ Lock current behavior as golden baseline before platform refactor begins.
 
 ---
 
-## [M1] M1 — Open Ingestion + Control Plane
+## [M1] M1 — Open Ingestion + Control Plane (M1-A Parallel with M0)
 
 ### Reality Snapshot (as of 2026-02-22)
 - Runtime import/control-plane contract is not complete.
 
 ### Objective
 Enable self-service runtime data onboarding without code edits/redeploy.
+
+### Parallel Execution Note
+Packet M1-A (adapter/registry foundation) starts in parallel with M0. M1-B, M1-C, and M1-D start after M0 gate is green.
 
 ### Covers
 - REQ-INGEST-001
@@ -172,6 +172,7 @@ Enable self-service runtime data onboarding without code edits/redeploy.
 - Source replacement behavior for duplicate `sourceId`.
 - API responsibility lock: `POST /api/import` (data-carrying registration) and `POST /api/sources` (metadata-only pre-registration) are both delivered and non-overlapping.
 - Implementation strategy lock: M1 is additive only; no structural split of `server/spatial.js` or `server/data-loader.js` is attempted in this milestone.
+- Degraded end-to-end demo: imported CSV data displayed on existing grid overlay and routed through existing audio bus system (no H3 or hex rendering required). This validates the "upload -> see -> hear" loop at the earliest milestone.
 
 ### Out of Scope
 - Full H3 query migration and hex frontend rendering.
@@ -182,6 +183,7 @@ Enable self-service runtime data onboarding without code edits/redeploy.
 - Stream source descriptors can be pre-registered and queried before first stream data arrival.
 - Source/channel APIs return stable schema.
 - Imported source survives restart and can be deleted cleanly.
+- Degraded demo: imported CSV produces visible map response and audible output when viewport covers the imported area.
 - WorldCover compatibility gate (M0) remains green.
 
 ### Evidence
@@ -193,6 +195,7 @@ Enable self-service runtime data onboarding without code edits/redeploy.
 - EVID-M1-006: Compatibility regression report after merge.
 - EVID-M1-007: API boundary test (`/api/import` vs `/api/sources`) with success/conflict scenarios.
 - EVID-M1-008: Stream source descriptor persistence/reload test.
+- EVID-M1-009: Degraded end-to-end demo walkthrough (import CSV -> map overlay -> audible output).
 
 ### Rollback
 - Feature flag off for runtime imports; fallback to WorldCover-only mode.
@@ -204,57 +207,14 @@ Enable self-service runtime data onboarding without code edits/redeploy.
 
 ---
 
-## [M2-Prep] M2-Prep — Structural Decoupling Gate (Between M1 and M2)
-
-### Reality Snapshot (as of 2026-02-22)
-- `server/spatial.js` and `server/data-loader.js` are high-coupling modules and are the main risk concentration for M2.
-
-### Objective
-Reduce migration risk before H3 cutover by decoupling hot legacy modules into testable boundaries.
-
-### Covers
-- (precondition stage for REQ-GRID-001)
-- REQ-COMPAT-001
-
-### In Scope
-- Split-prep for `server/spatial.js` into index/query/aggregation responsibilities with compatibility facade preserved.
-- Split-prep for `server/data-loader.js` into parser/validator/cache/manifest responsibilities.
-- Add parity harness hooks so M2 can compare legacy and H3 outputs deterministically.
-- Maintain behavior parity and compatibility guardrails while refactor scaffolding lands.
-
-### Out of Scope
-- H3 query semantics themselves.
-- Frontend hex rendering.
-
-### DoD
-- Decoupled module boundaries are merged and covered by regression tests.
-- No material behavior drift in WorldCover compatibility scenarios.
-- M2 implementation can proceed without direct high-risk edits across monolithic legacy files.
-
-### Evidence
-- EVID-M2P-001: `spatial.js` split-prep architecture test report.
-- EVID-M2P-002: `data-loader.js` split-prep architecture test report.
-- EVID-M2P-003: Legacy parity test harness integrated into CI.
-- EVID-M2P-004: Performance smoke comparison before/after split-prep.
-- EVID-M2P-005: Compatibility regression report.
-
-### Rollback
-- Re-enable monolithic path behind fallback facade if split-prep introduces instability.
-
-### Release Train
-- Canary: internal-only refactor release.
-- Monitoring: compatibility pass rate, query drift, startup/load regressions.
-- Rollback trigger: parity mismatch or compatibility failures above tolerance.
-
----
-
-## [M2] M2 — Unified H3 Spatial Core
+## [M2] M2 — Unified H3 Spatial Core (includes Structural Decoupling)
 
 ### Reality Snapshot (as of 2026-02-22)
 - Legacy grid semantics still influence runtime behavior.
+- `server/spatial.js` and `server/data-loader.js` are high-coupling modules and the main risk concentration.
 
 ### Objective
-Establish H3 as the single internal spatial language across ingest/query/render.
+Establish H3 as the single internal spatial language across ingest/query/render, starting with structural decoupling of legacy modules.
 
 ### Covers
 - REQ-GRID-001
@@ -262,7 +222,14 @@ Establish H3 as the single internal spatial language across ingest/query/render.
 - REQ-COMPAT-001
 
 ### In Scope
-- M2 entry condition: starts only after `M2-Prep` evidence passes.
+
+**Phase 1 — Structural Decoupling (first PRs of M2):**
+- Split-prep for `server/spatial.js` into index/query/aggregation responsibilities with compatibility facade preserved.
+- Split-prep for `server/data-loader.js` into parser/validator/cache/manifest responsibilities.
+- Add parity harness hooks so Phase 2 can compare legacy and H3 outputs deterministically.
+- Maintain behavior parity and compatibility guardrails while refactor scaffolding lands.
+
+**Phase 2 — H3 Migration (starts after Phase 1 evidence passes):**
 - H3 encoder/core utilities.
 - Spatial index/query migration to H3 cell model.
 - Cross-source merge via `CellSnapshot` namespaced channels.
@@ -274,28 +241,39 @@ Establish H3 as the single internal spatial language across ingest/query/render.
 - Advanced AOI bucketed stream strategies.
 
 ### DoD
-- Viewport query produces merged H3-aligned snapshots.
+- Phase 1: decoupled module boundaries merged and covered by regression tests; no material behavior drift.
+- Phase 2: viewport query produces merged H3-aligned snapshots.
 - Frontend displays hex-based overlays from H3 output.
 - Provisional performance targets are benchmark-validated and frozen as normative M2+ gates.
 - Existing WorldCover behavior remains non-regressed in compatibility path.
 
 ### Evidence
-- EVID-M2-001: Unit tests for encoding/parent lookup/dateline cases.
-- EVID-M2-002: Query parity report (legacy vs H3 tolerance bounds).
-- EVID-M2-003: Integration tests for multi-source merge semantics.
-- EVID-M2-004: Frontend visual verification across zoom ranges.
-- EVID-M2-005: Coordinate-order regression tests.
-- EVID-M2-006: Compatibility regression report.
-- EVID-M2-007: SLO benchmark freeze report (`provisional` to `normative` transition).
-- EVID-M2-008: M2 gate policy update showing SLO enforcement active after M2 exit.
+
+Phase 1 evidence:
+- EVID-M2-001: `spatial.js` split-prep architecture test report.
+- EVID-M2-002: `data-loader.js` split-prep architecture test report.
+- EVID-M2-003: Legacy parity test harness integrated into CI.
+- EVID-M2-004: Performance smoke comparison before/after split-prep.
+- EVID-M2-005: Phase 1 compatibility regression report.
+
+Phase 2 evidence:
+- EVID-M2-006: Unit tests for encoding/parent lookup/dateline cases.
+- EVID-M2-007: Query parity report (legacy vs H3 tolerance bounds).
+- EVID-M2-008: Integration tests for multi-source merge semantics.
+- EVID-M2-009: Frontend visual verification across zoom ranges.
+- EVID-M2-010: Coordinate-order regression tests.
+- EVID-M2-011: Phase 2 compatibility regression report.
+- EVID-M2-012: SLO benchmark freeze report (`provisional` to `normative` transition).
+- EVID-M2-013: M2 gate policy update showing SLO enforcement active after M2 exit.
 
 ### Rollback
-- Keep fallback switch to legacy query path until H3 path is verified stable.
+- Phase 1: re-enable monolithic path behind fallback facade if split-prep introduces instability.
+- Phase 2: keep fallback switch to legacy query path until H3 path is verified stable.
 
 ### Release Train
 - Canary: H3 path for internal users behind runtime flag.
-- Monitoring: query latency p95/p99, memory footprint, rendering errors.
-- Rollback trigger: query correctness drift beyond tolerance or severe frontend rendering defects.
+- Monitoring: query latency p95/p99, memory footprint, rendering errors, compatibility pass rate, query drift.
+- Rollback trigger: query correctness drift beyond tolerance, severe frontend rendering defects, or parity mismatch.
 
 ---
 
@@ -360,13 +338,14 @@ Deliver operator-grade alerting and real-time stream-driven monitoring from spat
 
 ---
 
-## [M4] M4 — Configurable Audio Runtime (No Redeploy)
+## [M4] M4 — Configurable Audio Runtime (No Redeploy, includes Sample Management)
 
 ### Reality Snapshot (as of 2026-02-22)
 - Web Audio is active, but runtime configurability for business users is not complete.
+- Audio sample files are hardcoded; no mechanism for custom sample upload.
 
 ### Objective
-Allow non-audio engineers to tune mapping and trigger behavior safely at runtime.
+Allow non-audio engineers to tune mapping, trigger behavior, and audio samples safely at runtime.
 
 ### Covers
 - REQ-AUDIO-001
@@ -374,20 +353,23 @@ Allow non-audio engineers to tune mapping and trigger behavior safely at runtime
 - REQ-COMPAT-001
 
 ### In Scope
-- `audio_mapping.json` schema enforcement.
+- `audio_mapping.json` schema enforcement (including per-bus `sampleUrl` field for custom samples).
 - `POST /api/audio-mapping/reload` hot reload path.
 - WebSocket `bus_config_update` event.
 - Minimum control UI/workflow for channel-to-bus mapping and threshold tuning.
 - SPEC-frozen workflow contract: `Draft -> Validate -> Apply -> Rollback`.
 - Runtime validation and rollback to last-known-good mapping.
+- Audio sample management: `POST /api/audio-samples/upload` for custom WAV/OGG files, stored in `data/samples/` with format/size validation. Frontend loads samples from configured URL.
 
 ### Out of Scope
 - Advanced DAW-grade authoring interfaces.
+- Full sample library management or audio processing pipeline.
 
 ### DoD
 - Config changes apply without restart/redeploy.
 - Invalid config does not break runtime audio path.
 - Operators can complete `Draft -> Validate -> Apply -> Rollback` through control surface.
+- Custom audio samples can be uploaded and referenced in bus mapping.
 - Compatibility guardrail remains green.
 
 ### Evidence
@@ -397,6 +379,8 @@ Allow non-audio engineers to tune mapping and trigger behavior safely at runtime
 - EVID-M4-004: Last-known-good fallback test.
 - EVID-M4-005: Audio behavior change verification script.
 - EVID-M4-006: Compatibility regression report.
+- EVID-M4-007: Audio sample upload API test (format validation, size limits).
+- EVID-M4-008: Custom sample playback verification (upload -> reference in mapping -> audible output).
 
 ### Rollback
 - Revert to previous valid audio mapping at runtime; disable new control UI endpoint if needed.
@@ -481,16 +465,16 @@ SLO gate staging (`REQ-PERF-001`):
 
 | Requirement | Implemented In | Primary Evidence |
 | --- | --- | --- |
-| REQ-COMPAT-001 | M0..M5 + M2-Prep (continuous gate) | EVID-M0-001..004 + each milestone `-006` |
-| REQ-INGEST-001 | M1 | EVID-M1-001..008 |
-| REQ-GRID-001 | M2-Prep + M2 | EVID-M2P-001..005 + EVID-M2-001..008 |
+| REQ-COMPAT-001 | M0..M5 (continuous gate) | EVID-M0-001..004 + each milestone compat report |
+| REQ-INGEST-001 | M1 | EVID-M1-001..009 |
+| REQ-GRID-001 | M2 (Phase 1 + Phase 2) | EVID-M2-001..013 |
 | REQ-ALERT-001 | M3 | EVID-M3-001..008 |
 | REQ-STREAM-001 | M3 | EVID-M3-001..008 |
-| REQ-AUDIO-001 | M4 | EVID-M4-001..006 |
-| REQ-UX-001 | M4 | EVID-M4-001..006 |
+| REQ-AUDIO-001 | M4 | EVID-M4-001..008 |
+| REQ-UX-001 | M4 | EVID-M4-001..008 |
 | REQ-GOV-001 | M5 | EVID-M5-001..007 |
 | REQ-DEPLOY-001 | M5 | EVID-M5-007 |
-| REQ-PERF-001 | M0/M1 observe + M2 freeze gate | EVID-M0-004 + EVID-M2-007..008 |
+| REQ-PERF-001 | M0/M1 observe + M2 freeze gate | EVID-M0-004 + EVID-M2-012..013 |
 
 **Acceptance:** Every REQ has explicit milestone ownership and objective evidence.
 
@@ -503,11 +487,12 @@ This table enforces single ownership for each new API contract to prevent overla
 | `POST /api/import` | M1 | Static/batch data-carrying registration |
 | `POST /api/sources` | M1 | Stream source pre-registration (`stream_poll`, `stream_push`) |
 | `GET /api/sources` / `GET /api/channels` / `DELETE /api/sources/:id` | M1 | Source lifecycle control plane |
-| Structural decoupling of `server/spatial.js` and `server/data-loader.js` | M2-Prep | Precondition stage before M2 |
-| H3 query/merge/render semantics | M2 | Unified spatial language delivery |
+| Structural decoupling of `server/spatial.js` and `server/data-loader.js` | M2 Phase 1 | Precondition within M2 before H3 migration |
+| H3 query/merge/render semantics | M2 Phase 2 | Unified spatial language delivery |
 | `POST /api/streams/push/:sourceId` | M3 | Push ingress contract, idempotency, backpressure |
 | `GET /api/streams` expanded status contract | M3 | Poll + push operational health contract |
 | `POST /api/audio-mapping/reload` + workflow `Draft -> Validate -> Apply -> Rollback` | M4 | Runtime audio control plane UX/behavior |
+| `POST /api/audio-samples/upload` + sample management | M4 | Custom audio sample upload and reference |
 | Auth/quota/audit + deployment boundary disclosure | M5 | Governance and boundary clarity |
 
 Milestone boundary check rule:
@@ -529,12 +514,12 @@ Mitigation: hysteresis/cooldown/dedup defaults and ops tuning runbook.
 Mitigation: schema validation + last-known-good fallback.
 5. **Governance risk (M5):** auth misconfiguration blocks operations.  
 Mitigation: staged canary, emergency bypass procedure, policy verification tests.
-6. **Migration effort-underestimate risk (M2/M2-Prep):** `server/spatial.js` and `server/data-loader.js` split/migration scope is larger than conservative estimates.  
-Mitigation: force `M2-Prep` stage, deliver split-prep before H3 semantics, and track scope as range-based estimates with parity checkpoints.
-7. **API-boundary ambiguity risk (M1/M3):** `/api/import`, `/api/sources`, and push ingress responsibilities are interpreted inconsistently.  
+6. **Migration effort-underestimate risk (M2):** `server/spatial.js` and `server/data-loader.js` split/migration scope is larger than conservative estimates.
+Mitigation: force structural decoupling as M2 Phase 1 before H3 semantics in Phase 2, and track scope as range-based estimates with parity checkpoints.
+7. **API-boundary ambiguity risk (M1/M3):** `/api/import`, `/api/sources`, and push ingress responsibilities are interpreted inconsistently.
 Mitigation: freeze API responsibility matrix in SPEC and enforce milestone boundary ownership checks in every review.
-8. **Total change-volume ratio risk (M1..M4):** current range estimate is roughly `~6,100-11,700 LOC` touched across new+modified code, which is large relative to current application code footprint (planning heuristic: ~50%-85% rewrite-equivalent).  
-Mitigation: keep staged delivery (`M1` additive -> `M2-Prep` split -> `M2` semantic migration), enforce per-stage rollback gates, and require scope rebasing when realized change volume exceeds upper-range assumptions.
+8. **Total change-volume ratio risk (M1..M4):** current range estimate is roughly `~6,500-12,420 LOC` touched across new+modified code, which is large relative to current application code footprint (planning heuristic: ~50%-85% rewrite-equivalent).
+Mitigation: keep staged delivery (`M1` additive -> `M2` Phase 1 decoupling -> `M2` Phase 2 semantic migration), enforce per-phase rollback gates, and require scope rebasing when realized change volume exceeds upper-range assumptions.
 
 **Acceptance:** Each risk has explicit mitigation and rollback linkage.
 

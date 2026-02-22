@@ -188,5 +188,4 @@ The Water bus combines fine-grained grid-level water data (classes 70+80) with a
 
 - `GET /health` - Health check (used by `start.command` to wait for readiness)
 - `GET /api/config` - Server configuration (ports, grid size, landcover metadata)
-- `GET /api/grids` - Returns all grid data as JSON
 - `POST /api/viewport` - Calculate stats for given bounds

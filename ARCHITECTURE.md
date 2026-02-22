@@ -4,7 +4,7 @@ This document describes the browser-based Web Audio engine.
 
 For the overall system architecture (Frontend → Server → Browser Audio), see `README.md`.
 For the frontend module structure (7 ES modules: config, landcover, ui, map, websocket, audio-engine, main), see the DEVLOG entry "2026-02-20 — Frontend Module Split" and "2026-02-21 — Web Audio Migration".
-For sound design rationale and task specs, see `sound_design_plan.md`.
+For sound design rationale and task specs, see `docs/2026-02-19-sound-design-plan.md`.
 
 ---
 
@@ -93,5 +93,5 @@ On `document.hidden`: cancel rAF, clear no-data timers, suspend `AudioContext`. 
 | -------------------- | ------- | --------------- | -------------------------------- |
 | `SMOOTHING_TIME_MS`  | 500 ms  | audio-engine.js | EMA time constant                |
 | `SNAP_THRESHOLD_MS`  | 2000 ms | audio-engine.js | Snap-to-target when dt too large |
-| `NO_DATA_FADE_START` | 3000 ms | audio-engine.js | Begin fade to silence            |
-| `NO_DATA_SUSPEND`    | 10000ms | audio-engine.js | Suspend AudioContext             |
+| `NO_DATA_FADE_START_MS` | 3000 ms | audio-engine.js | Begin fade to silence            |
+| `NO_DATA_SUSPEND_MS`    | 10000ms | audio-engine.js | Suspend AudioContext             |

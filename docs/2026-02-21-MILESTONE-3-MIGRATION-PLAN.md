@@ -61,6 +61,9 @@ This plan uses RFC 2119 terms and traceability IDs:
 
 No phase is considered complete without all of: `DoD + Evidence + Rollback readiness`.
 
+### Evidence-as-Code Rule
+Every `EVID-*` item MUST have a corresponding executable test case integrated into `npm test` before the phase is considered complete. `npm test` all-green is the single machine-verifiable acceptance gate for any phase. Evidence items that require visual or auditory confirmation (e.g., frontend rendering, audio output) MUST additionally include a scripted smoke command (curl / API call) whose output can be inspected, plus a documented manual verification step.
+
 ### 0.1 Three-Document Execution Gate
 The Three-Document Protocol is defined authoritatively in `OPEN-PLATFORM-SPEC` §0.1. All phase execution is bound by that protocol. Additional execution-context rule:
 - Each phase ticket/PR MUST include a trace tuple: `REQ-*` + `P*` + implementation guide section anchor.

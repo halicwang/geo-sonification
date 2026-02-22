@@ -831,8 +831,11 @@ The baseline WorldCover compatibility set is the contract protected by P0 regres
 4. Any new feature can be disabled without breaking baseline path.
 5. API ownership boundaries remain intact (`/api/import` vs `/api/sources` vs push ingress).
 6. V1 scaling boundary (200 clients, 500K cells) is not exceeded without explicit post-V1 architecture work.
+7. Every `EVID-*` item for the completed phase has a corresponding test case in `npm test`. All tests pass.
 
 This checklist prevents platformization work from breaking core demo reliability.
+
+**Automated acceptance gate:** `npm test` all-green is the single machine-verifiable signal that a phase is complete. Any implementation agent (human or AI) completing a phase MUST ensure all `EVID-*` test cases are committed and passing before declaring the phase done.
 
 ## 17. Demo and Verification Scripts
 

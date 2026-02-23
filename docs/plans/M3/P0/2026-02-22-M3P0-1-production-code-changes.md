@@ -1,13 +1,26 @@
-# P0B — Production Code Changes
+# P0-1 — Production Code Changes
 
-**Prerequisite:** P0A complete
+**Prerequisite:** None (first step, independent of P0-2)
 **Trace:** Milestone 3 Phase 0 — Compatibility Guardrails
+**Covers original:** Packet P0-A (Implementation Guide §10.1) — testability extraction
+
+## Cross-Reference to Original Packets
+
+| This sub-step | Original Packet (Impl Guide §10.1) | Relationship |
+|---------------|-------------------------------------|-------------|
+| P0-1 | P0-A (Golden baseline harness) | Testability extraction portion |
+| P0-2 | P0-A (Golden baseline harness) | Test infrastructure + fixture discovery |
+| P0-3 | P0-A (Golden baseline harness) | Golden regression gate |
+| P0-4 | P0-B (Provisional SLO benchmark) | Benchmark + scripts |
+| P0-5 | — | Final verification sweep |
 
 ## Context
 
 Make two surgical changes to `server/index.js` to enable testing the HTTP and WebSocket transport layers without calling `startServer()` (which loads real CSV data and binds hardcoded ports).
 
 These are the **only** production code changes in all of P0.
+
+**Forward-looking note:** `attachWsHandler` and `_setDataLoaded` are not consumed by any P0 test. They are extracted here as a low-risk, small change to prepare testability hooks for P1 transport-layer tests. Placing them in P0 ensures the production code extraction is reviewed in isolation before the test infrastructure lands.
 
 ## Changes
 
@@ -113,12 +126,9 @@ npm run lint
 ```bash
 node -e "const m = require('./server/index'); console.log(typeof m.attachWsHandler, typeof m._setDataLoaded)"
 # Expected: function function
-# (Ctrl+C to exit — the module require triggers startServer via require.main check,
-#  but since we're requiring as a library, it won't start)
+# (startServer() is gated by `if (require.main === module)` at line 392, so this is safe)
 ```
-
-Wait — `startServer()` is gated by `if (require.main === module)` at line 392, so the `node -e` check above is safe and won't start the server.
 
 ## Exit
 
-Report: "P0B complete. `npm test`: 10/10 green. `npm run lint`: clean. `attachWsHandler` and `_setDataLoaded` exported."
+Report: "P0-1 complete. `npm test`: 10/10 green. `npm run lint`: clean. `attachWsHandler` and `_setDataLoaded` exported."

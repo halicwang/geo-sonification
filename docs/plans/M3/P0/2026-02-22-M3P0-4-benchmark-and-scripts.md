@@ -1,11 +1,13 @@
-# P0E — Benchmark & Scripts
+# P0-4 — Benchmark & Scripts
 
-**Prerequisite:** P0D complete
+**Prerequisite:** P0-3 complete
 **Trace:** Milestone 3 Phase 0 — Compatibility Guardrails
+**Covers original:** Packet P0-B (Implementation Guide §10.1) — provisional SLO benchmark gate
+**EVID coverage:** EVID-P0-003 (manual smoke walkthrough), EVID-P0-004 (baseline latency report)
 
 ## Context
 
-Create the performance benchmark test (SLO gate), a standalone benchmark runner for manual profiling, and a smoke-test script that validates the full server stack (HTTP + WebSocket) end-to-end. These are P0-B deliverables: provisional SLO baselines.
+Create the performance benchmark test (SLO gate), a standalone benchmark runner for manual profiling, and a smoke-test script that validates the full server stack (HTTP + WebSocket) end-to-end. These are the Packet P0-B deliverables: provisional SLO baselines.
 
 ## Files to Create
 
@@ -284,7 +286,7 @@ Add to the root `package.json` scripts:
 npm test
 ```
 
-**Expected:** 12 suites (11 from P0D + benchmark-gate), all green. Benchmark tests should log timing stats to console.
+**Expected:** 12 suites (11 from P0-3 + benchmark-gate), all green. Benchmark tests should log timing stats to console.
 
 **Verify benchmark runs standalone:**
 ```bash
@@ -292,8 +294,8 @@ node scripts/benchmark-viewport.js 10
 ```
 **Expected:** Prints timing stats for all 4 scenarios, exits 0.
 
-**Smoke test** requires a running server — skip in this step's self-check. It will be verified in P0F.
+**Smoke test** requires a running server — skip in this step's self-check. It will be verified in P0-5.
 
 ## Exit
 
-Report: "P0E complete. `npm test`: 12 suites, all green. Benchmark and smoke scripts created. `npm run benchmark` runs clean."
+Report: "P0-4 complete. `npm test`: 12 suites, all green. Benchmark and smoke scripts created. `npm run benchmark` runs clean."

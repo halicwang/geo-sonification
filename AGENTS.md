@@ -26,11 +26,23 @@ When a change requires a devlog entry:
 3. Add/update the link in `docs/DEVLOG.md` under `## Entries`.
 4. Use `### Standalone Design Docs` only for non-entry reference documents.
 
-## Commit Message Guard
+## Commit Message Convention
 
-Recommended trailer line:
+This project enforces [Conventional Commits](https://www.conventionalcommits.org/) via [commitlint](https://commitlint.js.org/) in CI. Non-conforming commits will fail the `commitlint` check. See `CLAUDE.md § Commit Messages` for the full specification including types, scopes, formatting rules, and anti-patterns.
 
-`DEVLOG-REVIEWED: YYYY-MM-DD`
+Key rules for agents:
 
-Repository `commit-msg` hook runs in warn-only mode by default.
-Set `DEVLOG_REVIEWED_ENFORCE=1` to enforce blocking behavior.
+1. **Format**: `<type>(<scope>): <subject>` — max 72 chars.
+2. **Types** (enforced): `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf`, `revert`.
+3. **Scope** (recommended, not enforced): module name (`server`, `frontend`, `audio`, `ws`, `data`) or phase tag (`M3/P0`). Omitting scope is valid: `fix: handle missing data`.
+4. **Subject**: imperative mood, start lowercase, no period. Uppercase abbreviations (API, HTTP, DEM) are allowed.
+5. **Body** (for non-trivial changes): explain **why**, wrap at 72 chars.
+6. **Anti-patterns**: no vague messages (`Update files`, `Fix stuff`), no `WIP` on shared branches, no "explain" or "recent" as change verbs.
+
+### Devlog Trailer
+
+Recommended footer when devlog was reviewed before committing:
+
+```
+DEVLOG-REVIEWED: YYYY-MM-DD
+```

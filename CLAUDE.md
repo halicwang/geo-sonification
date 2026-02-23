@@ -61,6 +61,108 @@ Example: `docs/plans/M3/P0/2026-02-22-M3P0-1-production-code-changes.md` → Mil
 - **Feature changes** (new modules, architectural adjustments) must: create a new entry in `docs/devlog/M*/`, add it to the `docs/DEVLOG.md` index, and update `README.md` and `docs/ARCHITECTURE.md` when behavior changed.
 - **Bug fixes and internal refactors** require a new `docs/devlog/M*/` entry + index link; update `README.md` and `docs/ARCHITECTURE.md` if external behavior or operator workflow changed.
 
+## Commit Messages
+
+This project follows [Conventional Commits](https://www.conventionalcommits.org/) with project-specific scoping rules. Enforced by [commitlint](https://commitlint.js.org/) in CI — non-conforming commits will fail the `commitlint` check. Config: `commitlint.config.js`.
+
+### Format
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Type (required)
+
+| Type       | When to use                                              |
+| ---------- | -------------------------------------------------------- |
+| `feat`     | New user-facing functionality or behavior                |
+| `fix`      | Bug fix                                                  |
+| `refactor` | Code change that neither fixes a bug nor adds a feature  |
+| `docs`     | Documentation only — plans, devlog, README, ARCHITECTURE |
+| `test`     | Adding or updating tests                                 |
+| `chore`    | Build config, dependencies, tooling, repo housekeeping   |
+| `ci`       | CI/CD pipeline changes                                   |
+| `perf`     | Performance improvement with no functional change        |
+| `revert`   | Reverts a previous commit (reference SHA in body)        |
+
+### Scope (recommended)
+
+Use the module or area affected: `server`, `frontend`, `data`, `audio`, `ws`, `plans`, `devlog`.
+
+When the commit is scoped to a milestone phase, use the phase tag as scope:
+
+```
+docs(M3/P0): renumber plan files from letter to numeric suffixes
+```
+
+Multiple scopes are acceptable when tightly coupled: `fix(server,ws): ...`
+
+### Subject line rules
+
+- **Imperative mood, present tense** — "add", not "added" or "adds".
+- **Start lowercase** after the colon — `feat(server): add ...`, not `Add ...`.
+- **Uppercase abbreviations are OK** — `add API endpoint`, `handle HTTP 429`.
+- **No period** at the end.
+- **Max 72 characters** (type + scope + colon + space + subject).
+- Describe **what changed**, not what was wrong.
+
+### Body (optional, recommended for non-trivial changes)
+
+- Separated from subject by a blank line.
+- Explain **why** this change was made, not what (the diff shows what).
+- Wrap at 72 characters.
+
+### Footer (optional)
+
+- Breaking changes: `BREAKING CHANGE: <description>`
+- Issue references: `Closes #42`, `Refs #17`
+- Devlog trailer: `DEVLOG-REVIEWED: YYYY-MM-DD`
+
+### Examples
+
+```
+feat(server): add elevation-aware fallback for missing DEM tiles
+
+The tile service previously returned 500 when DEM data was unavailable
+for high-latitude regions. Fall back to bilinear interpolation from
+neighboring tiles to maintain audio continuity.
+
+Closes #23
+DEVLOG-REVIEWED: 2026-02-22
+```
+
+```
+fix(frontend): prevent audio context suspension on tab switch
+```
+
+```
+docs(M3/P0): add stage plans for compatibility guardrails
+
+DEVLOG-REVIEWED: 2026-02-22
+```
+
+```
+refactor(audio): extract param-mapping logic into shared util
+
+No behavioral change. Reduces duplication between drone and percussive
+mode mappers.
+```
+
+### Anti-patterns (do not use)
+
+| Bad                                  | Why                                                    |
+| ------------------------------------ | ------------------------------------------------------ |
+| `Explain recent doc changes`         | "recent" is meaningless in history; "explain" ≠ change |
+| `Fix doc format naming`              | Which doc? What format? What naming?                   |
+| `Add missing spec rationale details` | "missing details" conveys zero information             |
+| `Update files`                       | Says nothing                                           |
+| `WIP`                                | Never commit WIP to shared branches                    |
+| `fix: Fix the bug`                   | Redundant; describe the actual bug                     |
+
 ## Development Workflow
 
 - Mandatory pre-flight before any code/docs change: read `docs/DEVLOG.md` `Recording Guide` and the latest relevant entries for the milestone being edited.

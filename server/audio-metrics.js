@@ -189,36 +189,27 @@ function computeBusTargets(lcFractions) {
     );
 }
 
-// ── Ocean detection (three-level logic) ──────────────────────────────
+// ── Ocean detection (coverage-threshold mix logic) ───────────────────
 
-/** Coverage below this means "mostly ocean". */
-const OCEAN_COVERAGE_THRESHOLD = 0.1;
-
-/** Proximity above this qualifies as "zoomed in enough" for coastal. */
-const COASTAL_PROXIMITY_THRESHOLD = 0.7;
-
-/** Output level for the coastal zone. */
-const COASTAL_LEVEL = 0.7;
+/** Coverage at/above this means full land mix (no ocean boost). */
+const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
 
 /**
- * Three-level ocean detection, pre-smoothing.
+ * Coverage-linear ocean level, pre-smoothing.
  *
  * Smoothing is NOT applied here — the frontend EMA handles it.
  *
- *   proximity == 0                                       → 1.0  (pure ocean)
- *   coverage < OCEAN_COVERAGE_THRESHOLD && prox > 0.7    → 0.7  (coastal)
- *   otherwise                                            → 0.0  (land)
+ *   coverage 0%                                          → 1.0
+ *   coverage 40%                                         → 0.0
+ *   linear interpolation between (clamped)
  *
- * @param {number} proximity - 0-1 zoom-based proximity
+ * @param {number} _proximity - 0-1 zoom-based proximity (unused in current rule)
  * @param {number} coverage  - 0-1 land coverage ratio
- * @returns {number} Raw ocean level target (0.0, 0.7, or 1.0)
+ * @returns {number} Raw ocean level target in [0.0, 1.0]
  */
-function computeOceanLevel(proximity, coverage) {
-    const prox = Number.isFinite(proximity) ? clamp01(proximity) : 0;
+function computeOceanLevel(_proximity, coverage) {
     const cov = Number.isFinite(coverage) ? clamp01(coverage) : 0;
-    if (prox <= 0) return 1.0;
-    if (cov < OCEAN_COVERAGE_THRESHOLD && prox > COASTAL_PROXIMITY_THRESHOLD) return COASTAL_LEVEL;
-    return 0.0;
+    return clamp01(1 - cov / LAND_FULL_COVERAGE_THRESHOLD);
 }
 
 module.exports = {

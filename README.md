@@ -151,9 +151,9 @@ Five ambience WAV loops represent different land cover types. Land cover channel
 - **Crop bus**: class 40
 - **Urban bus**: class 50
 - **Bare bus**: class 60
-- **Water bus**: classes 70, 80 + ocean 3-level detector
+- **Water bus**: classes 70, 80 + coverage-linear ocean mix
 
-The Water bus combines fine-grained grid-level water data (classes 70+80) with a macro ocean signal derived from land coverage ratio. Three quantized levels: 1.0 (pure ocean, no grid data), 0.7 (coastal, coverage < 10% with high proximity), 0.0 (land). EMA smoothing provides gradual transitions.
+The audio engine uses `coverage` (grid percentage) as a linear mix rule: `coverage=0%` maps to `land:ocean = 0:100`, `coverage=40%` maps to `100:0`, and values in between interpolate linearly (`land=coverage/0.4`, `ocean=1-land`). Above 40%, playback stays pure land. Ocean rides the Water bus while land buses are attenuated in low-coverage mode. EMA smoothing provides gradual transitions.
 
 Ambience WAV files are local assets and are not committed (`frontend/audio/ambience/*.wav` is ignored). If a file is missing, the corresponding bus shows a loading error and that bus remains silent.
 

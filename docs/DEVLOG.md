@@ -23,6 +23,9 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-23 | Fix        | [Coverage 0–40 Linear Land/Ocean Mapping](devlog/M2/2026-02-23-M2-coverage-linear-0-40-mapping.md)                                                                                            |
+| 2026-02-23 | Fix        | [Grid-Coverage Land/Ocean Mix Rule](devlog/M2/2026-02-23-M2-grid-coverage-land-ocean-mix.md)                                                                                                  |
+| 2026-02-23 | Fix        | [Low-Pass Floor and Ocean Boost Logic Tuning](devlog/M2/2026-02-23-M2-lowpass-ocean-logic-tuning.md)                                                                                          |
 | 2026-02-23 | Fix        | [Web Audio Trigger Phase Sync](devlog/M2/2026-02-23-M2-web-audio-trigger-phase-sync.md)                                                                                                       |
 | 2026-02-23 | Fix        | [Web Audio Loop Crossfade Stability](devlog/M2/2026-02-23-M2-web-audio-loop-crossfade-stability.md)                                                                                           |
 | 2026-02-23 | Refactor   | [~~M3 Doc Hierarchy Reorganization~~](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-23-M3-doc-hierarchy-reorganization.md) _(M3 deprecated)_                                |

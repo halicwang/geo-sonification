@@ -30,6 +30,7 @@
 const NUM_BUSES = 5;
 const BUS_NAMES = Object.freeze(['tree', 'crop', 'urban', 'bare', 'water']);
 const WATER_BUS_INDEX = 4;
+const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
 
 /** EMA time constant in ms. */
 const SMOOTHING_TIME_MS = 500;
@@ -81,6 +82,15 @@ const gains = new Array(NUM_BUSES).fill(null);
 /** @type {GainNode|null} */
 let masterGain = null;
 
+/**
+ * Three cascaded lowpass BiquadFilterNodes → 36 dB/oct slope.
+ * Inserted between masterGain and audioCtx.destination.
+ * @type {BiquadFilterNode|null}
+ */
+let lpFilter1 = null;
+let lpFilter2 = null;
+let lpFilter3 = null;
+
 /** @type {AudioBuffer[]} */
 const buffers = new Array(NUM_BUSES).fill(null);
 
@@ -121,6 +131,10 @@ const busTargets = new Float64Array(NUM_BUSES);
 const busSmoothed = new Float64Array(NUM_BUSES);
 let oceanTarget = 0;
 let oceanSmoothed = 0;
+let coverageTarget = 1;
+let coverageSmoothed = 1;
+let proximityTarget = 0;
+let proximitySmoothed = 0;
 
 // ── Timing ──
 let lastEmaTime = 0;
@@ -627,7 +641,8 @@ function startAllSources() {
  *
  * @param {Object} audioParams
  * @param {number[]} audioParams.busTargets - 5 floats [tree, crop, urban, bare, water]
- * @param {number} audioParams.oceanLevel - 0.0, 0.7, or 1.0
+ * @param {number} audioParams.oceanLevel - 0.0 to 1.0
+ * @param {number} audioParams.coverage - 0-1 land/grid coverage ratio
  */
 function update(audioParams) {
     if (!audioParams) return;
@@ -655,6 +670,12 @@ function update(audioParams) {
     if (typeof audioParams.oceanLevel === 'number') {
         oceanTarget = clamp01(audioParams.oceanLevel);
     }
+    if (typeof audioParams.coverage === 'number') {
+        coverageTarget = clamp01(audioParams.coverage);
+    }
+    if (typeof audioParams.proximity === 'number') {
+        proximityTarget = clamp01(audioParams.proximity);
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -680,13 +701,31 @@ function rafLoop() {
         busSmoothed[i] += alpha * (busTargets[i] - busSmoothed[i]);
     }
     oceanSmoothed += alpha * (oceanTarget - oceanSmoothed);
+    coverageSmoothed += alpha * (coverageTarget - coverageSmoothed);
+    proximitySmoothed += alpha * (proximityTarget - proximitySmoothed);
+
+    // Low-pass cutoff: linear map proximity 0→500 Hz, 1→20 kHz
+    const cutoff = 500 + proximitySmoothed * 19500;
+    if (lpFilter1) lpFilter1.frequency.value = cutoff;
+    if (lpFilter2) lpFilter2.frequency.value = cutoff;
+    if (lpFilter3) lpFilter3.frequency.value = cutoff;
+
+    // Coverage-controlled linear land/ocean split:
+    // - coverage 0%  => land:ocean = 0:100
+    // - coverage 40% => land:ocean = 100:0
+    // - linear interpolation between, clamped outside [0, 40%]
+    const cov = clamp01(coverageSmoothed);
+    const landMix = clamp01(cov / LAND_FULL_COVERAGE_THRESHOLD);
+    const oceanMix = 1.0 - landMix;
 
     // Apply smoothed values to GainNodes
     for (let i = 0; i < NUM_BUSES; i++) {
         if (gains[i] && buffers[i]) {
-            // Water bus: max(LC-fraction water, ocean detector)
+            const landValue = busSmoothed[i] * landMix;
             const value =
-                i === WATER_BUS_INDEX ? Math.max(busSmoothed[i], oceanSmoothed) : busSmoothed[i];
+                i === WATER_BUS_INDEX
+                    ? Math.max(landValue, Math.max(oceanSmoothed, oceanMix))
+                    : landValue;
             gains[i].gain.value = value;
         }
     }
@@ -727,6 +766,7 @@ function handleVisibilityChange() {
                 busSmoothed[i] = busTargets[i];
             }
             oceanSmoothed = oceanTarget;
+            coverageSmoothed = coverageTarget;
             lastEmaTime = performance.now();
             startRaf();
             scheduleGlobalSwap();
@@ -751,7 +791,29 @@ async function start() {
 
         masterGain = audioCtx.createGain();
         masterGain.gain.value = 1.0;
-        masterGain.connect(audioCtx.destination);
+
+        // 36 dB/oct low-pass: three cascaded 12 dB/oct biquads.
+        // Q values for 6th-order Butterworth (maximally flat, no resonance).
+        // Cutoff driven by proximity in rafLoop().
+        lpFilter1 = audioCtx.createBiquadFilter();
+        lpFilter1.type = 'lowpass';
+        lpFilter1.frequency.value = 20000;
+        lpFilter1.Q.value = 0.5176;
+
+        lpFilter2 = audioCtx.createBiquadFilter();
+        lpFilter2.type = 'lowpass';
+        lpFilter2.frequency.value = 20000;
+        lpFilter2.Q.value = 0.7071;
+
+        lpFilter3 = audioCtx.createBiquadFilter();
+        lpFilter3.type = 'lowpass';
+        lpFilter3.frequency.value = 20000;
+        lpFilter3.Q.value = 1.9319;
+
+        masterGain.connect(lpFilter1);
+        lpFilter1.connect(lpFilter2);
+        lpFilter2.connect(lpFilter3);
+        lpFilter3.connect(audioCtx.destination);
 
         for (let i = 0; i < NUM_BUSES; i++) {
             gains[i] = audioCtx.createGain();
@@ -774,6 +836,10 @@ async function start() {
     busSmoothed.fill(0);
     oceanTarget = 0;
     oceanSmoothed = 0;
+    coverageTarget = 1;
+    coverageSmoothed = 1;
+    proximityTarget = 0;
+    proximitySmoothed = 0;
 
     // Replay the last audioParams that arrived before AudioContext existed.
     // This sets busTargets to the correct values for the current viewport so

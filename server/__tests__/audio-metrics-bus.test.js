@@ -140,43 +140,36 @@ describe('computeBusTargets', () => {
 // ═════════════════════════════════════════════════════════════════
 
 describe('computeOceanLevel', () => {
-    test('proximity=0 -> pure ocean (1.0) regardless of coverage', () => {
+    test('coverage 0% -> ocean level 1.0', () => {
         expect(computeOceanLevel(0, 0)).toBe(1.0);
-        expect(computeOceanLevel(0, 0.5)).toBe(1.0);
-        expect(computeOceanLevel(0, 1.0)).toBe(1.0);
     });
 
-    test('low coverage + high proximity -> coastal (0.7)', () => {
-        expect(computeOceanLevel(0.8, 0.05)).toBe(0.7);
-        expect(computeOceanLevel(0.9, 0.09)).toBe(0.7);
-        expect(computeOceanLevel(1.0, 0.0)).toBe(0.7);
-    });
-
-    test('sufficient coverage -> land (0.0)', () => {
+    test('coverage 40% or above -> no ocean boost (0.0)', () => {
+        expect(computeOceanLevel(0, 0.4)).toBe(0.0);
         expect(computeOceanLevel(0.5, 0.5)).toBe(0.0);
-        expect(computeOceanLevel(1.0, 0.2)).toBe(0.0);
-        expect(computeOceanLevel(0.3, 0.8)).toBe(0.0);
+        expect(computeOceanLevel(1.0, 1.0)).toBe(0.0);
     });
 
-    test('edge: coverage exactly 0.1 -> land (threshold is <, not <=)', () => {
-        expect(computeOceanLevel(0.8, 0.1)).toBe(0.0);
+    test('coverage between 0% and 40% uses linear interpolation', () => {
+        expect(computeOceanLevel(0, 0.1)).toBeCloseTo(0.75, 6);
+        expect(computeOceanLevel(0.5, 0.2)).toBeCloseTo(0.5, 6);
+        expect(computeOceanLevel(1.0, 0.3)).toBeCloseTo(0.25, 6);
     });
 
-    test('edge: proximity exactly 0.7 -> land (threshold is >, not >=)', () => {
-        expect(computeOceanLevel(0.7, 0.05)).toBe(0.0);
+    test('proximity does not affect result under coverage-linear rule', () => {
+        expect(computeOceanLevel(0, 0.18)).toBeCloseTo(0.55, 6);
+        expect(computeOceanLevel(0.5, 0.18)).toBeCloseTo(0.55, 6);
+        expect(computeOceanLevel(1.0, 0.18)).toBeCloseTo(0.55, 6);
     });
 
-    test('edge: proximity just above 0.7 with low coverage -> coastal', () => {
-        expect(computeOceanLevel(0.71, 0.05)).toBe(0.7);
+    test('handles NaN proximity -> ignored by rule', () => {
+        expect(computeOceanLevel(NaN, 0.05)).toBe(0.875);
+        expect(computeOceanLevel(NaN, 0.5)).toBe(0.0);
     });
 
-    test('handles NaN proximity -> treated as 0 -> pure ocean', () => {
-        expect(computeOceanLevel(NaN, 0.5)).toBe(1.0);
-    });
-
-    test('handles NaN coverage -> treated as 0 -> depends on proximity', () => {
-        expect(computeOceanLevel(0.8, NaN)).toBe(0.7);
-        expect(computeOceanLevel(0.5, NaN)).toBe(0.0);
+    test('handles NaN coverage -> treated as 0 -> pure ocean', () => {
+        expect(computeOceanLevel(0.8, NaN)).toBe(1.0);
+        expect(computeOceanLevel(0.5, NaN)).toBe(1.0);
     });
 
     test('handles undefined inputs', () => {

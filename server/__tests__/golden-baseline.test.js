@@ -135,7 +135,7 @@ describe('P0-A Golden Baseline: ocean viewport', () => {
         expectDeepCloseTo(stripInternalFields(stats), goldenOcean.expected);
     });
 
-    test('oceanLevel is 1.0 for pure ocean', () => {
+    test('oceanLevel is 1.0 when coverage is 0%', () => {
         const stats = runViewport(goldenOcean.input.bounds, goldenOcean.input.zoom);
         expect(stats.audioParams.oceanLevel).toBe(1.0);
     });

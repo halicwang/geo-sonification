@@ -43,6 +43,12 @@ export function updateUI(stats) {
         }
     }
 
+    // Proximity (from audioParams)
+    if (els.proximity && stats.audioParams) {
+        const p = stats.audioParams.proximity;
+        els.proximity.textContent = p != null ? p.toFixed(2) : '—';
+    }
+
     // Dominant landcover
     if (els.landType) {
         const name = getLandcoverName(stats.dominantLandcover);

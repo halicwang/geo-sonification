@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         gridCount: document.getElementById('grid-count'),
         audioMode: document.getElementById('audio-mode'),
         landType: document.getElementById('land-type'),
+        proximity: document.getElementById('proximity'),
         landcoverList: document.getElementById('landcover-list'),
         wsStatus: document.getElementById('ws-status'),
         wsText: document.getElementById('ws-text'),

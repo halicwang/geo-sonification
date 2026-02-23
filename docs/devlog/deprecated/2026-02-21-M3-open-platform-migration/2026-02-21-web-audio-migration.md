@@ -1,5 +1,7 @@
 # 2026-02-21 — Feature: Web Audio Migration (Phase W)
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Added browser-based audio playback using Web Audio API, enabling the sonification system to run without Max/MSP.
 
 ## Changes

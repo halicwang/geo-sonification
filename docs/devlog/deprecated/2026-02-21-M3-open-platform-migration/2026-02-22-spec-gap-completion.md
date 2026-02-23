@@ -1,5 +1,7 @@
 # 2026-02-22 — Design: Spec Gap Completion (Compound Alerts, API Surface, Format Roadmap, Scaling Boundary)
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Completed four spec-level decision locks across all three lighthouse documents after gap analysis review.
 
 ## Decisions Made

@@ -1,5 +1,7 @@
 # 2026-02-22 — Fix: Pre-Commit Prettier Guard
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Added a local `pre-commit` hook to format staged files before commit creation. This closes the gap where formatting issues were only caught in CI after the commit was already pushed.
 
 ## Details

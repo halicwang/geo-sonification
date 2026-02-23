@@ -1,5 +1,7 @@
 # 2026-02-22 — Feature: Provisional SLO Benchmark Gate (P0-B)
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Established the P0-B provisional SLO benchmark infrastructure for `POST /api/viewport` latency. A standalone HTTP benchmark script and an in-process Jest gate capture p50/p95/p99 percentiles with environment metadata. First baseline run recorded below as the P2 freeze handoff input.
 
 ## Evidence

@@ -1,5 +1,7 @@
 # 2026-02-22 — Design: P0 Close-Out & Planning Hierarchy Convention
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Completed P0-1 production code changes (the only runtime modification in P0) and P0-5 final verification. During close-out review, discovered that AI agents had not consulted the stage plan files (`docs/plans/M3/P0/`) during P0 execution because no upstream documentation referenced them. Added the Milestone → Phase → Stage planning hierarchy definition to `CLAUDE.md` and `AGENTS.md`, and added stage plan references to all three M3 lighthouse documents.
 
 ## P0-1: Production Code Changes

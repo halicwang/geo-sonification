@@ -1,5 +1,7 @@
 # 2026-02-22 — Refactor: Rename gee/ to gee-scripts/
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Renamed the `gee/` directory to `gee-scripts/` so the folder name clearly communicates it contains Google Earth Engine export scripts. The abbreviation "gee" is opaque to contributors unfamiliar with the GEE ecosystem.
 
 ## Changes

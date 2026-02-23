@@ -1,5 +1,7 @@
 # 2026-02-22 — Refactor: Remove Max/MSP Code
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Removed all tracked Max/MSP and OSC-related runtime code from the repository. With Web Audio fully functional (Phase W, 2026-02-21), Max/MSP is no longer needed. The system now uses Web Audio exclusively for sonification. (Some local worktrees may still keep ignored legacy files under `sonification/`.)
 
 ## Changes

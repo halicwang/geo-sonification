@@ -22,3 +22,7 @@ sonification/
 
 # Audio samples (too large for git)
 frontend/audio/ambience/*.wav
+
+# AI agent config (local-only)
+AGENTS.md
+CLAUDE.md

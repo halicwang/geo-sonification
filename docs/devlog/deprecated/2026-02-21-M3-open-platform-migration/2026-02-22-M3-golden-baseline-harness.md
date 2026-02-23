@@ -1,5 +1,7 @@
 # 2026-02-22 — Feature: Golden Baseline Harness (P0-A)
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Implemented the P0-A golden regression harness that locks current WorldCover demo behavior before M3 refactoring begins. Four canonical viewport scenarios (dense land, open ocean, coastal mixed, dense urban) are tested against golden fixture files with float-tolerant recursive comparison. An environment pinning guard locks 7 config constants to detect drift that would invalidate fixtures.
 
 ## Evidence

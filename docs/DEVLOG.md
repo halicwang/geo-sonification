@@ -5,9 +5,9 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 ## Recording Guide
 
 - **Order**: Reverse chronological — newest entry first, oldest last.
-- **Location**: Each entry is a standalone file under `docs/devlog/M*/` (for example `docs/devlog/M3/`).
-- **Milestone folder**: Put each new entry in the active milestone folder (`M1`, `M2`, `M3`, ...).
-- **File naming (new entries)**: `YYYY-MM-DD-M*-kebab-case-title.md` (for example `2026-02-22-M3-web-audio-bugfix.md`).
+- **Location**: Each entry is a standalone file under `docs/devlog/M*/` (for example `docs/devlog/M2/`). Deprecated milestone entries are in `docs/devlog/deprecated/`.
+- **Milestone folder**: Put each new entry in the active milestone folder (`M1`, `M2`, ...).
+- **File naming (new entries)**: `YYYY-MM-DD-M*-kebab-case-title.md` (for example `2026-02-21-M2-jsdoc-annotations.md`).
 - **Legacy files**: Existing entries that used the old naming style do not need to be renamed only for convention.
 - **Heading format (entries)**: `# YYYY-MM-DD — <Category>: <Short Title>` (h1 in standalone entry files listed in `## Entries`).
 - **Categories**: `Feature`, `Fix`, `Refactor`, `Design`, `Milestone`, `Discussion` (pick the most fitting one).
@@ -21,35 +21,35 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 ## Entries
 
-| Date       | Category   | Title                                                                                               |
-| ---------- | ---------- | --------------------------------------------------------------------------------------------------- |
-| 2026-02-23 | Fix        | [Web Audio Loop Crossfade Stability](devlog/M2/2026-02-23-M2-web-audio-loop-crossfade-stability.md) |
-| 2026-02-23 | Refactor   | [M3 Doc Hierarchy Reorganization](devlog/M3/2026-02-23-M3-doc-hierarchy-reorganization.md)          |
-| 2026-02-22 | Fix        | [Pre-Commit Prettier Guard](devlog/M3/2026-02-22-M3-pre-commit-prettier-guard.md)                   |
-| 2026-02-22 | Design     | [P0 Close-Out & Planning Hierarchy](devlog/M3/2026-02-22-M3-p0-close-and-planning-hierarchy.md)     |
-| 2026-02-22 | Feature    | [Provisional SLO Benchmark (P0-B)](devlog/M3/2026-02-22-M3-provisional-slo-benchmark.md)            |
-| 2026-02-22 | Feature    | [Golden Baseline Harness (P0-A)](devlog/M3/2026-02-22-M3-golden-baseline-harness.md)                |
-| 2026-02-22 | Refactor   | [Rename gee/ to gee-scripts/](devlog/M3/2026-02-22-M3-rename-gee-scripts.md)                        |
-| 2026-02-22 | Feature    | [GitHub Actions CI Workflow](devlog/M3/2026-02-22-M3-github-ci.md)                                  |
-| 2026-02-22 | Refactor   | [Move Project Docs into docs/](devlog/M3/2026-02-22-M3-docs-root-cleanup.md)                        |
-| 2026-02-22 | Design     | [Spec Gap Completion](devlog/M3/2026-02-22-spec-gap-completion.md)                                  |
-| 2026-02-22 | Fix        | [Frontend Loop Playback Stability](devlog/M3/2026-02-22-loop-playback-fix.md)                       |
-| 2026-02-22 | Refactor   | [Remove Max/MSP Code](devlog/M3/2026-02-22-remove-maxmsp.md)                                        |
-| 2026-02-22 | Fix        | [Web Audio & WebSocket Bug Fixes](devlog/M3/2026-02-22-web-audio-bugfix.md)                         |
-| 2026-02-21 | Feature    | [Web Audio Migration (Phase W)](devlog/M3/2026-02-21-web-audio-migration.md)                        |
-| 2026-02-21 | Refactor   | [JSDoc Type Annotations](devlog/M2/2026-02-21-jsdoc-annotations.md)                                 |
-| 2026-02-20 | Refactor   | [Frontend Module Split](devlog/M2/2026-02-20-frontend-module-split.md)                              |
-| 2026-02-20 | Fix        | [Proximity Zoom Mapping](devlog/M2/2026-02-20-proximity-zoom-mapping.md)                            |
-| 2026-02-20 | Fix        | [Crossfade Proximity Fix](devlog/M2/2026-02-20-crossfade-proximity-fix.md)                          |
-| 2026-02-20 | Feature    | [Loop Playback](devlog/M2/2026-02-20-loop-playback.md)                                              |
-| 2026-02-19 | Feature    | [Crop Bus](devlog/M2/2026-02-19-crop-bus.md)                                                        |
-| 2026-02-19 | Feature    | [Water Bus & 4-Bus Fold-Mapping](devlog/M2/2026-02-19-water-bus.md)                                 |
-| 2026-02-19 | Design     | [Sound Design Architecture](devlog/M2/2026-02-19-sound-design-architecture.md)                      |
-| 2026-02-19 | Milestone  | [Server-Side Foundation](devlog/M2/2026-02-19-server-side-foundation.md)                            |
-| 2026-02-08 | Feature    | [OSC Pipeline Extensions](devlog/M1/2026-02-08-osc-pipeline-extensions.md)                          |
-| 2026-02-06 | Feature    | [Per-Grid Mode](devlog/M1/2026-02-06-per-grid-mode.md)                                              |
-| 2026-01-27 | Discussion | [Pivot to Real-Time](devlog/M1/2026-01-27-pivot-to-realtime.md)                                     |
-| 2026-01-22 | Discussion | [Initial Proposal](devlog/M1/2026-01-22-initial-proposal.md)                                        |
+| Date       | Category   | Title                                                                                                                                                                                         |
+| ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-23 | Fix        | [Web Audio Loop Crossfade Stability](devlog/M2/2026-02-23-M2-web-audio-loop-crossfade-stability.md)                                                                                           |
+| 2026-02-23 | Refactor   | [~~M3 Doc Hierarchy Reorganization~~](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-23-M3-doc-hierarchy-reorganization.md) _(M3 deprecated)_                                |
+| 2026-02-22 | Fix        | [Pre-Commit Prettier Guard](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-pre-commit-prettier-guard.md) _(M3 — milestone deprecated, changes retained)_               |
+| 2026-02-22 | Design     | [P0 Close-Out & Planning Hierarchy](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-p0-close-and-planning-hierarchy.md) _(M3 — milestone deprecated, changes retained)_ |
+| 2026-02-22 | Feature    | [Provisional SLO Benchmark (P0-B)](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-provisional-slo-benchmark.md) _(M3 — milestone deprecated, changes retained)_        |
+| 2026-02-22 | Feature    | [Golden Baseline Harness (P0-A)](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-golden-baseline-harness.md) _(M3 — milestone deprecated, changes retained)_            |
+| 2026-02-22 | Refactor   | [Rename gee/ to gee-scripts/](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-rename-gee-scripts.md) _(M3 — milestone deprecated, changes retained)_                    |
+| 2026-02-22 | Feature    | [GitHub Actions CI Workflow](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-github-ci.md) _(M3 — milestone deprecated, changes retained)_                              |
+| 2026-02-22 | Refactor   | [Move Project Docs into docs/](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-docs-root-cleanup.md) _(M3 — milestone deprecated, changes retained)_                    |
+| 2026-02-22 | Design     | [~~Spec Gap Completion~~](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-spec-gap-completion.md) _(M3 deprecated)_                                                        |
+| 2026-02-22 | Fix        | [Frontend Loop Playback Stability](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-loop-playback-fix.md) _(M3 — milestone deprecated, changes retained)_                   |
+| 2026-02-22 | Refactor   | [Remove Max/MSP Code](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-remove-maxmsp.md) _(M3 — milestone deprecated, changes retained)_                                    |
+| 2026-02-22 | Fix        | [Web Audio & WebSocket Bug Fixes](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-web-audio-bugfix.md) _(M3 — milestone deprecated, changes retained)_                     |
+| 2026-02-21 | Feature    | [Web Audio Migration (Phase W)](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-21-web-audio-migration.md) _(M3 — milestone deprecated, changes retained)_                    |
+| 2026-02-21 | Refactor   | [JSDoc Type Annotations](devlog/M2/2026-02-21-jsdoc-annotations.md)                                                                                                                           |
+| 2026-02-20 | Refactor   | [Frontend Module Split](devlog/M2/2026-02-20-frontend-module-split.md)                                                                                                                        |
+| 2026-02-20 | Fix        | [Proximity Zoom Mapping](devlog/M2/2026-02-20-proximity-zoom-mapping.md)                                                                                                                      |
+| 2026-02-20 | Fix        | [Crossfade Proximity Fix](devlog/M2/2026-02-20-crossfade-proximity-fix.md)                                                                                                                    |
+| 2026-02-20 | Feature    | [Loop Playback](devlog/M2/2026-02-20-loop-playback.md)                                                                                                                                        |
+| 2026-02-19 | Feature    | [Crop Bus](devlog/M2/2026-02-19-crop-bus.md)                                                                                                                                                  |
+| 2026-02-19 | Feature    | [Water Bus & 4-Bus Fold-Mapping](devlog/M2/2026-02-19-water-bus.md)                                                                                                                           |
+| 2026-02-19 | Design     | [Sound Design Architecture](devlog/M2/2026-02-19-sound-design-architecture.md)                                                                                                                |
+| 2026-02-19 | Milestone  | [Server-Side Foundation](devlog/M2/2026-02-19-server-side-foundation.md)                                                                                                                      |
+| 2026-02-08 | Feature    | [OSC Pipeline Extensions](devlog/M1/2026-02-08-osc-pipeline-extensions.md)                                                                                                                    |
+| 2026-02-06 | Feature    | [Per-Grid Mode](devlog/M1/2026-02-06-per-grid-mode.md)                                                                                                                                        |
+| 2026-01-27 | Discussion | [Pivot to Real-Time](devlog/M1/2026-01-27-pivot-to-realtime.md)                                                                                                                               |
+| 2026-01-22 | Discussion | [Initial Proposal](devlog/M1/2026-01-22-initial-proposal.md)                                                                                                                                  |
 
 ### Standalone Design Docs
 

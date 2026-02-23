@@ -1,5 +1,7 @@
 # 2026-02-22 — Fix: Frontend Loop Playback Stability
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Fixed a false-positive idle behavior in the Web Audio engine that made loop playback appear to "stop" when the map was stationary. The previous no-data timeout treated "no new `update()` calls" as disconnect, but stationary viewports naturally pause updates. The engine now keeps the last targets continuously until user stop or tab hide.
 
 ## Changes

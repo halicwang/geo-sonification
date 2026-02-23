@@ -1,5 +1,7 @@
 # 2026-02-22 — Fix: Web Audio & WebSocket Bug Fixes (3 rounds)
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Three rounds of bug fixes following the Web Audio migration, covering `audio-engine.js`, `websocket.js`, `server/config.js`, and two Max JS scripts.
 
 ## Round 1 — Code audit (5 bugs)

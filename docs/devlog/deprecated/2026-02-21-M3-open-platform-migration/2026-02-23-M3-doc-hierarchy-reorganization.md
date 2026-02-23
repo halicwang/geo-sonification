@@ -1,5 +1,7 @@
 # 2026-02-23 — Refactor: M3 Documentation Hierarchy Reorganization
 
+> **Deprecated (2026-02-23):** M3 Open Platform milestone was abandoned. Tooling, tests, and bugfixes introduced during this period are retained; the Open Platform feature set was not pursued.
+
 Reorganized the three M3 lighthouse documents so each has one clear, non-overlapping role. The Implementation Guide (916 lines) had been mixing frozen contracts, sequencing content, and design rationale in one document, making it unclear what was normative vs advisory.
 
 ## What Changed

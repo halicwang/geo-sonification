@@ -47,7 +47,7 @@ cd server && npm install
 
 ### 4. Run GEE Export (if not done)
 
-Run the scripts in `gee/` and download CSVs to `data/raw/`. See `gee/README_EXPORT.md`.
+Run the scripts in `gee-scripts/` and download CSVs to `data/raw/`. See `gee-scripts/README_EXPORT.md`.
 
 **Before starting the server**: Confirm CSVs in `data/raw/` match the schema in `data/raw/SCHEMA.md`. If you have old `loss_*` CSVs, re-export and replace them. Validate with `npm run check:csv`. Delete `data/cache/` then start Node.
 
@@ -90,9 +90,8 @@ geo-sonification/
 │   ├── ARCHITECTURE.md                   # System architecture
 │   ├── DEVLOG.md                         # Development log index + recording guide
 │   ├── plans/                            # Design proposals, milestone specs
-│   ├── devlog/                           # Development logs and debugging records
-│   └── guides/                           # Implementation guides
-├── gee/
+│   └── devlog/                           # Development logs and debugging records
+├── gee-scripts/
 │   ├── README_EXPORT.md                  # GEE export instructions
 │   └── <continent>_grid.js               # GEE export scripts (one per continent)
 ├── server/
@@ -172,7 +171,7 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 
 ### Server won't start / CSV schema mismatch
 
-- Re-export CSVs using `gee/*.js` and place them into `data/raw/`
+- Re-export CSVs using `gee-scripts/*.js` and place them into `data/raw/`
 - Delete caches: `rm -rf data/cache`
 
 ### WebSocket disconnected

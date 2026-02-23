@@ -16,16 +16,16 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 
 ## Directory Conventions
 
-| Directory     | Purpose                                                      | File naming                    |
-| ------------- | ------------------------------------------------------------ | ------------------------------ |
-| `server/`     | Node.js backend                                              | kebab-case (`mode-manager.js`) |
-| `frontend/`   | Plain HTML/CSS/JS map client, no build tools                 | —                              |
-| `data/raw/`   | GEE exports — source of truth, do not edit manually          | —                              |
-| `data/cache/` | Derived data, auto-rebuilt by server — do not edit or commit | —                              |
-| `gee/`        | Google Earth Engine export scripts                           | —                              |
-| `docs/plans/` | Design proposals, milestone specs, migration plans           | —                              |
-| `docs/devlog/`| Development logs and debugging records (`M1/`, `M2/`, `M3/`) | —                              |
-| `scripts/`    | Utility scripts                                              | —                              |
+| Directory      | Purpose                                                      | File naming                    |
+| -------------- | ------------------------------------------------------------ | ------------------------------ |
+| `server/`      | Node.js backend                                              | kebab-case (`mode-manager.js`) |
+| `frontend/`    | Plain HTML/CSS/JS map client, no build tools                 | —                              |
+| `data/raw/`    | GEE exports — source of truth, do not edit manually          | —                              |
+| `data/cache/`  | Derived data, auto-rebuilt by server — do not edit or commit | —                              |
+| `gee-scripts/` | Google Earth Engine export scripts                           | —                              |
+| `docs/plans/`  | Design proposals, milestone specs, migration plans           | —                              |
+| `docs/devlog/` | Development logs and debugging records (`M1/`, `M2/`, `M3/`) | —                              |
+| `scripts/`     | Utility scripts                                              | —                              |
 
 ## Naming Conventions
 

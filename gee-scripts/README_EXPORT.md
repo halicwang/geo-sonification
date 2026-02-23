@@ -64,7 +64,7 @@ The Node server validates required files, CSV headers, and grid resolution at st
 
 ## Small test first (recommended)
 
-In any `gee/*_grid.js` script, uncomment the test block near the top:
+In any `gee-scripts/*_grid.js` script, uncomment the test block near the top:
 
 ```javascript
 // var testRegion = ee.Geometry.Rectangle([-70, -20, -60, -10]);

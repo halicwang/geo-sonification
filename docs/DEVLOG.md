@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                          |
 | ---------- | ---------- | ------------------------------------------------------------------------------ |
+| 2026-02-22 | Refactor   | [Rename gee/ to gee-scripts/](devlog/M3/2026-02-22-M3-rename-gee-scripts.md)  |
 | 2026-02-22 | Feature    | [GitHub Actions CI Workflow](devlog/M3/2026-02-22-M3-github-ci.md)             |
 | 2026-02-22 | Refactor   | [Move Project Docs into docs/](devlog/M3/2026-02-22-M3-docs-root-cleanup.md)   |
 | 2026-02-22 | Design     | [Spec Gap Completion](devlog/M3/2026-02-22-spec-gap-completion.md)             |

@@ -14,18 +14,36 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 - Node.js 18+, Express, WebSocket (`ws`).
 - Do not introduce new npm dependencies without explicit approval.
 
+## Planning Hierarchy
+
+Development is organized in three levels:
+
+| Level         | ID pattern         | Scope                                                                              | Location                                       |
+| ------------- | ------------------ | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Milestone** | `M1`, `M2`, `M3` … | Major development cycle                                                            | `docs/plans/M<n>/`                             |
+| **Phase**     | `P0` – `P5`        | Delivery unit within a milestone; has its own requirements, DoD, and evidence gate | `docs/plans/M<n>/` (three lighthouse docs)     |
+| **Stage**     | `1`, `2`, `3` …    | Sequential execution step within a phase; one concrete task                        | `docs/plans/M<n>/P<n>/` (numbered stage files) |
+
+- **Milestone** sets the overall goal (e.g., M3 = Open Platform).
+- **Phase** groups related work packets with shared requirements and a phase-exit gate (e.g., P0 = Compatibility Guardrails).
+- **Stage** is a single ordered step inside a phase (e.g., P0-1 = production code changes, P0-2 = fixture infrastructure).
+
+Stage file naming: `YYYY-MM-DD-M<milestone>P<phase>-<stage>-<kebab-title>.md`
+Example: `docs/plans/M3/P0/2026-02-22-M3P0-1-production-code-changes.md` → Milestone 3, Phase 0, Stage 1.
+
 ## Directory Conventions
 
-| Directory      | Purpose                                                      | File naming                    |
-| -------------- | ------------------------------------------------------------ | ------------------------------ |
-| `server/`      | Node.js backend                                              | kebab-case (`mode-manager.js`) |
-| `frontend/`    | Plain HTML/CSS/JS map client, no build tools                 | —                              |
-| `data/raw/`    | GEE exports — source of truth, do not edit manually          | —                              |
-| `data/cache/`  | Derived data, auto-rebuilt by server — do not edit or commit | —                              |
-| `gee-scripts/` | Google Earth Engine export scripts                           | —                              |
-| `docs/plans/`  | Design proposals, milestone specs, migration plans           | —                              |
-| `docs/devlog/` | Development logs and debugging records (`M1/`, `M2/`, `M3/`) | —                              |
-| `scripts/`     | Utility scripts                                              | —                              |
+| Directory           | Purpose                                                      | File naming                                    |
+| ------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| `server/`           | Node.js backend                                              | kebab-case (`mode-manager.js`)                 |
+| `frontend/`         | Plain HTML/CSS/JS map client, no build tools                 | —                                              |
+| `data/raw/`         | GEE exports — source of truth, do not edit manually          | —                                              |
+| `data/cache/`       | Derived data, auto-rebuilt by server — do not edit or commit | —                                              |
+| `gee-scripts/`      | Google Earth Engine export scripts                           | —                                              |
+| `docs/plans/`       | Design proposals, milestone specs, migration plans           | —                                              |
+| `docs/plans/M*/P*/` | Stage execution plans (granular steps within each phase)     | `YYYY-MM-DD-M<n>P<n>-<stage>-<kebab-title>.md` |
+| `docs/devlog/`      | Development logs and debugging records (`M1/`, `M2/`, `M3/`) | —                                              |
+| `scripts/`          | Utility scripts                                              | —                                              |
 
 ## Naming Conventions
 

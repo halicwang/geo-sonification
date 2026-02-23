@@ -15,6 +15,7 @@ Every release must include observability metrics and rollback triggers to avoid 
 ## Companion Detailed Docs
 - Normative requirement source: `docs/plans/M3/2026-02-21-M3-open-platform-spec.md`
 - Technical rationale and engineering execution: `docs/plans/M3/2026-02-22-M3-implementation-guide.md`
+- Stage execution plans (granular steps within each phase): `docs/plans/M3/P*/` — see `CLAUDE.md` § "Planning Hierarchy" for the Milestone → Phase → Stage definition. Each phase subdirectory contains numbered stage files (e.g., `P0/2026-02-22-M3P0-1-production-code-changes.md`). Implementation agents MUST consult the relevant `P*/` folder before executing any phase.
 
 ## Phase Mapping (P0-P5)
 Section numbers in this document are local structure only. Cross-document tracking uses `P0..P5` phase IDs.
@@ -65,8 +66,9 @@ No phase is considered complete without all of: `DoD + Evidence + Rollback readi
 Every `EVID-*` item MUST have a corresponding executable test case integrated into `npm test` before the phase is considered complete. `npm test` all-green is the single machine-verifiable acceptance gate for any phase. Evidence items that require visual or auditory confirmation (e.g., frontend rendering, audio output) MUST additionally include a scripted smoke command (curl / API call) whose output can be inspected, plus a documented manual verification step.
 
 ### 0.1 Three-Document Execution Gate
-The Three-Document Protocol is defined authoritatively in `OPEN-PLATFORM-SPEC` §0.1. All phase execution is bound by that protocol. Additional execution-context rule:
+The Three-Document Protocol is defined authoritatively in `OPEN-PLATFORM-SPEC` §0.1. All phase execution is bound by that protocol. Additional execution-context rules:
 - Each phase ticket/PR MUST include a trace tuple: `REQ-*` + `P*` + implementation guide section anchor.
+- Before executing any phase, the agent MUST consult the corresponding stage plans in `docs/plans/M3/P*/` (e.g., `P0/`, `P1/`). Stage files define the granular, ordered execution steps and are the primary operational guide for implementation within each phase.
 
 ## 1. Phase Map (P0-P5)
 

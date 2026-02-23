@@ -1,0 +1,74 @@
+{
+    "description": "Dense forest viewport: 4 cells at (0,0)-(0.5,0.5), tree-dominant continuous LC data",
+    "input": {
+        "bounds": [-0.1, -0.1, 1.0, 1.0],
+        "zoom": 8
+    },
+    "expected": {
+        "dominantLandcover": 10,
+        "nightlightNorm": 0.3342412065113339,
+        "populationNorm": 0.016914829845243003,
+        "forestNorm": 0.6375,
+        "avgForestPct": 63.75,
+        "avgPopulationDensity": 0.22,
+        "avgNightlightMean": 1.875,
+        "avgNightlightP90": 3.875,
+        "gridCount": 4,
+        "landcoverDistribution": {
+            "10": 5984.259381532828,
+            "20": 1165.114035853429,
+            "30": 905.1664644800669,
+            "40": 595.8381035568428,
+            "50": 155.20969025908232,
+            "60": 103.65781951078301,
+            "90": 519.8670483218513,
+            "95": 363.04583387423844,
+            "100": 207.84162261087806
+        },
+        "landcoverBreakdown": [
+            {
+                "class": 10,
+                "count": 5984.259381532828,
+                "percentage": 59.842593815328286
+            },
+            {
+                "class": 20,
+                "count": 1165.114035853429,
+                "percentage": 11.65114035853429
+            },
+            {
+                "class": 30,
+                "count": 905.1664644800669,
+                "percentage": 9.051664644800669
+            },
+            {
+                "class": 40,
+                "count": 595.8381035568428,
+                "percentage": 5.958381035568428
+            },
+            {
+                "class": 90,
+                "count": 519.8670483218513,
+                "percentage": 5.198670483218513
+            },
+            {
+                "class": null,
+                "count": 829.7549662549818,
+                "percentage": 8.297549662549818
+            }
+        ],
+        "mode": "per-grid",
+        "perGridThresholdEnter": 50,
+        "perGridThresholdExit": 50,
+        "audioParams": {
+            "busTargets": [
+                0.914529438667329, 0.059583810355684275, 0.01552096902590823, 0.010365781951078299,
+                0
+            ],
+            "busNames": ["tree", "crop", "urban", "bare", "water"],
+            "oceanLevel": 0,
+            "proximity": 1,
+            "coverage": 0.4444444444444444
+        }
+    }
+}

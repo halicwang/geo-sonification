@@ -10,6 +10,8 @@
         "check:csv": "node scripts/check_csv_schema.js",
         "clean:cache": "rm -rf data/cache",
         "test": "npm --prefix server test",
+        "benchmark": "node scripts/benchmark-viewport.js",
+        "smoke": "node scripts/smoke-worldcover.js",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --cache --ignore-unknown --write .",

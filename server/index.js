@@ -46,6 +46,16 @@ const WS_MAX_BUFFERED = 64 * 1024; // 64KB
 
 // ============ State ============
 let dataLoaded = false;
+
+/**
+ * @internal @test-only
+ * Allow tests to toggle the dataLoaded flag without calling startServer().
+ * @param {boolean} value
+ */
+function _setDataLoaded(value) {
+    dataLoaded = value;
+}
+
 let httpServer = null;
 let wssServer = null;
 
@@ -201,6 +211,132 @@ app.post('/api/viewport', (req, res) => {
     res.json(result.stats);
 });
 
+// ============ WebSocket Handler ============
+
+/**
+ * Attach viewport message handling to a WebSocket server.
+ * Extracted from startServer() for testability — pure code motion.
+ *
+ * Must be called exactly once per wss instance.
+ * @param {import('ws').WebSocketServer} wss
+ */
+function attachWsHandler(wss) {
+    if (wss._handlerAttached) {
+        throw new Error('attachWsHandler called twice on the same wss instance');
+    }
+    wss._handlerAttached = true;
+
+    wss.on('connection', (ws) => {
+        console.log('WebSocket client connected');
+
+        // Per-client hysteresis state — each client tracks its own mode
+        // so multiple viewports don't interfere with each other.
+        const modeState = createModeState();
+        const deltaState = createDeltaState();
+
+        // Mark alive; the ping timer will flip to false before each ping.
+        // If pong comes back, it flips back to true.
+        ws.isAlive = true;
+        const pingTimer = setInterval(() => {
+            if (!ws.isAlive) {
+                console.log('WebSocket client timeout, terminating connection');
+                clearInterval(pingTimer);
+                ws.terminate();
+                return;
+            }
+            ws.isAlive = false;
+            try {
+                ws.ping();
+            } catch (err) {
+                console.error('Failed to send ping:', err);
+            }
+        }, WS_PING_INTERVAL_MS);
+
+        ws.on('pong', () => {
+            ws.isAlive = true;
+        });
+
+        ws.on('message', (message) => {
+            try {
+                const data = JSON.parse(message);
+
+                if (data.type === 'viewport') {
+                    const parsedBounds = parseViewportBounds(data.bounds, 'WebSocket');
+                    if (parsedBounds.error) {
+                        ws.send(JSON.stringify({ type: 'error', error: parsedBounds.error }));
+                        return;
+                    }
+
+                    if (!dataLoaded) {
+                        ws.send(
+                            JSON.stringify({
+                                type: 'stats',
+                                loading: true,
+                                message: 'Data loading...',
+                            })
+                        );
+                        return;
+                    }
+
+                    const zoom = Number.isFinite(data.zoom) ? data.zoom : undefined;
+                    const result = processViewport(
+                        parsedBounds.bounds,
+                        modeState,
+                        deltaState,
+                        zoom
+                    );
+                    if (result.error) {
+                        ws.send(JSON.stringify({ type: 'error', error: result.error }));
+                        return;
+                    }
+                    _statsCounter.viewports++;
+                    _statsCounter.totalMs += result.elapsedMs;
+
+                    const payload = JSON.stringify({ type: 'stats', ...result.stats });
+
+                    // Default: unicast (only sender). BROADCAST_STATS=1: all clients.
+                    if (BROADCAST_STATS) {
+                        wss.clients.forEach((client) => {
+                            if (
+                                client.readyState === WebSocket.OPEN &&
+                                client.bufferedAmount < WS_MAX_BUFFERED
+                            ) {
+                                try {
+                                    client.send(payload);
+                                } catch (sendErr) {
+                                    console.error('Failed to send to client:', sendErr);
+                                }
+                            } else if (client.readyState === WebSocket.OPEN) {
+                                console.warn(
+                                    `[WS] Skipping slow client (buffered=${client.bufferedAmount})`
+                                );
+                            }
+                        });
+                    } else {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(payload);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('WebSocket message error:', err);
+                try {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'error', error: 'Invalid message format' }));
+                    }
+                } catch (sendErr) {
+                    console.error('Failed to send error response:', sendErr);
+                }
+            }
+        });
+
+        ws.on('close', () => {
+            console.log('WebSocket client disconnected');
+            clearInterval(pingTimer);
+        });
+    });
+}
+
 // ============ Startup ============
 
 /** Load data, build spatial index, start HTTP + WebSocket servers. @returns {Promise<void>} */
@@ -230,117 +366,7 @@ async function startServer() {
             console.error('WebSocket server error:', err);
         });
 
-        wss.on('connection', (ws) => {
-            console.log('WebSocket client connected');
-
-            // Per-client hysteresis state — each client tracks its own mode
-            // so multiple viewports don't interfere with each other.
-            const modeState = createModeState();
-            const deltaState = createDeltaState();
-
-            // Mark alive; the ping timer will flip to false before each ping.
-            // If pong comes back, it flips back to true.
-            ws.isAlive = true;
-            const pingTimer = setInterval(() => {
-                if (!ws.isAlive) {
-                    console.log('WebSocket client timeout, terminating connection');
-                    clearInterval(pingTimer);
-                    ws.terminate();
-                    return;
-                }
-                ws.isAlive = false;
-                try {
-                    ws.ping();
-                } catch (err) {
-                    console.error('Failed to send ping:', err);
-                }
-            }, WS_PING_INTERVAL_MS);
-
-            ws.on('pong', () => {
-                ws.isAlive = true;
-            });
-
-            ws.on('message', (message) => {
-                try {
-                    const data = JSON.parse(message);
-
-                    if (data.type === 'viewport') {
-                        const parsedBounds = parseViewportBounds(data.bounds, 'WebSocket');
-                        if (parsedBounds.error) {
-                            ws.send(JSON.stringify({ type: 'error', error: parsedBounds.error }));
-                            return;
-                        }
-
-                        if (!dataLoaded) {
-                            ws.send(
-                                JSON.stringify({
-                                    type: 'stats',
-                                    loading: true,
-                                    message: 'Data loading...',
-                                })
-                            );
-                            return;
-                        }
-
-                        const zoom = Number.isFinite(data.zoom) ? data.zoom : undefined;
-                        const result = processViewport(
-                            parsedBounds.bounds,
-                            modeState,
-                            deltaState,
-                            zoom
-                        );
-                        if (result.error) {
-                            ws.send(JSON.stringify({ type: 'error', error: result.error }));
-                            return;
-                        }
-                        _statsCounter.viewports++;
-                        _statsCounter.totalMs += result.elapsedMs;
-
-                        const payload = JSON.stringify({ type: 'stats', ...result.stats });
-
-                        // Default: unicast (only sender). BROADCAST_STATS=1: all clients.
-                        if (BROADCAST_STATS) {
-                            wss.clients.forEach((client) => {
-                                if (
-                                    client.readyState === WebSocket.OPEN &&
-                                    client.bufferedAmount < WS_MAX_BUFFERED
-                                ) {
-                                    try {
-                                        client.send(payload);
-                                    } catch (sendErr) {
-                                        console.error('Failed to send to client:', sendErr);
-                                    }
-                                } else if (client.readyState === WebSocket.OPEN) {
-                                    console.warn(
-                                        `[WS] Skipping slow client (buffered=${client.bufferedAmount})`
-                                    );
-                                }
-                            });
-                        } else {
-                            if (ws.readyState === WebSocket.OPEN) {
-                                ws.send(payload);
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.error('WebSocket message error:', err);
-                    try {
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.send(
-                                JSON.stringify({ type: 'error', error: 'Invalid message format' })
-                            );
-                        }
-                    } catch (sendErr) {
-                        console.error('Failed to send error response:', sendErr);
-                    }
-                }
-            });
-
-            ws.on('close', () => {
-                console.log('WebSocket client disconnected');
-                clearInterval(pingTimer);
-            });
-        });
+        attachWsHandler(wss);
 
         console.log(`
 ======================================
@@ -402,4 +428,6 @@ module.exports = {
     startWsServer,
     startServer,
     gracefulShutdown,
+    attachWsHandler,
+    _setDataLoaded,
 };

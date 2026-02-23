@@ -17,6 +17,7 @@ Any critical interface, type, or configuration not frozen here must not be inven
 ## Companion Detailed Docs
 - Technical rationale and engineering execution: `docs/plans/M3/2026-02-22-M3-implementation-guide.md`
 - Phase execution contract: `docs/plans/M3/2026-02-21-M3-migration-plan.md`
+- Stage execution plans (granular steps within each phase): `docs/plans/M3/P*/` — see `CLAUDE.md` § "Planning Hierarchy" for the Milestone → Phase → Stage definition. Each phase subdirectory contains numbered stage files (e.g., `P0/2026-02-22-M3P0-1-production-code-changes.md`). Implementation agents MUST consult the relevant `P*/` folder before executing any phase.
 
 ## Phase Mapping (P0-P5)
 Section numbers in this document are local structure only. Cross-document tracking uses `P0..P5` phase IDs.
@@ -56,8 +57,9 @@ All requirements are traceable by `REQ-*` IDs and are referenced by phases in th
   - `docs/plans/M3/2026-02-21-M3-open-platform-spec.md`
   - `docs/plans/M3/2026-02-21-M3-migration-plan.md`
   - `docs/plans/M3/2026-02-22-M3-implementation-guide.md`
+- Before executing any phase, the agent MUST also consult the corresponding stage plans in `docs/plans/M3/P*/` (e.g., `P0/`, `P1/`). Stage files contain the granular, ordered execution steps within each phase and are the primary operational guide for implementation.
 - Every implementation plan, task, or PR MUST include a trace tuple: at least one `REQ-*`, one `P*`, and one implementation guide section anchor.
-- Document precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `IMPLEMENTATION-GUIDE`.
+- Document precedence MUST be: `OPEN-PLATFORM-SPEC` > `MIGRATION-PLAN` > `IMPLEMENTATION-GUIDE` > `Stage Plans (P*/)`.
 - If cross-document conflict is detected, implementation MUST pause and the document conflict MUST be resolved (or explicitly decision-locked) before merge.
 
 **Acceptance:** Delivery artifacts include a three-doc trace tuple and no unresolved cross-document conflicts.

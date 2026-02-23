@@ -2,6 +2,7 @@
     "name": "geo-sonification",
     "version": "1.0.0",
     "private": true,
+    "license": "MIT",
     "description": "Interactive map that sonifies geographic data in real-time using Web Audio",
     "scripts": {
         "start": "npm --prefix server start",

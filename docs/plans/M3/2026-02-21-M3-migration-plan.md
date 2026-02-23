@@ -32,14 +32,14 @@ Section numbers in this document are local structure only. Cross-document tracki
 
 ### Cross-Document Phase Alignment Matrix
 
-| Phase ID | Spec Anchor | Migration Anchor | Implementation Guide Anchor |
-| --- | --- | --- | --- |
-| `P0` | `5.5 [P0]` | `[P0] P0` | `10.1 [P0]`, `14. WorldCover Baseline Manifest` |
-| `P1` | `5.1 [P1]` | `[P1] P1` | `10.2 [P1]`, `6. Adapter Contracts`, `7. Import Pipeline` |
-| `P2` | `5.2 [P2]` | `[P2] P2` | `10.3 [P2]`, `4. H3 Technical Deep Dive` |
-| `P3` | `5.3 [P3]` | `[P3] P3` | `10.4 [P3]`, `9. Alert Engine Semantics` |
-| `P4` | `5.4 [P4]` | `[P4] P4` | `10.5 [P4]`, `8.4 Audio Runtime Config Invariants` |
-| `P5` | `5.6 [P5]` | `[P5] P5` | `10.6 [P5]`, `8.5 Governance Baseline Hooks` |
+| Phase ID | Spec Anchor | Migration Anchor | Implementation Guide Anchor | Stage Files |
+| --- | --- | --- | --- | --- |
+| `P0` | `5.5 [P0]`, Appendix B | `[P0] P0` | `2. Coupling Analysis` | `P0/*` |
+| `P1` | `5.1 [P1]`, `3.5`, `4.1.1` | `[P1] P1` | `6. Adapter Rationale`, `7. Import Guidance` | `P1/*` |
+| `P2` | `5.2 [P2]`, `3.7` | `[P2] P2` | `4. H3 Design Rationale` | `P2/*` |
+| `P3` | `5.3 [P3]`, `3.6`, `4.1.2` | `[P3] P3` | `9. Alert Engine & Stream Rationale` | `P3/*` |
+| `P4` | `5.4 [P4]` | `[P4] P4` | Spec §5.4 (contracts only) | `P4/*` |
+| `P5` | `5.6 [P5]` | `[P5] P5` | `8. Governance Extension Points` | `P5/*` |
 
 ## 0. Execution Conventions
 
@@ -503,3 +503,18 @@ Mitigation: document hard limits in API docs and `/api/config` metadata, add run
 ## Appendix A: Historical Max/OSC Notes
 - Historical Max/OSC references are preserved for context only.
 - They do not define mainline V1 architecture or release priorities.
+
+## Appendix B: Shortest Delivery Paths (Decision Aid)
+
+Use this section to choose showcase path under tight schedule.
+
+- **CSV upload -> degraded demo (earliest value):**
+    P0-A + P1-A parallel -> P1-B import -> P1-D degraded demo
+- **CSV upload -> hex view -> sound (full H3 path):**
+    compatibility harness -> P1 ingest -> P2 decoupling -> H3 migration -> frontend hex
+- **Live earthquake -> sound:**
+    adapter/registry -> stream registry -> poll stream packet -> alert engine
+- **Enterprise push feed -> alert -> sound:**
+    source pre-registration -> push ingress -> dedup/backpressure -> alert engine -> mapping reload workflow
+- **Earliest alert capability:**
+    H3 foundation -> adapter/registry -> alert engine core

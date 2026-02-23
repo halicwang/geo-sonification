@@ -2,7 +2,7 @@
 
 **Prerequisite:** P1-5 complete (`POST /api/import`, `GET /api/sources`, `DELETE /api/sources/:id` operational)
 **Trace:** Milestone 3 Phase 1 — Open Ingestion + Control Plane
-**Covers original:** Packet P1-B (Implementation Guide §10.2) — stream source registration + persistence (part 3 of 3)
+**Covers original:** Packet P1-B (Migration Plan P1) — stream source registration + persistence (part 3 of 3)
 **EVID coverage:** EVID-P1-007 (partial — cross-endpoint basics), EVID-P1-008 (stream source descriptor persistence)
 
 ## Context

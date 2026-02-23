@@ -2,7 +2,7 @@
 
 **Prerequisite:** P1-2 complete; P0 gate must be green (all golden baseline tests passing)
 **Trace:** Milestone 3 Phase 1 — Open Ingestion + Control Plane
-**Covers original:** Packet P1-A (Implementation Guide §10.2) — core file updates (part 3 of 3)
+**Covers original:** Packet P1-A (Migration Plan P1) — core file updates (part 3 of 3)
 **EVID coverage:** EVID-P1-006 (compatibility regression — partial gate)
 
 ## Context

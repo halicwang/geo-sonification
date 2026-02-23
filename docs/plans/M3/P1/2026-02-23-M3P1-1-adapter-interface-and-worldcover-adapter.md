@@ -2,11 +2,11 @@
 
 **Prerequisite:** None (purely additive — no existing files modified)
 **Trace:** Milestone 3 Phase 1 — Open Ingestion + Control Plane
-**Covers original:** Packet P1-A (Implementation Guide §10.2) — adapter foundation (part 1 of 3)
+**Covers original:** Packet P1-A (Migration Plan P1) — adapter foundation (part 1 of 3)
 
 ## Context
 
-Create the canonical adapter interface definitions (JSDoc typedefs) and the first concrete adapter wrapping the built-in WorldCover data source. This establishes the frozen module boundary from Implementation Guide §6 (DataAdapter, StreamAdapter, PushAdapter contracts).
+Create the canonical adapter interface definitions (JSDoc typedefs) and the first concrete adapter wrapping the built-in WorldCover data source. This establishes the frozen module boundary from Spec §3.5 (DataAdapter, StreamAdapter, PushAdapter contracts).
 
 The WorldCover adapter maps the existing 14-channel manifest (11 distribution + 3 metric) from `server/landcover.js` `LANDCOVER_META` into the DataAdapter shape. It does **not** yet wire into the server startup path — that happens in P1-3.
 
@@ -19,7 +19,7 @@ These are purely additive files. No existing production code is touched.
 Frozen type definitions and a factory/validator for adapter registration.
 
 **Responsibilities:**
-- JSDoc typedefs for `ChannelManifest`, `DataAdapter`, `StreamAdapter`, `PushAdapter`, `DataRecord`, `CellSnapshot`, `SourceDescriptor`, `PushIngestAck` — shapes per Implementation Guide §6
+- JSDoc typedefs for `ChannelManifest`, `DataAdapter`, `StreamAdapter`, `PushAdapter`, `DataRecord`, `CellSnapshot`, `SourceDescriptor`, `PushIngestAck` — shapes per Spec §3.5
 - `createAdapter(config)` — validates required fields (`id`, `name`, `channels`, `temporalType`, `ingest`), channel manifest entries, and returns `{ valid, adapter|errors }`
 - `validateChannelManifest(ch, index)` — validates individual channel entries (required fields, range as `[min, max]`, normalization enum)
 - Export validation constants (`REQUIRED_ADAPTER_FIELDS`, `VALID_TEMPORAL_TYPES`, etc.)

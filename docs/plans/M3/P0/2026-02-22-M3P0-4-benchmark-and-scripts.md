@@ -2,7 +2,7 @@
 
 **Prerequisite:** P0-3 complete
 **Trace:** Milestone 3 Phase 0 — Compatibility Guardrails
-**Covers original:** Packet P0-B (Implementation Guide §10.1) — provisional SLO benchmark gate
+**Covers original:** Packet P0-B (Migration Plan P0) — provisional SLO benchmark gate
 **EVID coverage:** EVID-P0-003 (manual smoke walkthrough), EVID-P0-004 (baseline latency report)
 
 ## Context

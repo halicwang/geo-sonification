@@ -15,7 +15,7 @@
  * Evidence:
  *   EVID-P0-004 — Baseline latency report
  *
- * Trace: REQ-PERF-001 + P0 + Implementation Guide §10.1 P0-B, §17.3
+ * Trace: REQ-PERF-001 + P0 + Migration Plan P0, Implementation Guide §11.3
  */
 
 const { performance } = require('node:perf_hooks');

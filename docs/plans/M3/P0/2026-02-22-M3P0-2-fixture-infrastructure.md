@@ -2,7 +2,7 @@
 
 **Prerequisite:** None (independent of P0-1)
 **Trace:** Milestone 3 Phase 0 — Compatibility Guardrails
-**Covers original:** Packet P0-A (Implementation Guide §10.1) — test helpers and fixture discovery
+**Covers original:** Packet P0-A (Migration Plan P0) — test helpers and fixture discovery
 
 ## Context
 

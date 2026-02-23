@@ -2,7 +2,7 @@
 
 **Prerequisite:** P1-5 complete (minimum — `POST /api/import` operational); P1-7 recommended
 **Trace:** Milestone 3 Phase 1 — Open Ingestion + Control Plane
-**Covers original:** Packet P1-D (Implementation Guide §10.2) — degraded end-to-end demo
+**Covers original:** Packet P1-D (Migration Plan P1) — degraded end-to-end demo
 **EVID coverage:** EVID-P1-009 (degraded demo walkthrough)
 
 ## Context

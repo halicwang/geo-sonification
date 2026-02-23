@@ -2,13 +2,13 @@
 
 **Prerequisite:** P1-1 complete (adapter-interface.js and worldcover.js exist)
 **Trace:** Milestone 3 Phase 1 — Open Ingestion + Control Plane
-**Covers original:** Packet P1-A (Implementation Guide §10.2) — adapter foundation (part 2 of 3)
+**Covers original:** Packet P1-A (Migration Plan P1) — adapter foundation (part 2 of 3)
 
 ## Context
 
 Create the channel registry that manages source registration, namespace resolution, and channel index assignment. Also create the generic CSV adapter that can ingest arbitrary CSV files with lat/lon columns into `DataRecord[]`.
 
-The channel registry implements the namespace strategy from Implementation Guide §8:
+The channel registry implements the namespace strategy from Spec §3.3:
 - **Storage:** bare keys (`tree`, `pm25`) + source identity
 - **Query/merge:** namespaced keys (`sourceId.channelName`)
 - Built-in channels get fixed index positions; imported channels append in registration order

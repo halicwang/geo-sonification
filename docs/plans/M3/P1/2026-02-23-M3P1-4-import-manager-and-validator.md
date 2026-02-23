@@ -2,14 +2,14 @@
 
 **Prerequisite:** P1-3 complete (channel registry wired, `GET /api/channels` operational)
 **Trace:** Milestone 3 Phase 1 — Open Ingestion + Control Plane
-**Covers original:** Packet P1-B (Implementation Guide §10.2) — runtime import lifecycle (part 1 of 3)
+**Covers original:** Packet P1-B (Migration Plan P1) — runtime import lifecycle (part 1 of 3)
 **EVID coverage:** EVID-P1-003 (restart persistence), EVID-P1-004 (duplicate sourceId replacement), EVID-P1-005 (delete + builtin rejection)
 
 ## Context
 
-Create the import manager (orchestrates source lifecycle: import, replace, delete, persist, restore) and the import validator (pre-ingest validation checks from Implementation Guide §7.2).
+Create the import manager (orchestrates source lifecycle: import, replace, delete, persist, restore) and the import validator (pre-ingest validation checks per Implementation Guide §7.2).
 
-The import manager persists to `data/imports/manifest.json` with atomic write semantics (temp-file + rename) per Implementation Guide §7.3. Builtin sources (e.g. `worldcover`) cannot be deleted or overwritten via import.
+The import manager persists to `data/imports/manifest.json` with atomic write semantics (temp-file + rename) per Spec §4.1.1. Builtin sources (e.g. `worldcover`) cannot be deleted or overwritten via import.
 
 ## Housekeeping
 

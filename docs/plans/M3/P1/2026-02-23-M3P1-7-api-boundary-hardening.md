@@ -2,12 +2,12 @@
 
 **Prerequisite:** P1-6 complete (`POST /api/sources` operational, `getSourceType()` available)
 **Trace:** Milestone 3 Phase 1 — Open Ingestion + Control Plane
-**Covers original:** Packet P1-C (Implementation Guide §10.2) — API responsibility boundary
+**Covers original:** Packet P1-C (Migration Plan P1) — API responsibility boundary
 **EVID coverage:** EVID-P1-007 (full — API boundary test)
 
 ## Context
 
-Enforce the non-overlapping API responsibility boundary between the two registration paths per Implementation Guide §7.4:
+Enforce the non-overlapping API responsibility boundary between the two registration paths per Spec §4.1 (API Responsibility Matrix):
 
 - `POST /api/import` — data-carrying, for static/batch sources (CSV, GeoJSON)
 - `POST /api/sources` — metadata-only, for stream source pre-registration

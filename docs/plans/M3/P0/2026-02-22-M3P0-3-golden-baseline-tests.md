@@ -2,7 +2,7 @@
 
 **Prerequisite:** P0-2 complete + human-reviewed fixtures frozen in `golden-viewports.js`
 **Trace:** Milestone 3 Phase 0 — Compatibility Guardrails
-**Covers original:** Packet P0-A (Implementation Guide §10.1) — golden regression gate
+**Covers original:** Packet P0-A (Migration Plan P0) — golden regression gate
 **EVID coverage:** EVID-P0-001 (golden payload fixture set)
 
 ## Context
@@ -28,7 +28,7 @@ Before any scenario runs, a guard suite asserts that configuration constants mat
 
 ## Channel Manifest Guard
 
-Per Implementation Guide §14, P0 must lock the WorldCover baseline channel set. Add an explicit assertion that the 11 distribution landcover classes and 5-bus audio fold are present:
+Per Spec Appendix B, P0 must lock the WorldCover baseline channel set. Add an explicit assertion that the 11 distribution landcover classes and 5-bus audio fold are present:
 
 - **11 distribution classes** (from `LANDCOVER_META` or equivalent): tree, shrub, grass, crop, urban, bare, snow, water, wetland, mangrove, moss.
 - **5 audio buses**: verify `audioParams.busTargets` has length 5.
@@ -110,7 +110,7 @@ afterEach(() => {
     });
 });
 
-describe('channel manifest guard (Implementation Guide §14)', () => {
+describe('channel manifest guard (Spec Appendix B)', () => {
     test('land-heavy scenario produces expected audio structure', () => {
         const modeState = createModeState();
         const deltaState = createDeltaState();
@@ -118,7 +118,7 @@ describe('channel manifest guard (Implementation Guide §14)', () => {
 
         expect(result.error).toBeUndefined();
 
-        // 5-bus audio fold (Implementation Guide §14: nature, urban, crop, water, ocean)
+        // 5-bus audio fold (Spec Appendix B: nature, urban, crop, water, ocean)
         expect(result.stats.audioParams.busTargets).toHaveLength(5);
 
         // Control signals present
@@ -161,7 +161,7 @@ describe('golden baseline: processViewport', () => {
 - The `normalizeValues` mock returns deterministic zeros. `afterEach` resets + restores the mock to survive between tests.
 - Scenarios with empty `expectedResponse` are auto-skipped so the suite doesn't fail before P0-2 review is done.
 - `expectCloseDeep` only checks keys in `expectedResponse` — the test won't break if processViewport adds new fields in P1+.
-- The `channel manifest guard` explicitly locks the audio structure shape (5 buses, control signals) per Implementation Guide §14.
+- The `channel manifest guard` explicitly locks the audio structure shape (5 buses, control signals) per Spec Appendix B.
 
 ## Alternative: Synthetic Data Approach
 

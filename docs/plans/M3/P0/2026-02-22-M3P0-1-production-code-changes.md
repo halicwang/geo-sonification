@@ -2,11 +2,11 @@
 
 **Prerequisite:** None (first step, independent of P0-2)
 **Trace:** Milestone 3 Phase 0 — Compatibility Guardrails
-**Covers original:** Packet P0-A (Implementation Guide §10.1) — testability extraction
+**Covers original:** Packet P0-A (Migration Plan P0) — testability extraction
 
 ## Cross-Reference to Original Packets
 
-| This sub-step | Original Packet (Impl Guide §10.1) | Relationship |
+| This sub-step | Original Packet (Migration Plan P0) | Relationship |
 |---------------|-------------------------------------|-------------|
 | P0-1 | P0-A (Golden baseline harness) | Testability extraction portion |
 | P0-2 | P0-A (Golden baseline harness) | Test infrastructure + fixture discovery |

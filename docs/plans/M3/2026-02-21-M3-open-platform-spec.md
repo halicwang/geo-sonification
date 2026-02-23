@@ -263,12 +263,28 @@ V1 compound rule constraints:
 - Import pipeline MUST reject invalid coordinates and malformed geometries.
 - Push event spatial key resolution MUST follow deterministic precedence: `cellId` (if present) > `lat`/`lon` encoding > rejection.
 
+### 3.2.1 Coordinate-Order Safety Rules
+
+H3 library functions use inconsistent parameter orders. All code MUST follow these conversion rules:
+
+- `latLngToCell` takes `(lat, lon)` — when source is GeoJSON `[lon, lat]`, use `latLngToCell(coord[1], coord[0], res)`.
+- `cellToBoundary` returns `[lat, lng]` pairs — flip to `[lng, lat]` for GeoJSON output.
+- `polygonToCells` consumes GeoJSON-style coordinates `[lon, lat]`.
+
+Guardrail: coordinate-order regression tests MUST cover `latLngToCell`, `polygonToCells`, and `cellToBoundary` output transforms.
+
 ## 3.3 Merge and Namespace Rules
 - Storage key model MUST be `(cellId, sourceId)`.
 - Query merge MUST namespace channel keys during `CellSnapshot` construction.
 - Name collisions between sources MUST be resolved structurally via namespace, not by silent overwrite.
 
 **Acceptance:** Multi-source merge behavior is deterministic, namespaced, and reproducible across restarts.
+
+### 3.3.1 Channel Index Assignment Policy
+
+- Builtin channels: MUST have fixed index positions for compatibility.
+- Imported channels: MUST use deterministic append order from manifest/import order.
+- Runtime mutation (delete/re-import): index changes are allowed for non-builtin channels, but MUST trigger `channel_update` reload notifications.
 
 ## 3.4 Channel Resolution Policy
 - Configuration artifacts (`alert_rules.json`, `audio_mapping.json`) MUST accept references to channels not currently registered in the channel registry (lazy resolution).
@@ -282,6 +298,129 @@ V1 compound rule constraints:
 - Runtime SHOULD log a warning for each unresolved channel reference at config load and at periodic health check intervals.
 
 **Acceptance:** Operators can configure rules/mappings referencing future data sources without causing runtime errors; rules activate automatically when referenced sources come online.
+
+## 3.5 Frozen Adapter and Extension Types
+
+### DataAdapter (frozen module boundary)
+```js
+/**
+ * @typedef {Object} DataAdapter
+ * @property {string} id - Unique adapter ID (e.g. "worldcover", "air_quality")
+ * @property {string} name - Display name
+ * @property {ChannelManifest[]} channels - Declared channel manifest
+ * @property {"static"|"stream"|"timeseries"} temporalType - Adapter data mode
+ * @property {string} [version] - Semantic version
+ * @property {Object<string, string>} [requiredConfig] - Required config key types
+ * @property {(rawData: any, encoder: CellEncoder, precision: number) => DataRecord[]} ingest
+ * @property {Object<string, Function>} [importFormats] - Supported import format parsers
+ */
+```
+
+### StreamAdapter (extends DataAdapter)
+```js
+/**
+ * @typedef {Object} StreamAdapter
+ * @extends DataAdapter
+ * @property {"stream"} temporalType
+ * @property {number} pollIntervalMs
+ * @property {number} windowMs
+ * @property {"count"|"mean"|"max"|"last"} windowAggregate
+ * @property {(encoder: CellEncoder, precision: number) => Promise<DataRecord[]>} fetch
+ */
+```
+
+### PushAdapter (extends DataAdapter)
+```js
+/**
+ * @typedef {Object} PushAdapter
+ * @extends DataAdapter
+ * @property {"stream"} temporalType
+ * @property {"stream_push"} mode
+ * @property {number} dedupWindowMs
+ * @property {number} maxBatchSize
+ * @property {number} maxQueueDepth
+ * @property {(records: PushEvent[], encoder: CellEncoder, precision: number) => Promise<PushIngestAck>} ingestPush
+ */
+```
+
+### SourceDescriptor (control-plane metadata)
+```json
+{
+    "sourceId": "aq_stream",
+    "mode": "stream_push",
+    "schemaVersion": 1,
+    "ownerTeam": "ops_air",
+    "status": "active"
+}
+```
+
+### CellEncoder (extensibility boundary)
+```js
+/**
+ * encode(lat, lon, precision) -> cellId
+ * decode(cellId) -> {lat, lon, boundary}
+ * parent(cellId, precision) -> cellId
+ * precision(cellId) -> number
+ * precisionForZoom(zoom) -> number
+ * enumerateBounds(bounds, precision) -> cellId[]
+ * neighbors(cellId, k) -> cellId[]
+ */
+```
+
+All adapters MUST expose the same discovery and ingest surface for registry/control-plane integration. `requiredConfig` validates presence/type at registration time, but secrets MUST NOT leak via public APIs.
+
+## 3.6 Frozen Stream Ingestion Types
+
+### PushEvent
+```json
+{
+    "eventId": "evt-20260222-001",
+    "timestamp": "2026-02-22T06:31:10Z",
+    "cellId": "85283473fffffff",
+    "lat": 37.78,
+    "lon": -122.41,
+    "channelsRaw": { "pm25": 83.2, "temp_c": 29.5 },
+    "meta": { "sourceConfidence": 0.91 }
+}
+```
+
+Type rules:
+- `timestamp` is required.
+- Spatial key precedence (deterministic):
+  1. If `cellId` is present and non-null: use `cellId` directly; `lat`/`lon` are ignored.
+  2. If `cellId` is absent/null and both `lat`+`lon` are present: encode cell from coordinates using source's declared resolution.
+  3. If neither `cellId` nor `lat`+`lon` are present: reject record with code `MISSING_SPATIAL_KEY`.
+  4. If `cellId` is present but is not a valid H3 index: reject record with code `INVALID_CELL_ID`.
+- `channelsRaw` is required; normalization is adapter/runtime responsibility, not producer responsibility.
+
+### PushIngestAck
+```json
+{
+    "accepted": 4980,
+    "deduped": 15,
+    "rejected": 5,
+    "ingestLatencyMs": 42,
+    "errors": [
+        { "index": 17, "code": "INVALID_COORDINATE", "message": "lat out of range" }
+    ]
+}
+```
+
+Ack rules:
+- Partial acceptance is allowed and MUST include per-record error details.
+- Ack counters MUST sum to input record count (`accepted + deduped + rejected = total`).
+- `ingestLatencyMs` MUST measure server-side processing window for the batch.
+
+## 3.7 Multi-Resolution Query Strategy
+
+All spatial queries MUST follow this resolution strategy:
+
+1. Store per-source data at native resolution (`DataRecord.resolution`).
+2. Downsample (`queryRes < storedRes`): aggregate by parent using channel fold semantics.
+3. Upsample (`queryRes > storedRes`): parent broadcast to children (no fake interpolation).
+4. Same resolution: direct lookup.
+
+Critical performance constraint: implementations MUST NOT use `cellToChildren()` in hot viewport query paths. Complexity is `O(7^(deltaRes))`; parent-lookup approach keeps per-cell work close to O(1).
 
 ## 4. Frozen Public Interfaces (Contract Baseline)
 
@@ -422,6 +561,26 @@ Example success:
 - Response `200` MUST include `accepted`, `deduped`, `rejected`, `errors[]`, `ingestLatencyMs`.
 - Response `400/401/403/404/409/413/429` MUST use error envelope.
 - Backpressure rule: when source queue depth exceeds configured cap, endpoint MUST return `429` and MUST NOT partially enqueue rejected records.
+
+### 4.1.1 Import Format Contracts
+
+**CSV minimal contract:**
+- Required columns: `lat`, `lon` (or aliases `latitude`, `longitude`).
+- Any additional numeric field becomes a candidate channel.
+- Optional recognized columns: `timestamp`, `alt`.
+
+**sourceId rules:**
+- `sourceId` MUST be sanitized: lowercase, replace `[^a-z0-9_]` with `_`, strip leading/trailing underscores, collapse consecutive underscores. MUST start with a letter, max 64 chars.
+- Re-import with same `sourceId` MUST replace previous source atomically.
+- Manifest writes MUST use temp-file + rename to avoid crash corruption.
+- Manifest MUST persist discovered channel names (bare keys) per source. On restart, channel registry is rebuilt from manifest metadata without re-parsing source files.
+
+### 4.1.2 Push Ingestion Normative Semantics
+
+- `Idempotency-Key` header identifies retried push requests and MUST prevent duplicate ingestion within the dedup window.
+- Dedup window default (`dedupWindowMs`) is source-configurable with a V1 baseline default.
+- Queue depth cap enforces backpressure; exceeded cap MUST return `429`.
+- Oversized push batches MUST return `413` before expensive ingest work begins.
 
 ### `GET /api/config`
 - Purpose: client runtime config (`wsPort`, rendering metadata, capability flags).
@@ -692,9 +851,19 @@ Provisional V1 targets (subject to benchmark freeze):
 Benchmark note (informative, non-commitment): a local 80-request smoke sample on 2026-02-22 observed `p50=1.622ms`, `p95=2.059ms`, `p99=10.331ms` for one fixed viewport. This sample is sanity input only, not release certification.
 
 V1 scaling boundary (hard limit):
-- V1 is designed and tested for a single-instance deployment serving up to 200 concurrent viewport clients and up to 500,000 unique cells per source.
+
+| Dimension | V1 Hard Limit | Scaling Approach (Post-V1) |
+| --- | --- | --- |
+| Concurrent viewport clients | 200 per instance | Horizontal instance scaling + load balancer |
+| Unique cells per source | 500,000 | Sharded spatial index |
+| Total sources | Not hard-limited in V1 | Source partitioning |
+
+- V1 is designed and tested for a single-instance deployment.
 - Horizontal scaling, sharding, or multi-instance coordination is explicitly out of V1 scope.
 - Exceeding these limits in production requires architecture changes tracked as post-V1 work.
+- These limits MUST be validated by the P2 benchmark gate.
+- Runtime SHOULD expose current utilization (active clients, cell counts) via `/api/config` or a status endpoint.
+- Runtime SHOULD add monitoring hooks that warn operators when utilization approaches 80% of hard limits.
 
 ## 6. Quality Gates for This Spec
 
@@ -757,13 +926,45 @@ V1 scaling boundary (hard limit):
 - They MUST NOT redefine V1 primary architecture.
 - Any compatibility bridge must be additive and non-blocking to Web Audio-first delivery.
 
-## Appendix B: Glossary
-- **DataRecord:** per-source storage record for one cell.
-- **CellSnapshot:** merged output record for one cell across sources.
-- **ChannelManifest:** adapter-declared metadata for channels.
-- **AlertRule:** declarative threshold rule.
-- **AlertEvent:** emitted runtime alert transition event.
-- **SourceDescriptor:** source metadata object including `mode`, schema version, and status.
-- **PushEvent:** runtime event payload accepted by push ingestion endpoint.
-- **PushIngestAck:** push endpoint ingestion acknowledgement summary.
+## Appendix B: WorldCover Baseline Manifest (Compatibility Contract)
+
+The baseline WorldCover compatibility set is the contract protected by P0 regression gates.
+
+### Declared channel manifest (11 distribution + 3 metric)
+
+| Channel | Range | Unit | Normalization | Group |
+| --- | --- | --- | --- | --- |
+| `tree` | [0,1] | fraction | linear | distribution |
+| `shrub` | [0,1] | fraction | linear | distribution |
+| `grass` | [0,1] | fraction | linear | distribution |
+| `crop` | [0,1] | fraction | linear | distribution |
+| `urban` | [0,1] | fraction | linear | distribution |
+| `bare` | [0,1] | fraction | linear | distribution |
+| `snow` | [0,1] | fraction | linear | distribution |
+| `water` | [0,1] | fraction | linear | distribution |
+| `wetland` | [0,1] | fraction | linear | distribution |
+| `mangrove` | [0,1] | fraction | linear | distribution |
+| `moss` | [0,1] | fraction | linear | distribution |
+| `nightlight` | [0,1] | normalized | percentile | metric |
+| `population` | [0,1] | normalized | log | metric |
+| `forest` | [0,1] | fraction | linear | metric |
+
+### Derived compatibility control signal
+
+- `proximity` in [0,1] (runtime-derived control path, non-manifest channel).
+- P0 fixtures MUST lock the 14 declared channels and this derived control signal where applicable.
+
+## Appendix C: Glossary
+- **CellEncoder:** abstraction layer for spatial encoding operations (H3 in V1). See §3.5.
+- **CellSnapshot:** merged output record for one cell across sources. See §3.1.
+- **ChannelManifest:** adapter-declared metadata for channels. See §3.1.
 - **Control Plane:** APIs that manage source/channel/audio/stream/alert configuration.
+- **DataAdapter:** frozen module interface for all data source integrations. See §3.5.
+- **DataRecord:** per-source storage record for one cell. See §3.1.
+- **AlertEvent:** emitted runtime alert transition event. See §3.1.
+- **AlertRule:** declarative threshold rule. See §3.1.
+- **PushAdapter:** DataAdapter extension for HTTPS push stream sources. See §3.5.
+- **PushEvent:** runtime event payload accepted by push ingestion endpoint. See §3.6.
+- **PushIngestAck:** push endpoint ingestion acknowledgement summary. See §3.6.
+- **SourceDescriptor:** source metadata object including `mode`, schema version, and status. See §3.5.
+- **StreamAdapter:** DataAdapter extension for poll-based stream sources. See §3.5.

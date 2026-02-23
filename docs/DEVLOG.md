@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                           |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------------- |
+| 2026-02-23 | Refactor   | [M3 Doc Hierarchy Reorganization](devlog/M3/2026-02-23-M3-doc-hierarchy-reorganization.md)      |
 | 2026-02-22 | Fix        | [Pre-Commit Prettier Guard](devlog/M3/2026-02-22-M3-pre-commit-prettier-guard.md)               |
 | 2026-02-22 | Design     | [P0 Close-Out & Planning Hierarchy](devlog/M3/2026-02-22-M3-p0-close-and-planning-hierarchy.md) |
 | 2026-02-22 | Feature    | [Provisional SLO Benchmark (P0-B)](devlog/M3/2026-02-22-M3-provisional-slo-benchmark.md)        |

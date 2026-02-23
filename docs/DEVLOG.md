@@ -21,34 +21,35 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 ## Entries
 
-| Date | Category | Title |
-| --- | --- | --- |
-| 2026-02-22 | Refactor | [Move Project Docs into docs/](devlog/M3/2026-02-22-M3-docs-root-cleanup.md) |
-| 2026-02-22 | Design | [Spec Gap Completion](devlog/M3/2026-02-22-spec-gap-completion.md) |
-| 2026-02-22 | Fix | [Frontend Loop Playback Stability](devlog/M3/2026-02-22-loop-playback-fix.md) |
-| 2026-02-22 | Refactor | [Remove Max/MSP Code](devlog/M3/2026-02-22-remove-maxmsp.md) |
-| 2026-02-22 | Fix | [Web Audio & WebSocket Bug Fixes](devlog/M3/2026-02-22-web-audio-bugfix.md) |
-| 2026-02-21 | Feature | [Web Audio Migration (Phase W)](devlog/M3/2026-02-21-web-audio-migration.md) |
-| 2026-02-21 | Refactor | [JSDoc Type Annotations](devlog/M2/2026-02-21-jsdoc-annotations.md) |
-| 2026-02-20 | Refactor | [Frontend Module Split](devlog/M2/2026-02-20-frontend-module-split.md) |
-| 2026-02-20 | Fix | [Proximity Zoom Mapping](devlog/M2/2026-02-20-proximity-zoom-mapping.md) |
-| 2026-02-20 | Fix | [Crossfade Proximity Fix](devlog/M2/2026-02-20-crossfade-proximity-fix.md) |
-| 2026-02-20 | Feature | [Loop Playback](devlog/M2/2026-02-20-loop-playback.md) |
-| 2026-02-19 | Feature | [Crop Bus](devlog/M2/2026-02-19-crop-bus.md) |
-| 2026-02-19 | Feature | [Water Bus & 4-Bus Fold-Mapping](devlog/M2/2026-02-19-water-bus.md) |
-| 2026-02-19 | Design | [Sound Design Architecture](devlog/M2/2026-02-19-sound-design-architecture.md) |
-| 2026-02-19 | Milestone | [Server-Side Foundation](devlog/M2/2026-02-19-server-side-foundation.md) |
-| 2026-02-08 | Feature | [OSC Pipeline Extensions](devlog/M1/2026-02-08-osc-pipeline-extensions.md) |
-| 2026-02-06 | Feature | [Per-Grid Mode](devlog/M1/2026-02-06-per-grid-mode.md) |
-| 2026-01-27 | Discussion | [Pivot to Real-Time](devlog/M1/2026-01-27-pivot-to-realtime.md) |
-| 2026-01-22 | Discussion | [Initial Proposal](devlog/M1/2026-01-22-initial-proposal.md) |
+| Date       | Category   | Title                                                                          |
+| ---------- | ---------- | ------------------------------------------------------------------------------ |
+| 2026-02-22 | Feature    | [GitHub Actions CI Workflow](devlog/M3/2026-02-22-M3-github-ci.md)             |
+| 2026-02-22 | Refactor   | [Move Project Docs into docs/](devlog/M3/2026-02-22-M3-docs-root-cleanup.md)   |
+| 2026-02-22 | Design     | [Spec Gap Completion](devlog/M3/2026-02-22-spec-gap-completion.md)             |
+| 2026-02-22 | Fix        | [Frontend Loop Playback Stability](devlog/M3/2026-02-22-loop-playback-fix.md)  |
+| 2026-02-22 | Refactor   | [Remove Max/MSP Code](devlog/M3/2026-02-22-remove-maxmsp.md)                   |
+| 2026-02-22 | Fix        | [Web Audio & WebSocket Bug Fixes](devlog/M3/2026-02-22-web-audio-bugfix.md)    |
+| 2026-02-21 | Feature    | [Web Audio Migration (Phase W)](devlog/M3/2026-02-21-web-audio-migration.md)   |
+| 2026-02-21 | Refactor   | [JSDoc Type Annotations](devlog/M2/2026-02-21-jsdoc-annotations.md)            |
+| 2026-02-20 | Refactor   | [Frontend Module Split](devlog/M2/2026-02-20-frontend-module-split.md)         |
+| 2026-02-20 | Fix        | [Proximity Zoom Mapping](devlog/M2/2026-02-20-proximity-zoom-mapping.md)       |
+| 2026-02-20 | Fix        | [Crossfade Proximity Fix](devlog/M2/2026-02-20-crossfade-proximity-fix.md)     |
+| 2026-02-20 | Feature    | [Loop Playback](devlog/M2/2026-02-20-loop-playback.md)                         |
+| 2026-02-19 | Feature    | [Crop Bus](devlog/M2/2026-02-19-crop-bus.md)                                   |
+| 2026-02-19 | Feature    | [Water Bus & 4-Bus Fold-Mapping](devlog/M2/2026-02-19-water-bus.md)            |
+| 2026-02-19 | Design     | [Sound Design Architecture](devlog/M2/2026-02-19-sound-design-architecture.md) |
+| 2026-02-19 | Milestone  | [Server-Side Foundation](devlog/M2/2026-02-19-server-side-foundation.md)       |
+| 2026-02-08 | Feature    | [OSC Pipeline Extensions](devlog/M1/2026-02-08-osc-pipeline-extensions.md)     |
+| 2026-02-06 | Feature    | [Per-Grid Mode](devlog/M1/2026-02-06-per-grid-mode.md)                         |
+| 2026-01-27 | Discussion | [Pivot to Real-Time](devlog/M1/2026-01-27-pivot-to-realtime.md)                |
+| 2026-01-22 | Discussion | [Initial Proposal](devlog/M1/2026-01-22-initial-proposal.md)                   |
 
 ### Standalone Design Docs
 
-| Date | Title |
-| --- | --- |
+| Date       | Title                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
 | 2026-02-06 | [Per-Grid Spatial Sonification — Design Rationale](devlog/M1/2026-02-06-per-grid-design-rationale.md) |
-| 2026-01-26 | [Landcover Fix](devlog/M1/2026-01-26-landcover-fix.md) |
+| 2026-01-26 | [Landcover Fix](devlog/M1/2026-01-26-landcover-fix.md)                                                |
 
 ---
 

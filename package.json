@@ -2,6 +2,7 @@
     "name": "geo-sonification",
     "version": "1.0.0",
     "private": true,
+    "license": "MIT",
     "description": "Interactive map that sonifies geographic data in real-time using Web Audio",
     "scripts": {
         "start": "npm --prefix server start",
@@ -9,6 +10,8 @@
         "check:csv": "node scripts/check_csv_schema.js",
         "clean:cache": "rm -rf data/cache",
         "test": "npm --prefix server test",
+        "benchmark": "node scripts/benchmark-viewport.js",
+        "smoke": "node scripts/smoke-worldcover.js",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --cache --ignore-unknown --write .",

@@ -1,0 +1,72 @@
+{
+    "description": "Dense urban viewport: 3 cells at (20,20)-(20.5,20.5), urban-dominant high nightlight/population",
+    "input": {
+        "bounds": [19.5, 19.5, 21.0, 21.0],
+        "zoom": 8
+    },
+    "expected": {
+        "dominantLandcover": 50,
+        "nightlightNorm": 1,
+        "populationNorm": 0.9887523311181285,
+        "forestNorm": 0.08333333333333334,
+        "avgForestPct": 8.333333333333334,
+        "avgPopulationDensity": 466.6666666666667,
+        "avgNightlightMean": 40,
+        "avgNightlightP90": 52.666666666666664,
+        "gridCount": 3,
+        "landcoverDistribution": {
+            "10": 462.5668449197861,
+            "20": 260.6951871657754,
+            "30": 435.1604278074866,
+            "40": 379.3449197860963,
+            "50": 5030.080213903743,
+            "60": 671.4572192513369,
+            "90": 260.6951871657754
+        },
+        "landcoverBreakdown": [
+            {
+                "class": 50,
+                "count": 5030.080213903743,
+                "percentage": 67.06773618538324
+            },
+            {
+                "class": 60,
+                "count": 671.4572192513369,
+                "percentage": 8.952762923351159
+            },
+            {
+                "class": 10,
+                "count": 462.5668449197861,
+                "percentage": 6.167557932263815
+            },
+            {
+                "class": 30,
+                "count": 435.1604278074866,
+                "percentage": 5.802139037433155
+            },
+            {
+                "class": 40,
+                "count": 379.3449197860963,
+                "percentage": 5.057932263814617
+            },
+            {
+                "class": null,
+                "count": 521.3903743315508,
+                "percentage": 6.951871657754011
+            }
+        ],
+        "mode": "per-grid",
+        "perGridThresholdEnter": 50,
+        "perGridThresholdExit": 50,
+        "audioParams": {
+            "busTargets": [
+                0.18921568627450977, 0.050579322638146164, 0.6706773618538323, 0.08952762923351158,
+                0
+            ],
+            "busNames": ["tree", "crop", "urban", "bare", "water"],
+            "oceanLevel": 0,
+            "proximity": 1,
+            "coverage": 0.3333333333333333
+        }
+    }
+}

@@ -1,0 +1,32 @@
+{
+    "description": "Open ocean viewport: query bounds [100,-60,110,-50] with no data — emptyStats path",
+    "input": {
+        "bounds": [100, -60, 110, -50],
+        "zoom": 3
+    },
+    "expected": {
+        "dominantLandcover": 80,
+        "nightlightNorm": 0,
+        "populationNorm": 0,
+        "forestNorm": 0,
+        "avgForestPct": 0,
+        "avgPopulationDensity": 0,
+        "avgNightlightMean": 0,
+        "avgNightlightP90": 0,
+        "gridCount": 0,
+        "landcoverDistribution": {
+            "80": 1
+        },
+        "landcoverBreakdown": [],
+        "mode": "aggregated",
+        "perGridThresholdEnter": 50,
+        "perGridThresholdExit": 50,
+        "audioParams": {
+            "busTargets": [0, 0, 0, 0, 1],
+            "busNames": ["tree", "crop", "urban", "bare", "water"],
+            "oceanLevel": 1,
+            "proximity": 0,
+            "coverage": 0
+        }
+    }
+}

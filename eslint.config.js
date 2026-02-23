@@ -5,7 +5,7 @@ const prettierConfig = require('eslint-config-prettier');
 module.exports = [
     // Global ignores
     {
-        ignores: ['node_modules/', 'server/node_modules/', 'data/', 'gee/'],
+        ignores: ['node_modules/', 'server/node_modules/', 'data/', 'gee-scripts/'],
     },
 
     // server/**/*.js — Node.js ES2020

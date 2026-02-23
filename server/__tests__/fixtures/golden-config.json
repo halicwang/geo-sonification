@@ -1,0 +1,21 @@
+{
+    "description": "GET /api/config golden fixture: static server configuration with default env vars",
+    "expected": {
+        "wsPort": 3001,
+        "httpPort": 3000,
+        "gridSize": 0.5,
+        "landcoverMeta": {
+            "10": { "name": "Tree/Forest", "color": "#2D6A4F" },
+            "20": { "name": "Shrubland", "color": "#A67C52" },
+            "30": { "name": "Grassland", "color": "#7CB518" },
+            "40": { "name": "Cropland", "color": "#D4A843" },
+            "50": { "name": "Built-up/Urban", "color": "#8D99AE" },
+            "60": { "name": "Bare/Sparse", "color": "#B8A99A" },
+            "70": { "name": "Snow/Ice", "color": "#D0E1F9" },
+            "80": { "name": "Water", "color": "#4895EF" },
+            "90": { "name": "Wetland", "color": "#48BFE3" },
+            "95": { "name": "Mangroves", "color": "#40916C" },
+            "100": { "name": "Moss/Lichen", "color": "#8CB369" }
+        }
+    }
+}

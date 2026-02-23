@@ -578,7 +578,7 @@ async function loadGridData() {
     if (gridData.length === 0) {
         throw new Error(
             '[CSV] No usable grid data found.\n' +
-                'Please run gee/*.js in GEE to export new CSVs into data/raw/, ensure headers include new columns like nightlight_p90, then delete data/cache/ and restart.'
+                'Please run gee-scripts/*.js in GEE to export new CSVs into data/raw/, ensure headers include new columns like nightlight_p90, then delete data/cache/ and restart.'
         );
     }
 

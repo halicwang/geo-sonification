@@ -19,6 +19,9 @@ The project uses three lighthouse documents:
 | `OPEN-PLATFORM-SPEC` | Normative contracts (`MUST/SHOULD/MAY`) | Highest — defines what to build |
 | `MIGRATION-PLAN` | Phase sequencing, evidence, rollback | Second — defines delivery order |
 | `IMPLEMENTATION-GUIDE` | Technical rationale + engineering packets | Third — defines why and how |
+| Stage plans (`P*/`) | Granular ordered steps within each phase | Fourth — defines step-by-step execution |
+
+Stage execution plans live in `docs/plans/M3/P*/` (e.g., `P0/2026-02-22-M3P0-1-production-code-changes.md`). See `CLAUDE.md` § "Planning Hierarchy" for the canonical Milestone → Phase → Stage definition. Each phase subdirectory contains numbered stage files that break the phase's work packets into concrete, sequenced implementation steps. Implementation agents MUST consult the relevant `P*/` folder before executing any phase.
 
 ### 0.1 Three-Document Use
 The Three-Document Protocol is defined authoritatively in `OPEN-PLATFORM-SPEC` §0.1. This document inherits all protocol rules and adds no overrides.

@@ -5,5 +5,7 @@ data/cache/
 data/tiles/
 *.maxpat
 .claude/
+docs/plans/
+docs/devlog/
 package-lock.json
 server/package-lock.json

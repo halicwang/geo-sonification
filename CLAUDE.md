@@ -14,17 +14,36 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 - Node.js 18+, Express, WebSocket (`ws`).
 - Do not introduce new npm dependencies without explicit approval.
 
+## Planning Hierarchy
+
+Development is organized in three levels:
+
+| Level         | ID pattern         | Scope                                                                              | Location                                       |
+| ------------- | ------------------ | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Milestone** | `M1`, `M2`, `M3` … | Major development cycle                                                            | `docs/plans/M<n>/`                             |
+| **Phase**     | `P0` – `P5`        | Delivery unit within a milestone; has its own requirements, DoD, and evidence gate | `docs/plans/M<n>/` (three lighthouse docs)     |
+| **Stage**     | `1`, `2`, `3` …    | Sequential execution step within a phase; one concrete task                        | `docs/plans/M<n>/P<n>/` (numbered stage files) |
+
+- **Milestone** sets the overall goal (e.g., M3 = Open Platform).
+- **Phase** groups related work packets with shared requirements and a phase-exit gate (e.g., P0 = Compatibility Guardrails).
+- **Stage** is a single ordered step inside a phase (e.g., P0-1 = production code changes, P0-2 = fixture infrastructure).
+
+Stage file naming: `YYYY-MM-DD-M<milestone>P<phase>-<stage>-<kebab-title>.md`
+Example: `docs/plans/M3/P0/2026-02-22-M3P0-1-production-code-changes.md` → Milestone 3, Phase 0, Stage 1.
+
 ## Directory Conventions
 
-| Directory     | Purpose                                                      | File naming                    |
-| ------------- | ------------------------------------------------------------ | ------------------------------ |
-| `server/`     | Node.js backend                                              | kebab-case (`mode-manager.js`) |
-| `frontend/`   | Plain HTML/CSS/JS map client, no build tools                 | —                              |
-| `data/raw/`   | GEE exports — source of truth, do not edit manually          | —                              |
-| `data/cache/` | Derived data, auto-rebuilt by server — do not edit or commit | —                              |
-| `gee/`        | Google Earth Engine export scripts                           | —                              |
-| `docs/`       | Design documents and dev logs                                | —                              |
-| `scripts/`    | Utility scripts                                              | —                              |
+| Directory           | Purpose                                                      | File naming                                    |
+| ------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| `server/`           | Node.js backend                                              | kebab-case (`mode-manager.js`)                 |
+| `frontend/`         | Plain HTML/CSS/JS map client, no build tools                 | —                                              |
+| `data/raw/`         | GEE exports — source of truth, do not edit manually          | —                                              |
+| `data/cache/`       | Derived data, auto-rebuilt by server — do not edit or commit | —                                              |
+| `gee-scripts/`      | Google Earth Engine export scripts                           | —                                              |
+| `docs/plans/`       | Design proposals, milestone specs, migration plans           | —                                              |
+| `docs/plans/M*/P*/` | Stage execution plans (granular steps within each phase)     | `YYYY-MM-DD-M<n>P<n>-<stage>-<kebab-title>.md` |
+| `docs/devlog/`      | Development logs and debugging records (`M1/`, `M2/`, `M3/`) | —                                              |
+| `scripts/`          | Utility scripts                                              | —                                              |
 
 ## Naming Conventions
 
@@ -33,39 +52,27 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 - Server source files: `kebab-case.js`
 - Test files: `server/__tests__/<module-name>.test.js`
 
-## Core Design Principles
-
-1. **`config.js` is the single source for runtime configuration.** All thresholds, ports, and tunable parameters live in `server/config.js`. No magic numbers in other files.
-
-2. **`audio-metrics.js` is the audio computation module.** Bus fold-mapping (`LC_CLASS_ORDER`, `computeBusTargets`), ocean detection (`computeOceanLevel`), proximity, and delta calculations all live in `server/audio-metrics.js`.
-
-3. **Single-responsibility modules.** Each server module does one thing.
-
-4. **State factory pattern.** Per-client state is created via `createXxxState()` factory functions (e.g. `createModeState()`, `createDeltaState()`).
-
-5. **EMA smoothing.** Exponential moving average is the standard approach for smoothing signal transitions.
-
 ## Do Not Touch
 
 - **`data/raw/*.csv`** — GEE export results. Changes require re-export via GEE scripts.
 
 ## Documentation Update Policy
 
-- **Feature changes** (new modules, architectural adjustments) must update all three files: `DEVLOG.md`, `README.md`, and `ARCHITECTURE.md`.
-- **Bug fixes and internal refactors** only require a `DEVLOG.md` entry; update `README.md` and `ARCHITECTURE.md` as needed.
+- **Feature changes** (new modules, architectural adjustments) must: create a new entry in `docs/devlog/M*/`, add it to the `docs/DEVLOG.md` index, and update `README.md` and `docs/ARCHITECTURE.md` when behavior changed.
+- **Bug fixes and internal refactors** require a new `docs/devlog/M*/` entry + index link; update `README.md` and `docs/ARCHITECTURE.md` if external behavior or operator workflow changed.
 
 ## Development Workflow
 
+- Mandatory pre-flight before any code/docs change: read `docs/DEVLOG.md` `Recording Guide` and the latest relevant entries for the milestone being edited.
 - After changing server code, run `npm test` and confirm all tests pass.
 - Common commands: `npm start`, `npm run dev`, `npm test`, `npm run clean:cache`
 - Environment variables: see `.env.example`
 
 ## Reference Docs
 
-- System architecture: `ARCHITECTURE.md`
-- Design decisions: `DEVLOG.md`
-- Sound design: `docs/2026-02-19-sound-design-plan.md`
+- System architecture: `docs/ARCHITECTURE.md`
+- Design decisions: `docs/DEVLOG.md`
 - Data schema: `data/raw/SCHEMA.md`
-- Open platform spec: `docs/2026-02-21-MILESTONE-3-OPEN-PLATFORM-SPEC.md`
-- Migration plan: `docs/2026-02-21-MILESTONE-3-MIGRATION-PLAN.md`
-- Implementation guide: `docs/2026-02-22-MILESTONE-3-IMPLEMENTATION-GUIDE.md`
+- Open platform spec: `docs/plans/M3/2026-02-21-M3-open-platform-spec.md`
+- Migration plan: `docs/plans/M3/2026-02-21-M3-migration-plan.md`
+- Implementation guide: `docs/plans/M3/2026-02-22-M3-implementation-guide.md`

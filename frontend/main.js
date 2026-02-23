@@ -91,6 +91,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             engine.setOnLoadingUpdate(renderLoadingUI);
             await engine.start();
+
+            // Re-send current viewport so the server returns fresh
+            // audioParams.  Previous params arrived before AudioContext
+            // existed — pendingParams covers the cached copy, but a fresh
+            // request ensures the targets match the *current* map view
+            // (the user may have panned while audio was off).
+            onViewportChange();
         } else {
             state.runtime.audioEnabled = false;
             state.els.audioIcon.textContent = '\u25B6';

@@ -157,6 +157,12 @@ export async function refreshServerConfig() {
         if (!response.ok) return;
         const config = await response.json();
 
+        if (config.wsPort && Number.isFinite(config.wsPort)) {
+            state.config.wsPort = config.wsPort;
+            // Rebuild cached WS URL so reconnects use the updated port
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            state.runtime.wsUrl = `${protocol}//${window.location.hostname}:${config.wsPort}`;
+        }
         if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
             state.config.gridSize = config.gridSize;
         }

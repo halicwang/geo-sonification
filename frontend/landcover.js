@@ -37,7 +37,7 @@ export function getLandcoverName(landcoverClass) {
     const meta = state.config.landcoverMeta[cls];
     if (meta) return meta.name;
     const rawKey = String(landcoverClass);
-    if (!warnedUnknownLandcoverClasses.has(rawKey)) {
+    if (!warnedUnknownLandcoverClasses.has(rawKey) && warnedUnknownLandcoverClasses.size < 50) {
         warnedUnknownLandcoverClasses.add(rawKey);
         if (warnedUnknownLandcoverClasses.size <= 20) {
             console.warn('Unknown landcover_class received:', landcoverClass);

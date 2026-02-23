@@ -62,13 +62,14 @@ let wssServer = null;
 // ============ Runtime Monitoring ============
 let _statsCounter = { viewports: 0, totalMs: 0 };
 const STATS_LOG_INTERVAL_MS = 30000;
-setInterval(() => {
+const _statsTimer = setInterval(() => {
     if (_statsCounter.viewports > 0) {
         const avgMs = (_statsCounter.totalMs / _statsCounter.viewports).toFixed(1);
         console.log(`[Stats] ${_statsCounter.viewports} viewport updates in 30s, avg ${avgMs}ms`);
         _statsCounter = { viewports: 0, totalMs: 0 };
     }
-}, STATS_LOG_INTERVAL_MS).unref();
+}, STATS_LOG_INTERVAL_MS);
+_statsTimer.unref();
 
 // ============ Shared Helpers ============
 
@@ -256,6 +257,10 @@ function attachWsHandler(wss) {
             ws.isAlive = true;
         });
 
+        ws.on('error', (err) => {
+            console.error('WebSocket client error:', err.message || err);
+        });
+
         ws.on('message', (message) => {
             try {
                 const data = JSON.parse(message);
@@ -295,14 +300,24 @@ function attachWsHandler(wss) {
                     const payload = JSON.stringify({ type: 'stats', ...result.stats });
 
                     // Default: unicast (only sender). BROADCAST_STATS=1: all clients.
+                    // Note: broadcast strips per-client fields (mode, delta) since
+                    // those are computed from the sender's viewport, not the receiver's.
                     if (BROADCAST_STATS) {
+                        // eslint-disable-next-line no-unused-vars
+                        const { mode, ...sharedStats } = result.stats;
+                        const broadcastPayload = JSON.stringify({
+                            type: 'stats',
+                            ...sharedStats,
+                            broadcast: true,
+                        });
                         wss.clients.forEach((client) => {
                             if (
                                 client.readyState === WebSocket.OPEN &&
                                 client.bufferedAmount < WS_MAX_BUFFERED
                             ) {
                                 try {
-                                    client.send(payload);
+                                    // Sender gets full payload; others get shared-only
+                                    client.send(client === ws ? payload : broadcastPayload);
                                 } catch (sendErr) {
                                     console.error('Failed to send to client:', sendErr);
                                 }
@@ -407,6 +422,7 @@ async function startServer() {
  */
 function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down...`);
+    clearInterval(_statsTimer);
     if (wssServer) {
         wssServer.clients.forEach((client) => client.terminate());
         wssServer.close();

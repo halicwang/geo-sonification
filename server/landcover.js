@@ -77,7 +77,7 @@ function normalizeLandcoverClass(value) {
         }
     }
 
-    if (!warnedNearestFallback.has(rounded)) {
+    if (!warnedNearestFallback.has(rounded) && warnedNearestFallback.size < 50) {
         warnedNearestFallback.add(rounded);
         if (warnedNearestFallback.size <= 20) {
             console.warn(

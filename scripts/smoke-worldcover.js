@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Zixiao Wang
+
 /**
  * P0 WorldCover smoke test — validates the full server stack (HTTP + WebSocket).
  *

@@ -372,6 +372,23 @@ body {
     color: var(--color-text-dim);
 }
 
+/* ============ Data Attribution (bottom of info panel) ============ */
+.data-attribution {
+    margin-top: 10px;
+    font-size: 0.65em;
+    line-height: 1.4;
+    color: var(--color-text-dim);
+}
+
+.data-attribution a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+}
+
+.data-attribution a:hover {
+    text-decoration: underline;
+}
+
 /* ============ Responsive: narrow screens ============ */
 @media (max-width: 600px) {
     #info-panel {

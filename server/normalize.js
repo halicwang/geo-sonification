@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Zixiao Wang
+
 /**
  * Normalization: p1/p99 percentile scaling, fingerprint-based caching.
  * Used by spatial.js to map raw metric averages into [0,1].

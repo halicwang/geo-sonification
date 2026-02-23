@@ -17,8 +17,8 @@ Interactive map that sonifies geographic data in real-time using Web Audio.
 │  interaction    │      │   stats +       │
 │                 │      │   audioParams   │
 │  audio-engine ◄─┼──────┼── busTargets,   │
-│  (Web Audio)    │  WS  │   oceanLevel   │
-└─────────────────┘      └────────────────┘
+│  (Web Audio)    │  WS  │   oceanLevel    │
+└─────────────────┘      └─────────────────┘
 ```
 
 ## Quick Start
@@ -42,7 +42,7 @@ Double-click `start.command` to start the Node server and open the browser.
 ### 3. Install Dependencies
 
 ```bash
-cd server && npm install
+npm install && cd server && npm install
 ```
 
 ### 4. Run GEE Export (if not done)
@@ -123,6 +123,9 @@ geo-sonification/
 └── scripts/
     ├── check_csv_schema.js                # CSV schema validator
     ├── build-tiles.js                     # Tile builder
+    ├── benchmark-viewport.js              # Viewport processing benchmark
+    ├── smoke-worldcover.js                # WorldCover smoke test
+    ├── setup-git-hooks.sh                 # Git hooks installer
     └── test_bounds_validation.sh          # Bounds regression test
 ```
 

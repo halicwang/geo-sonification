@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Zixiao Wang
+
 /**
  * Tests for land coverage ratio (theoreticalGridCount / landCoverageRatio).
  * Uses area-weighted aggregation (default mode).

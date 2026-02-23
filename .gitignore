@@ -24,5 +24,6 @@ sonification/
 frontend/audio/ambience/*.wav
 
 # AI agent config (local-only)
+.claude/
 AGENTS.md
 CLAUDE.md

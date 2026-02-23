@@ -17,4 +17,3 @@ Improved loop playback continuity in the browser audio engine to remove audible 
 ## Files changed
 
 - `frontend/audio-engine.js` — loop playback graph, equal-power crossfade envelopes, and load-generation state guard (modified)
-

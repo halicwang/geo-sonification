@@ -1,0 +1,57 @@
+geo-sonification
+Copyright 2026 Zixiao Wang
+
+This product includes software developed by Zixiao Wang.
+
+=========================================================================
+Third-Party Dependencies
+=========================================================================
+
+This project depends on the following third-party libraries at runtime.
+They are NOT distributed with this source code; each is governed by its
+own license.
+
+-------------------------------------------------------------------------
+Server-side (npm)
+-------------------------------------------------------------------------
+
+  Express        — MIT   — https://expressjs.com/
+  cors           — MIT   — https://github.com/expressjs/cors
+  csv-parse      — MIT   — https://csv.js.org/parse/
+  ws             — MIT   — https://github.com/websockets/ws
+
+-------------------------------------------------------------------------
+Client-side (loaded via CDN, not bundled)
+-------------------------------------------------------------------------
+
+  Mapbox GL JS v3  — Mapbox Terms of Service (proprietary)
+                     https://www.mapbox.com/legal/tos
+                     Requires a valid Mapbox access token.
+
+  mapbox-pmtiles   — MIT — https://github.com/versatiles-org/mapbox-pmtiles
+
+=========================================================================
+Data Sources
+=========================================================================
+
+This project uses the following third-party datasets. They are NOT
+distributed with this source code; users must obtain them independently
+(via Google Earth Engine export).
+
+  ESA WorldCover 2021
+    © ESA WorldCover project 2021
+    Contains modified Copernicus Sentinel data (2021) processed by ESA
+    WorldCover consortium.
+    License: CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+    https://esa-worldcover.org/
+
+  WorldPop 2020
+    © WorldPop, University of Southampton
+    License: CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+    https://www.worldpop.org/
+
+  VIIRS Nighttime Lights (NASA/NOAA)
+    Earth Observation Group, Payne Institute for Public Policy
+    Colorado School of Mines
+    Public domain (U.S. Government work)
+    https://eogdata.mines.edu/products/vnl/

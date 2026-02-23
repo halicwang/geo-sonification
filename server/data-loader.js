@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Zixiao Wang
+
 /**
  * Grid data loading: CSV parsing, schema validation, caching, deduplication.
  *

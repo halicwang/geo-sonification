@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Zixiao Wang
+
 /**
  * Tests that Water (class 80) cells are excluded from landcover aggregation
  * in both discrete-fallback and continuous-distribution branches.

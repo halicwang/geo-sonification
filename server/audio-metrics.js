@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Zixiao Wang
+
 /**
  * Pure helpers for audio-parameter computation:
  * proximity, delta, bus fold-mapping, ocean detection.

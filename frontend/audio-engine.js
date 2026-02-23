@@ -49,6 +49,15 @@ const LOOP_TIMER_LOOKAHEAD_SECONDS = 0.1;
 /** Small buffer to avoid stop()/ramp edge clicks at swap boundary. */
 const VOICE_STOP_GRACE_SECONDS = 0.01;
 
+/** Tiny lookahead used only when a swap callback wakes up late. */
+const LATE_SWAP_LOOKAHEAD_SECONDS = 0.005;
+
+/** Fade duration used by the recovery path when overlap window was missed. */
+const RECOVERY_FADE_SECONDS = 0.02;
+
+/** Warn when swap callback lateness exceeds this threshold. */
+const SWAP_LATE_WARN_SECONDS = 0.025;
+
 /** Resolution of equal-power fade curves. */
 const XF_CURVE_POINTS = 128;
 
@@ -283,9 +292,10 @@ function resetAllBusLoops() {
  * Create one one-shot voice for the given bus at an absolute start time.
  * @param {number} busIndex
  * @param {number} startTime
+ * @param {number} [offsetSeconds=0]
  * @returns {LoopSlot|null}
  */
-function createVoice(busIndex, startTime) {
+function createVoice(busIndex, startTime, offsetSeconds = 0) {
     if (!audioCtx || !buffers[busIndex] || !gains[busIndex]) return null;
 
     const source = audioCtx.createBufferSource();
@@ -295,7 +305,11 @@ function createVoice(busIndex, startTime) {
     source.connect(gain);
     gain.connect(gains[busIndex]);
 
-    source.start(startTime, 0);
+    const maxOffset = Math.max(0, source.buffer.duration - 1e-3);
+    const safeOffset = Number.isFinite(offsetSeconds)
+        ? Math.max(0, Math.min(offsetSeconds, maxOffset))
+        : 0;
+    source.start(startTime, safeOffset);
 
     return { source, gain };
 }
@@ -346,8 +360,10 @@ function scheduleVoiceStop(source, gain, stopTime) {
  * Perform one bus-local crossfade at a shared global swap time.
  * @param {number} busIndex
  * @param {number} swapTime
+ * @param {number} phaseDelaySeconds
+ * @param {number} incomingOffsetSeconds
  */
-function swapBusVoice(busIndex, swapTime) {
+function swapBusVoice(busIndex, swapTime, phaseDelaySeconds, incomingOffsetSeconds) {
     const state = busLoops[busIndex];
     const outgoingIndex = state.activeSlot;
     const incomingIndex = outgoingIndex === 0 ? 1 : 0;
@@ -356,29 +372,41 @@ function swapBusVoice(busIndex, swapTime) {
     // Defensive cleanup in case an old incoming slot wasn't released yet.
     stopSlotImmediately(state.slots[incomingIndex]);
 
-    const incoming = createVoice(busIndex, swapTime);
+    const incoming = createVoice(busIndex, swapTime, incomingOffsetSeconds);
     if (!incoming || !incoming.gain) return;
 
-    incoming.gain.gain.cancelScheduledValues(swapTime);
-    incoming.gain.gain.setValueAtTime(0, swapTime);
-    incoming.gain.gain.setValueCurveAtTime(FADE_IN_CURVE, swapTime, LOOP_OVERLAP_SECONDS);
-    incoming.gain.gain.setValueAtTime(1, swapTime + LOOP_OVERLAP_SECONDS);
+    const overlapRemaining = LOOP_OVERLAP_SECONDS - Math.max(0, phaseDelaySeconds);
 
-    if (outgoing.source && outgoing.gain) {
+    if (outgoing.source && outgoing.gain && overlapRemaining > 1e-3) {
+        incoming.gain.gain.cancelScheduledValues(swapTime);
+        incoming.gain.gain.setValueAtTime(0, swapTime);
+        incoming.gain.gain.setValueCurveAtTime(FADE_IN_CURVE, swapTime, overlapRemaining);
+        incoming.gain.gain.setValueAtTime(1, swapTime + overlapRemaining);
+
         outgoing.gain.gain.cancelScheduledValues(swapTime);
         outgoing.gain.gain.setValueAtTime(1, swapTime);
-        outgoing.gain.gain.setValueCurveAtTime(FADE_OUT_CURVE, swapTime, LOOP_OVERLAP_SECONDS);
-        outgoing.gain.gain.setValueAtTime(0, swapTime + LOOP_OVERLAP_SECONDS);
+        outgoing.gain.gain.setValueCurveAtTime(FADE_OUT_CURVE, swapTime, overlapRemaining);
+        outgoing.gain.gain.setValueAtTime(0, swapTime + overlapRemaining);
 
         scheduleVoiceStop(
             outgoing.source,
             outgoing.gain,
-            swapTime + LOOP_OVERLAP_SECONDS + VOICE_STOP_GRACE_SECONDS
+            swapTime + overlapRemaining + VOICE_STOP_GRACE_SECONDS
         );
     } else {
-        // First-cycle recovery path if outgoing voice was unexpectedly missing.
+        // Recovery path: overlap window missed (or outgoing unavailable).
         incoming.gain.gain.cancelScheduledValues(swapTime);
         incoming.gain.gain.setValueAtTime(1, swapTime);
+        if (outgoing.source && outgoing.gain) {
+            outgoing.gain.gain.cancelScheduledValues(swapTime);
+            outgoing.gain.gain.setValueAtTime(1, swapTime);
+            outgoing.gain.gain.linearRampToValueAtTime(0, swapTime + RECOVERY_FADE_SECONDS);
+            scheduleVoiceStop(
+                outgoing.source,
+                outgoing.gain,
+                swapTime + RECOVERY_FADE_SECONDS + VOICE_STOP_GRACE_SECONDS
+            );
+        }
     }
 
     state.slots[incomingIndex] = incoming;
@@ -405,18 +433,30 @@ function performGlobalSwap() {
     if (!audioCtx || suspended) return;
     if (!(loopCycleSeconds > 0) || !(nextGlobalSwapTime > 0)) return;
 
-    const swapTime = Math.max(
-        nextGlobalSwapTime,
-        audioCtx.currentTime + LOOP_START_LOOKAHEAD_SECONDS
-    );
+    const plannedSwapTime = nextGlobalSwapTime;
+    const now = audioCtx.currentTime;
+    const swapTime = plannedSwapTime >= now ? plannedSwapTime : now + LATE_SWAP_LOOKAHEAD_SECONDS;
+    const phaseDelaySeconds = Math.max(0, swapTime - plannedSwapTime);
+    const incomingOffsetSeconds = phaseDelaySeconds % loopCycleSeconds;
+
+    if (phaseDelaySeconds > SWAP_LATE_WARN_SECONDS) {
+        console.warn(
+            `[audio-engine] Late loop swap: ${(phaseDelaySeconds * 1000).toFixed(1)}ms behind`
+        );
+    }
 
     for (let i = 0; i < NUM_BUSES; i++) {
         if (buffers[i] && gains[i]) {
-            swapBusVoice(i, swapTime);
+            swapBusVoice(i, swapTime, phaseDelaySeconds, incomingOffsetSeconds);
         }
     }
 
-    nextGlobalSwapTime = swapTime + loopCycleSeconds;
+    let nextPlannedSwapTime = plannedSwapTime + loopCycleSeconds;
+    const minFutureTime = audioCtx.currentTime + LOOP_TIMER_LOOKAHEAD_SECONDS;
+    while (nextPlannedSwapTime <= minFutureTime) {
+        nextPlannedSwapTime += loopCycleSeconds;
+    }
+    nextGlobalSwapTime = nextPlannedSwapTime;
     scheduleGlobalSwap();
 }
 

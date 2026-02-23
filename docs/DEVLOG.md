@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-23 | Fix        | [Web Audio Trigger Phase Sync](devlog/M2/2026-02-23-M2-web-audio-trigger-phase-sync.md)                                                                                                       |
 | 2026-02-23 | Fix        | [Web Audio Loop Crossfade Stability](devlog/M2/2026-02-23-M2-web-audio-loop-crossfade-stability.md)                                                                                           |
 | 2026-02-23 | Refactor   | [~~M3 Doc Hierarchy Reorganization~~](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-23-M3-doc-hierarchy-reorganization.md) _(M3 deprecated)_                                |
 | 2026-02-22 | Fix        | [Pre-Commit Prettier Guard](devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-22-M3-pre-commit-prettier-guard.md) _(M3 — milestone deprecated, changes retained)_               |

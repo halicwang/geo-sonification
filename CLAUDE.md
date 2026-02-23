@@ -40,20 +40,20 @@ geo-sonification is a real-time geographic data sonification system. A Node.js s
 
 ## Documentation Update Policy
 
-- **Feature changes** (new modules, architectural adjustments) must: create a new entry in `docs/devlog/M*/`, add it to the `DEVLOG.md` index, and update `README.md` and `ARCHITECTURE.md` when behavior changed.
-- **Bug fixes and internal refactors** require a new `docs/devlog/M*/` entry + index link; update `README.md` and `ARCHITECTURE.md` if external behavior or operator workflow changed.
+- **Feature changes** (new modules, architectural adjustments) must: create a new entry in `docs/devlog/M*/`, add it to the `docs/DEVLOG.md` index, and update `README.md` and `docs/ARCHITECTURE.md` when behavior changed.
+- **Bug fixes and internal refactors** require a new `docs/devlog/M*/` entry + index link; update `README.md` and `docs/ARCHITECTURE.md` if external behavior or operator workflow changed.
 
 ## Development Workflow
 
-- Mandatory pre-flight before any code/docs change: read `DEVLOG.md` `Recording Guide` and the latest relevant entries for the milestone being edited.
+- Mandatory pre-flight before any code/docs change: read `docs/DEVLOG.md` `Recording Guide` and the latest relevant entries for the milestone being edited.
 - After changing server code, run `npm test` and confirm all tests pass.
 - Common commands: `npm start`, `npm run dev`, `npm test`, `npm run clean:cache`
 - Environment variables: see `.env.example`
 
 ## Reference Docs
 
-- System architecture: `ARCHITECTURE.md`
-- Design decisions: `DEVLOG.md`
+- System architecture: `docs/ARCHITECTURE.md`
+- Design decisions: `docs/DEVLOG.md`
 - Data schema: `data/raw/SCHEMA.md`
 - Open platform spec: `docs/plans/M3/2026-02-21-M3-open-platform-spec.md`
 - Migration plan: `docs/plans/M3/2026-02-21-M3-migration-plan.md`

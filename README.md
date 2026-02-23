@@ -77,7 +77,6 @@ geo-sonification/
 ├── package.json                          # Root scripts: start, dev, check:csv, clean:cache
 ├── .env.example                          # All configurable env vars with defaults
 ├── start.command                         # macOS one-click launcher (double-click)
-├── DEVLOG.md                             # Development log
 ├── data/
 │   ├── raw/                              # GEE-exported CSVs (source data, do not delete)
 │   │   ├── SCHEMA.md                     # Data contract (fields, types, ranges)
@@ -88,6 +87,8 @@ geo-sonification/
 │   └── tiles/                            # PMTiles (built by scripts/build-tiles.js)
 │       └── grids.pmtiles
 ├── docs/
+│   ├── ARCHITECTURE.md                   # System architecture
+│   ├── DEVLOG.md                         # Development log index + recording guide
 │   ├── plans/                            # Design proposals, milestone specs
 │   ├── devlog/                           # Development logs and debugging records
 │   └── guides/                           # Implementation guides

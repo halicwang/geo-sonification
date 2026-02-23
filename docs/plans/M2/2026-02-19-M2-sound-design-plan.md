@@ -4,7 +4,7 @@
 
 This is an interactive map sonification project. Users interact with a Mapbox map in the browser; the frontend sends viewport bounds to a Node.js server via WebSocket. The server queries pre-processed CSV data (exported from Google Earth Engine), computes geographic statistics for the current viewport, and sends normalized values to Max/MSP via OSC (UDP port 7400) for sound generation.
 
-The project repository structure, existing OSC message formats, data pipeline, and all design decisions are documented in `README.md` and `DEVLOG.md`. **Read both files completely, along with all source files in `server/`, before starting any work.** Understand the existing architecture, naming conventions, error handling patterns, and the design principle recorded in DEVLOG: "extend with independent addresses, never modify existing message formats."
+The project repository structure, existing OSC message formats, data pipeline, and all design decisions are documented in `README.md` and `docs/DEVLOG.md`. **Read both files completely, along with all source files in `server/`, before starting any work.** Understand the existing architecture, naming conventions, error handling patterns, and the design principle recorded in DEVLOG: "extend with independent addresses, never modify existing message formats."
 
 ---
 
@@ -117,7 +117,7 @@ On the first viewport update for a client (no previous snapshot), send all-zero 
 - `server/config.js` — new config constants (`DT_MIN_MS`, `DT_MAX_MS`, `DELTA_RATE_CEILING`)
 - `.env.example` — document new env vars
 
-Update `DEVLOG.md` with this change.
+Update `docs/DEVLOG.md` with this change.
 
 ---
 
@@ -152,7 +152,7 @@ If the viewport contains zero grid cells (ocean-only area, data gap, or extreme 
 - `server/config.js` — `PROXIMITY_UPPER`, `PROXIMITY_LOWER` constants
 - `.env.example` — document new env vars
 
-Update `DEVLOG.md`.
+Update `docs/DEVLOG.md`.
 
 ---
 
@@ -411,7 +411,7 @@ Create `sonification/granulator_README.md` with:
 
 ---
 
-## Task 8: Update README.md and DEVLOG.md
+## Task 8: Update README.md and docs/DEVLOG.md
 
 ### README.md updates
 
@@ -435,7 +435,7 @@ Add to the "OSC Messages" section:
 - `/delta/magnitude` (float 0–1) — Overall change magnitude: `0.5 * sum(|current_i - prev_i|)`. 0 = minimal, 1 = dramatic shift
 - `/delta/rate` (float 0–1) — Rate of change: magnitude per second, normalized. Distinguishes slow panning from fast flicking. Uses clamped dt (50–5000ms) to handle edge cases
 
-### DEVLOG.md updates
+### docs/DEVLOG.md updates
 
 Add a new dated entry recording:
 
@@ -462,7 +462,7 @@ Add a new dated entry recording:
 
 ## Execution Order
 
-1. **Read all existing code** — `README.md`, `DEVLOG.md`, all files in `server/`, `frontend/app.js`
+1. **Read all existing code** — `README.md`, `docs/DEVLOG.md`, all files in `server/`, `frontend/app.js`
 2. **Task 6** — Create sample directory structure (simplest, establishes foundation)
 3. **Task 2** — `/proximity` (simple logic, dependency for later tasks)
 4. **Task 1** — `/delta` (builds on existing per-client state, includes shared schema extraction groundwork)
@@ -532,7 +532,7 @@ The 8 tasks are grouped into 3 independently verifiable milestones. Each milesto
 
 | Step | Task                                     | What it delivers                                                                   |
 | ---- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
-| C.1  | Task 8 — README.md and DEVLOG.md updates | Complete documentation of new OSC messages, sound design decisions, architecture   |
+| C.1  | Task 8 — README.md and docs/DEVLOG.md updates | Complete documentation of new OSC messages, sound design decisions, architecture   |
 | C.2  | Task 7 — Granulator _(optional)_         | JS-based granular synthesis module with 4-voice polyphony and proximity modulation |
 
 **Verification**:

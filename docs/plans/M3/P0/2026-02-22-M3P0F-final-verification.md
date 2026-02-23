@@ -50,7 +50,7 @@ Stop the server after smoke test completes.
 
 ### 4. DEVLOG Entry
 
-Add an entry to `DEVLOG.md` documenting the P0 work. Follow the existing entry format in the file.
+Add an entry to `docs/DEVLOG.md` documenting the P0 work. Follow the existing entry format in the file.
 
 Entry should cover:
 - **What:** P0 Compatibility Guardrails — golden baseline tests locking processViewport() output
@@ -101,7 +101,7 @@ ls server/__tests__/helpers/make-cell.js \
 # server/__tests__/spatial-landcover.test.js (makeCell → import)
 # server/__tests__/index.startup.test.js (close helpers → import)
 # package.json (benchmark + smoke scripts)
-# DEVLOG.md (new entry)
+# docs/DEVLOG.md (new entry)
 ```
 
 ## Exit

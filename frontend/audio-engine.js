@@ -129,8 +129,6 @@ let globalSwapTimerId = null;
 // ── EMA state ──
 const busTargets = new Float64Array(NUM_BUSES);
 const busSmoothed = new Float64Array(NUM_BUSES);
-let oceanTarget = 0;
-let oceanSmoothed = 0;
 let coverageTarget = 1;
 let coverageSmoothed = 1;
 let proximityTarget = 0;
@@ -395,12 +393,18 @@ function swapBusVoice(busIndex, swapTime, phaseDelaySeconds, incomingOffsetSecon
         incoming.gain.gain.cancelScheduledValues(swapTime);
         incoming.gain.gain.setValueAtTime(0, swapTime);
         incoming.gain.gain.setValueCurveAtTime(FADE_IN_CURVE, swapTime, overlapRemaining);
-        incoming.gain.gain.setValueAtTime(1, swapTime + overlapRemaining);
+        incoming.gain.gain.setValueAtTime(
+            1,
+            swapTime + overlapRemaining + VOICE_STOP_GRACE_SECONDS
+        );
 
         outgoing.gain.gain.cancelScheduledValues(swapTime);
         outgoing.gain.gain.setValueAtTime(1, swapTime);
         outgoing.gain.gain.setValueCurveAtTime(FADE_OUT_CURVE, swapTime, overlapRemaining);
-        outgoing.gain.gain.setValueAtTime(0, swapTime + overlapRemaining);
+        outgoing.gain.gain.setValueAtTime(
+            0,
+            swapTime + overlapRemaining + VOICE_STOP_GRACE_SECONDS
+        );
 
         scheduleVoiceStop(
             outgoing.source,
@@ -584,12 +588,16 @@ async function loadAllSamples(generation) {
     if (loadingStarted) return;
     loadingStarted = true;
 
-    await Promise.all(PRIORITY_FIRST.map((i) => loadSample(i, generation)));
-    if (generation !== loadGeneration) return;
-    await Promise.all(PRIORITY_SECOND.map((i) => loadSample(i, generation)));
-    if (generation !== loadGeneration) return;
+    try {
+        await Promise.all(PRIORITY_FIRST.map((i) => loadSample(i, generation)));
+        if (generation !== loadGeneration) return;
+        await Promise.all(PRIORITY_SECOND.map((i) => loadSample(i, generation)));
+        if (generation !== loadGeneration) return;
 
-    startAllSources();
+        startAllSources();
+    } finally {
+        loadingStarted = false;
+    }
 }
 
 /**
@@ -641,7 +649,6 @@ function startAllSources() {
  *
  * @param {Object} audioParams
  * @param {number[]} audioParams.busTargets - 5 floats [tree, crop, urban, bare, water]
- * @param {number} audioParams.oceanLevel - 0.0 to 1.0
  * @param {number} audioParams.coverage - 0-1 land/grid coverage ratio
  */
 function update(audioParams) {
@@ -666,9 +673,6 @@ function update(audioParams) {
         for (let i = 0; i < NUM_BUSES; i++) {
             busTargets[i] = clamp01(audioParams.busTargets[i] ?? 0);
         }
-    }
-    if (typeof audioParams.oceanLevel === 'number') {
-        oceanTarget = clamp01(audioParams.oceanLevel);
     }
     if (typeof audioParams.coverage === 'number') {
         coverageTarget = clamp01(audioParams.coverage);
@@ -700,7 +704,6 @@ function rafLoop() {
     for (let i = 0; i < NUM_BUSES; i++) {
         busSmoothed[i] += alpha * (busTargets[i] - busSmoothed[i]);
     }
-    oceanSmoothed += alpha * (oceanTarget - oceanSmoothed);
     coverageSmoothed += alpha * (coverageTarget - coverageSmoothed);
     proximitySmoothed += alpha * (proximityTarget - proximitySmoothed);
 
@@ -722,10 +725,7 @@ function rafLoop() {
     for (let i = 0; i < NUM_BUSES; i++) {
         if (gains[i] && buffers[i]) {
             const landValue = busSmoothed[i] * landMix;
-            const value =
-                i === WATER_BUS_INDEX
-                    ? Math.max(landValue, Math.max(oceanSmoothed, oceanMix))
-                    : landValue;
+            const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
             gains[i].gain.value = value;
         }
     }
@@ -765,8 +765,8 @@ function handleVisibilityChange() {
             for (let i = 0; i < NUM_BUSES; i++) {
                 busSmoothed[i] = busTargets[i];
             }
-            oceanSmoothed = oceanTarget;
             coverageSmoothed = coverageTarget;
+            proximitySmoothed = proximityTarget;
             lastEmaTime = performance.now();
             startRaf();
             scheduleGlobalSwap();
@@ -784,6 +784,8 @@ function handleVisibilityChange() {
  * Must be called from a user gesture (browser autoplay policy).
  */
 async function start() {
+    if (audioCtx && !suspended) return;
+
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)({
             sampleRate: 48000,
@@ -834,8 +836,6 @@ async function start() {
     // an audible pop (e.g. water bus loud → stop → navigate to desert → start)
     busTargets.fill(0);
     busSmoothed.fill(0);
-    oceanTarget = 0;
-    oceanSmoothed = 0;
     coverageTarget = 1;
     coverageSmoothed = 1;
     proximityTarget = 0;

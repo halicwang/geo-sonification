@@ -4,12 +4,16 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 ![Node](https://img.shields.io/badge/node-18%2B-green)
 
+<p align="center">
+  <img src="docs/images/075bd0e64435f1650a993001f7dd3338.png" alt="Geo-Sonification Demo — globe view with real-time land cover sonification" width="800">
+</p>
+
 Turn geographic data into soundscapes. This project maps ESA WorldCover satellite land-cover data to ambient audio — pan across forests, cities, and oceans, and hear the landscape change in real-time, powered by your own Google Earth Engine exports.
 
 ### How it works
 
 - Frontend (Mapbox) visualizes **landcover** and streams viewport metrics to a Node.js server.
-- The server computes audio parameters (5-bus fold-mapping, ocean detection) and sends them back via WebSocket.
+- The server computes audio parameters (5-bus fold-mapping, land-coverage ratio) and sends them back via WebSocket.
 - The browser's Web Audio engine plays ambient soundscapes that reflect the land cover composition of the current viewport.
 
 ## Architecture
@@ -23,7 +27,7 @@ Turn geographic data into soundscapes. This project maps ESA WorldCover satellit
 │  interaction    │      │   stats +       │
 │                 │      │   audioParams   │
 │  audio-engine ◄─┼──────┼── busTargets,   │
-│  (Web Audio)    │  WS  │   oceanLevel    │
+│  (Web Audio)    │  WS  │   coverage …    │
 └─────────────────┘      └─────────────────┘
 ```
 
@@ -149,7 +153,7 @@ This project uses a single, "now-only" schema (no historical time series). Each 
 ## Viewport Aggregation (V2)
 
 - Landcover breakdown and dominant landcover are computed **by land area** (sum of `land_area_km2`), not by grid count.
-- Forest and population are aggregated by land area: forest = `sum(forest_area_km2) / sum(land_area_km2) * 100`, population density = `sum(population_total) / sum(land_area_km2)`.
+- Forest and population are aggregated by land area: forest = area-weighted mean of per-cell `forest_pct`, population density = `sum(population_total) / sum(land_area_km2)`.
 - Nightlight uses `nightlight_p90` for viewport display; viewport nightlight is an **area-weighted mean of cell-level p90** (approximation, not the true viewport p90).
 
 All server settings (ports, aggregation mode, coastal weighting, cache) are configurable via environment variables. See `.env.example` for a full list with defaults. Copy to `.env` and modify as needed.
@@ -166,7 +170,7 @@ Five ambience WAV loops represent different land cover types. Land cover channel
 - **Bare bus**: class 60
 - **Water bus**: classes 70, 80 + coverage-linear ocean mix
 
-The audio engine uses `coverage` (grid percentage) as a linear mix rule: `coverage=0%` maps to `land:ocean = 0:100`, `coverage=40%` maps to `100:0`, and values in between interpolate linearly (`land=coverage/0.4`, `ocean=1-land`). Above 40%, playback stays pure land. Ocean rides the Water bus while land buses are attenuated in low-coverage mode. EMA smoothing provides gradual transitions.
+The audio engine uses `coverage` (fraction of viewport cells with land data) as a linear mix rule: `coverage=0%` maps to `land:ocean = 0:100`, `coverage=40%` maps to `100:0`, and values in between interpolate linearly (`land=coverage/0.4`, `ocean=1-land`). Above 40%, playback stays pure land. Ocean rides the Water bus while land buses are attenuated in low-coverage mode. EMA smoothing provides gradual transitions.
 
 Ambience WAV files are local assets and are not committed (`frontend/audio/ambience/*.wav` is ignored). If a file is missing, the corresponding bus shows a loading error and that bus remains silent.
 
@@ -225,12 +229,12 @@ Connect to `ws://localhost:3001` (default port, configurable via `WS_PORT`).
 { "type": "viewport", "bounds": [west, south, east, north], "zoom": 12.5 }
 ```
 
-`zoom` is required — it drives the proximity signal and low-pass filter cutoff frequency.
+`zoom` is recommended — it drives the proximity signal and low-pass filter cutoff frequency. If omitted, proximity defaults to 0 (fully distant).
 
 **Server → Client:**
 
 ```json
-{ "type": "stats", "audioParams": { "busTargets": [...], "oceanLevel": 0.0, "proximity": 0.8, "coverage": 0.95 }, "mode": "aggregated", ... }
+{ "type": "stats", "audioParams": { "busTargets": [...], "proximity": 0.8, "coverage": 0.95 }, "mode": "aggregated", ... }
 ```
 
 See `docs/ARCHITECTURE.md` for the full field reference.

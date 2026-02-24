@@ -275,6 +275,56 @@ body {
     pointer-events: none;
 }
 
+/* ============ Loop Progress Bar (bottom of screen) ============ */
+.loop-progress {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    cursor: pointer;
+    z-index: 500;
+    display: flex;
+    align-items: flex-end;
+}
+
+.loop-progress.hidden {
+    display: none;
+}
+
+.loop-progress-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--color-accent);
+    transition: height 0.15s;
+    pointer-events: none;
+}
+
+.loop-progress:hover .loop-progress-fill,
+.loop-progress.dragging .loop-progress-fill {
+    height: 5px;
+}
+
+.loop-progress-handle {
+    position: absolute;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+}
+
+.loop-progress:hover .loop-progress-handle,
+.loop-progress.dragging .loop-progress-handle {
+    opacity: 1;
+}
+
 /* ============ Mapbox Overrides (match dark theme) ============ */
 .mapboxgl-ctrl-attrib {
     background: var(--color-bg-70) !important;

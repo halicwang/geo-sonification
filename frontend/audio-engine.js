@@ -905,6 +905,57 @@ function isRunning() {
     return audioCtx !== null && audioCtx.state === 'running' && !suspended;
 }
 
+/**
+ * Get current playback position within the loop cycle.
+ * @returns {{ progress: number, cycleSeconds: number } | null}
+ */
+function getLoopProgress() {
+    if (!audioCtx || suspended || !(loopCycleSeconds > 0) || !(nextGlobalSwapTime > 0)) {
+        return null;
+    }
+    const elapsed = loopCycleSeconds - (nextGlobalSwapTime - audioCtx.currentTime);
+    const progress = clamp01(elapsed / loopCycleSeconds);
+    return { progress, cycleSeconds: loopCycleSeconds };
+}
+
+/**
+ * Seek all buses to a position within the current loop cycle.
+ * Stops all current voices and restarts them at the target buffer offset.
+ * @param {number} progress - 0.0 to 1.0 position within the cycle
+ */
+function seekLoop(progress) {
+    if (!audioCtx || suspended || !(loopCycleSeconds > 0)) return;
+
+    const targetOffset = clamp01(progress) * loopCycleSeconds;
+    const now = audioCtx.currentTime;
+    const startTime = now + LATE_SWAP_LOOKAHEAD_SECONDS;
+
+    clearGlobalSwapTimer();
+    resetAllBusLoops();
+
+    let startedCount = 0;
+    for (let i = 0; i < NUM_BUSES; i++) {
+        if (!buffers[i] || !gains[i]) continue;
+
+        const voice = createVoice(i, startTime, targetOffset);
+        if (!voice || !voice.gain) continue;
+
+        voice.gain.gain.setValueAtTime(1, startTime);
+
+        const state = busLoops[i];
+        state.slots[0] = voice;
+        state.slots[1] = createEmptyLoopSlot();
+        state.activeSlot = 0;
+        startedCount++;
+    }
+
+    if (startedCount === 0) return;
+
+    const remainingCycle = loopCycleSeconds - targetOffset;
+    nextGlobalSwapTime = startTime + remainingCycle;
+    scheduleGlobalSwap();
+}
+
 export const engine = {
     start,
     stop,
@@ -912,4 +963,6 @@ export const engine = {
     getLoadingStates,
     setOnLoadingUpdate,
     isRunning,
+    getLoopProgress,
+    seekLoop,
 };

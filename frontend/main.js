@@ -42,6 +42,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         audioIcon: document.getElementById('audio-icon'),
         audioStatus: document.getElementById('audio-status'),
         audioLoading: document.getElementById('audio-loading'),
+        loopProgress: document.getElementById('loop-progress'),
+        loopProgressFill: document.getElementById('loop-progress-fill'),
+        loopProgressHandle: document.getElementById('loop-progress-handle'),
     };
 
     getClientId();
@@ -95,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             engine.setOnLoadingUpdate(renderLoadingUI);
             await engine.start();
+            startProgressLoop();
 
             // Re-send current viewport so the server returns fresh
             // audioParams.  Previous params arrived before AudioContext
@@ -109,6 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.els.audioStatus.textContent = 'Audio off';
             state.els.audioLoading.classList.add('hidden');
             await engine.stop();
+            stopProgressLoop();
         }
     });
 
@@ -159,4 +164,84 @@ document.addEventListener('DOMContentLoaded', async () => {
                 'Loading (' + readyCount + '/' + states.length + ')';
         }
     }
+
+    // ── Loop progress bar ──
+    let progressRafId = null;
+    let isDragging = false;
+
+    function updateProgressBar() {
+        const info = engine.getLoopProgress();
+        if (!info) {
+            if (!state.els.loopProgress.classList.contains('hidden')) {
+                state.els.loopProgress.classList.add('hidden');
+            }
+            // Keep polling — samples may still be loading; the loop will
+            // yield a valid progress once startAllSources() has fired.
+            progressRafId = requestAnimationFrame(updateProgressBar);
+            return;
+        }
+
+        state.els.loopProgress.classList.remove('hidden');
+
+        if (!isDragging) {
+            const pct = (info.progress * 100).toFixed(2) + '%';
+            state.els.loopProgressFill.style.width = pct;
+            state.els.loopProgressHandle.style.left = pct;
+        }
+
+        progressRafId = requestAnimationFrame(updateProgressBar);
+    }
+
+    function startProgressLoop() {
+        if (progressRafId !== null) return;
+        progressRafId = requestAnimationFrame(updateProgressBar);
+    }
+
+    function stopProgressLoop() {
+        if (progressRafId !== null) {
+            cancelAnimationFrame(progressRafId);
+            progressRafId = null;
+        }
+        state.els.loopProgress.classList.add('hidden');
+    }
+
+    /** @param {PointerEvent} e */
+    function progressFromPointerEvent(e) {
+        const rect = state.els.loopProgress.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        return Math.max(0, Math.min(1, x / rect.width));
+    }
+
+    /** @param {number} progress */
+    function setVisualProgress(progress) {
+        const pct = (progress * 100).toFixed(2) + '%';
+        state.els.loopProgressFill.style.width = pct;
+        state.els.loopProgressHandle.style.left = pct;
+    }
+
+    state.els.loopProgress.addEventListener('pointerdown', (e) => {
+        if (!engine.isRunning()) return;
+        isDragging = true;
+        state.els.loopProgress.classList.add('dragging');
+        state.els.loopProgress.setPointerCapture(e.pointerId);
+        setVisualProgress(progressFromPointerEvent(e));
+    });
+
+    state.els.loopProgress.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        setVisualProgress(progressFromPointerEvent(e));
+    });
+
+    state.els.loopProgress.addEventListener('pointerup', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        state.els.loopProgress.classList.remove('dragging');
+        engine.seekLoop(progressFromPointerEvent(e));
+    });
+
+    state.els.loopProgress.addEventListener('pointercancel', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        state.els.loopProgress.classList.remove('dragging');
+    });
 });

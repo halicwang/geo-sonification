@@ -18,6 +18,12 @@
         <!-- Full-screen Mapbox map (layers added by app.js) -->
         <div id="map"></div>
 
+        <!-- Loop cycle progress bar (bottom of screen, visible only during playback) -->
+        <div id="loop-progress" class="loop-progress hidden">
+            <div id="loop-progress-fill" class="loop-progress-fill"></div>
+            <div id="loop-progress-handle" class="loop-progress-handle"></div>
+        </div>
+
         <!-- Floating info panel: stats updated in real time by updateUI() -->
         <div id="info-panel">
             <h2>Geo-Sonification</h2>

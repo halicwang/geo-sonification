@@ -1,6 +1,12 @@
 # Geo-Sonification: Interactive Sound Map
 
-Interactive map that sonifies geographic data in real-time using Web Audio.
+[![CI](https://github.com/halicwang/geo-sonification/actions/workflows/ci.yml/badge.svg)](https://github.com/halicwang/geo-sonification/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+![Node](https://img.shields.io/badge/node-18%2B-green)
+
+Turn geographic data into soundscapes. This project maps ESA WorldCover satellite land-cover data to ambient audio — pan across forests, cities, and oceans, and hear the landscape change in real-time, powered by your own Google Earth Engine exports.
+
+### How it works
 
 - Frontend (Mapbox) visualizes **landcover** and streams viewport metrics to a Node.js server.
 - The server computes audio parameters (5-bus fold-mapping, ocean detection) and sends them back via WebSocket.
@@ -23,15 +29,17 @@ Interactive map that sonifies geographic data in real-time using Web Audio.
 
 ## Quick Start
 
-### One-click start (macOS)
-
-Double-click `start.command` to start the Node server and open the browser.
+> **One-click start (macOS):** Double-click `start.command` to start the Node server and open the browser. Requires steps 1–4 below to be completed first.
 
 ### 1. Prerequisites
 
 - Node.js 18+
 - Mapbox account (for access token)
-- Five ambience WAV files in `frontend/audio/ambience/`: `tree.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav` (`*.wav` is gitignored; repository only includes `.gitkeep`)
+- Five ambience WAV files in `frontend/audio/ambience/` (gitignored; repository only includes `.gitkeep`):
+    - **Files**: `tree.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`
+    - **Format**: WAV, 48 kHz, stereo recommended (mono works — Web Audio upmixes automatically)
+    - **Duration**: any length, but the last 1.875 s must be an exact copy of the first 1.875 s. The engine crossfades outgoing/incoming voices over this overlap window — identical head and tail content is what makes the loop seamless. Total duration = desired cycle length + 1.875 s (e.g., 120 s cycle → 121.875 s file)
+    - **Source**: record your own or obtain ambient loops from sites like [Freesound](https://freesound.org/). Trim to your desired cycle length in a DAW, then copy the first 1.875 s and append it to the end
 
 ### 2. Get Mapbox Token
 
@@ -71,6 +79,9 @@ npm start
 - Listen to the ambient soundscape change as the viewport moves across different land cover types
 
 ## File Structure
+
+<details>
+<summary>Click to expand full directory tree</summary>
 
 ```
 geo-sonification/
@@ -128,6 +139,8 @@ geo-sonification/
     ├── setup-git-hooks.sh                 # Git hooks installer
     └── test_bounds_validation.sh          # Bounds regression test
 ```
+
+</details>
 
 ## Data Organization
 
@@ -196,6 +209,44 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 
 ## API Endpoints
 
-- `GET /health` - Health check (used by `start.command` to wait for readiness)
-- `GET /api/config` - Server configuration (ports, grid size, landcover metadata)
-- `POST /api/viewport` - Calculate stats for given bounds
+### HTTP
+
+- `GET /health` — Health check (used by `start.command` to wait for readiness)
+- `GET /api/config` — Server configuration (ports, grid size, landcover metadata)
+- `POST /api/viewport` — Calculate stats for given bounds (HTTP fallback when WebSocket is unavailable)
+
+### WebSocket
+
+Connect to `ws://localhost:3001` (default port, configurable via `WS_PORT`).
+
+**Client → Server:**
+
+```json
+{ "type": "viewport", "bounds": [west, south, east, north], "zoom": 12.5 }
+```
+
+`zoom` is required — it drives the proximity signal and low-pass filter cutoff frequency.
+
+**Server → Client:**
+
+```json
+{ "type": "stats", "audioParams": { "busTargets": [...], "oceanLevel": 0.0, "proximity": 0.8, "coverage": 0.95 }, "mode": "aggregated", ... }
+```
+
+See `docs/ARCHITECTURE.md` for the full field reference.
+
+## Contributing
+
+Contributions are welcome! Please open an issue first to discuss what you would like to change before submitting a pull request.
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) enforced by [commitlint](https://commitlint.js.org/). Run `npm run lint` and `npm run format:check` before committing.
+
+## Data Sources
+
+This project uses the following third-party datasets (obtained independently via Google Earth Engine export, not distributed with this repository):
+
+- **ESA WorldCover 2021** — CC BY 4.0 — https://esa-worldcover.org/
+- **WorldPop 2020** — CC BY 4.0 — https://www.worldpop.org/
+- **VIIRS Nighttime Lights (NASA/NOAA)** — Public domain — https://eogdata.mines.edu/products/vnl/
+
+See `NOTICE` for full attribution details.

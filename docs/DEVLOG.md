@@ -23,6 +23,8 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-24 | Feature    | [Loop Cycle Progress Bar](devlog/M2/2026-02-24-M2-loop-progress-bar.md)                                                                                                                       |
+| 2026-02-23 | Fix        | [Audio Engine Code Review Fixes](devlog/M2/2026-02-23-M2-audio-engine-code-review-fixes.md)                                                                                                   |
 | 2026-02-23 | Fix        | [Coverage 0–40 Linear Land/Ocean Mapping](devlog/M2/2026-02-23-M2-coverage-linear-0-40-mapping.md)                                                                                            |
 | 2026-02-23 | Fix        | [Grid-Coverage Land/Ocean Mix Rule](devlog/M2/2026-02-23-M2-grid-coverage-land-ocean-mix.md)                                                                                                  |
 | 2026-02-23 | Fix        | [Low-Pass Floor and Ocean Boost Logic Tuning](devlog/M2/2026-02-23-M2-lowpass-ocean-logic-tuning.md)                                                                                          |

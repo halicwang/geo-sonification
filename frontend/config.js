@@ -66,7 +66,7 @@ function fallbackWsPort() {
 }
 
 /** Build a WebSocket URL from the given port. */
-function buildWsUrl(port) {
+export function buildWsUrl(port) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.hostname}:${port}`;
 }

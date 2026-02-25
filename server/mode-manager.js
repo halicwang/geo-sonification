@@ -113,6 +113,11 @@ function applyHysteresis(modeState, gridCount) {
  * @returns {string}
  */
 function getHttpClientKey(req) {
+    /**
+     * Validate and trim a client ID value. Handles arrays (e.g. repeated headers).
+     * @param {*} value
+     * @returns {string} Trimmed ID, or empty string if invalid
+     */
     const normalizeClientId = (value) => {
         if (Array.isArray(value)) {
             for (const item of value) {
@@ -130,8 +135,8 @@ function getHttpClientKey(req) {
 
     const body = req.body;
     if (body && typeof body === 'object') {
-        const clientId = typeof body.clientId === 'string' ? body.clientId.trim() : '';
-        if (clientId && clientId.length <= 128) {
+        const clientId = normalizeClientId(body.clientId);
+        if (clientId) {
             return `client:${clientId}`;
         }
     }
@@ -143,15 +148,14 @@ function getHttpClientKey(req) {
         return `header-client:${headerClientId}`;
     }
 
-    const xff = normalizeClientId(req.headers['x-forwarded-for']);
+    const xff = req.headers['x-forwarded-for'];
+    const xffValue = Array.isArray(xff) ? xff[0] : xff;
     const ip =
-        typeof xff === 'string' && xff.trim() !== ''
-            ? xff.split(',')[0].trim()
+        typeof xffValue === 'string' && xffValue.trim() !== ''
+            ? xffValue.split(',')[0].trim()
             : req.ip || req.socket?.remoteAddress || 'unknown';
 
-    const safeUa =
-        normalizeClientId(req.get ? req.get('user-agent') : req.headers['user-agent']) || 'unknown';
-    return `${ip}|${safeUa}`;
+    return `ip:${ip}`;
 }
 
 module.exports = {

@@ -425,7 +425,8 @@ function calculateAreaWeightedStats(gridsInView) {
     let sumPopulationTotal = 0;
     let sumNightlightMeanWeighted = 0;
     let sumNightlightP90Weighted = 0;
-    let sumNightlightLandArea = 0; // separate weight for nightlight (excludes -1 sentinel cells)
+    let sumNightlightMeanLandArea = 0; // separate weight for nightlight mean (excludes -1 sentinel)
+    let sumNightlightP90LandArea = 0; // separate weight for nightlight p90 (excludes -1 sentinel)
 
     gridsInView.forEach((g) => {
         const baseLandAreaKm2 = Number.isFinite(g.land_area_km2) ? g.land_area_km2 : 0;
@@ -450,13 +451,17 @@ function calculateAreaWeightedStats(gridsInView) {
         // average density. wMult (coastal down-weight) appears in both numerator and denominator,
         // so the ratio is a valid weighted average of per-cell density = pop_i / area_i.
         sumPopulationTotal += (g.population_total ?? 0) * wMult;
-        // Exclude NIGHTLIGHT_NO_DATA sentinel (no VIIRS data) from nightlight weighted averages
+        // Exclude NIGHTLIGHT_NO_DATA sentinel (no VIIRS data) from nightlight weighted averages.
+        // Mean and p90 tracked independently so one missing metric doesn't exclude the other.
         const nlMean = g.nightlight_mean ?? NIGHTLIGHT_NO_DATA;
         const nlP90 = g.nightlight_p90 ?? NIGHTLIGHT_NO_DATA;
-        if (nlMean >= 0 && nlP90 >= 0) {
+        if (nlMean >= 0) {
             sumNightlightMeanWeighted += nlMean * weightLandAreaKm2;
+            sumNightlightMeanLandArea += weightLandAreaKm2;
+        }
+        if (nlP90 >= 0) {
             sumNightlightP90Weighted += nlP90 * weightLandAreaKm2;
-            sumNightlightLandArea += weightLandAreaKm2;
+            sumNightlightP90LandArea += weightLandAreaKm2;
         }
 
         const cellDist = getCellLcDistribution(g);
@@ -476,12 +481,12 @@ function calculateAreaWeightedStats(gridsInView) {
     });
 
     // Weighted averages (divide accumulated sums by total weight)
-    // Nightlight uses its own weight sum to exclude cells with -1 sentinel (no VIIRS data)
+    // Mean and p90 use separate weight sums to exclude cells with -1 sentinel independently
     const avgNightlightMean =
-        sumNightlightLandArea > 0 ? sumNightlightMeanWeighted / sumNightlightLandArea : 0;
+        sumNightlightMeanLandArea > 0 ? sumNightlightMeanWeighted / sumNightlightMeanLandArea : 0;
     // NOTE: area-weighted mean of cell-level p90, not a true viewport percentile
     const avgNightlightP90 =
-        sumNightlightLandArea > 0 ? sumNightlightP90Weighted / sumNightlightLandArea : 0;
+        sumNightlightP90LandArea > 0 ? sumNightlightP90Weighted / sumNightlightP90LandArea : 0;
     const avgPopulation = sumLandAreaKm2 > 0 ? sumPopulationTotal / sumLandAreaKm2 : 0;
     const avgForest = sumLandAreaKm2 > 0 ? sumForestPctWeighted / sumLandAreaKm2 : 0;
 

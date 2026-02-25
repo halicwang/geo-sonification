@@ -1,5 +1,4 @@
 @echo off
-setlocal enabledelayedexpansion
 title Geo-Sonification
 
 echo ========================================
@@ -9,15 +8,22 @@ echo.
 
 cd /d "%~dp0"
 
-:: Load .env if present (skip # comment lines, strip inline # comments)
-if not exist ".env" goto :env_done
-for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
-    call :setenv "%%A" "%%B"
+:: ---- Phase 1: Load .env WITHOUT delayed expansion ----
+:: This prevents ! characters in values (e.g. tokens, URLs) from being
+:: corrupted by cmd.exe's delayed-expansion parser.
+:: Inline # comments are not stripped (acceptable trade-off for correctness).
+setlocal
+if exist ".env" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
+        set "%%A=%%B"
+    )
 )
-:env_done
 
 if not defined HTTP_PORT set HTTP_PORT=3000
 if not defined WS_PORT set WS_PORT=3001
+
+:: ---- Phase 2: Enable delayed expansion (inherits .env variables) ----
+setlocal enabledelayedexpansion
 
 :: Check prerequisites
 where node >nul 2>&1 || (
@@ -113,38 +119,5 @@ if defined SERVER_PID (
     taskkill /PID !SERVER_PID! /F >nul 2>&1
 )
 endlocal
+endlocal
 exit /b 0
-
-:: ---- Subroutines ----
-
-:setenv
-:: Set env var from .env line, stripping inline # comments and trailing spaces.
-set "_key=%~1"
-set "_val=%~2"
-if not defined _val (
-    set "%_key%="
-    goto :eof
-)
-:: Strip inline comment: " #..." (space-hash) to match bash semantics.
-:: A bare # inside a value (e.g. token=pk.abc#def) is preserved.
-call :strip_inline_comment
-:: Trim trailing spaces
-:trim_loop
-if "!_val:~-1!"==" " (
-    set "_val=!_val:~0,-1!"
-    goto :trim_loop
-)
-set "%_key%=!_val!"
-goto :eof
-
-:strip_inline_comment
-:: Walk _val char-by-char; truncate at first " #" (space-hash).
-set "_i=0"
-:_sic_loop
-if "!_val:~%_i%,1!"=="" goto :eof
-if "!_val:~%_i%,2!"==" #" (
-    if !_i! equ 0 (set "_val=") else set "_val=!_val:~0,%_i%!"
-    goto :eof
-)
-set /a "_i+=1"
-goto :_sic_loop

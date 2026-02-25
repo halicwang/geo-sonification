@@ -303,8 +303,8 @@ function attachWsHandler(wss) {
                     const payload = JSON.stringify({ type: 'stats', ...result.stats });
 
                     // Default: unicast (only sender). BROADCAST_STATS=1: all clients.
-                    // Note: broadcast strips per-client fields (mode, delta) since
-                    // those are computed from the sender's viewport, not the receiver's.
+                    // Note: broadcast strips per-client field (mode) since
+                    // it is computed from the sender's viewport, not the receiver's.
                     if (BROADCAST_STATS) {
                         // eslint-disable-next-line no-unused-vars
                         const { mode, ...sharedStats } = result.stats;

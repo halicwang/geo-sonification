@@ -10,7 +10,7 @@
  * @module frontend/map
  */
 
-import { state, VIEWPORT_DEBOUNCE, getClientId } from './config.js';
+import { state, VIEWPORT_DEBOUNCE, getClientId, buildWsUrl } from './config.js';
 import { escapeHtml, getLandcoverName } from './landcover.js';
 import { updateUI } from './ui.js';
 import { engine } from './audio-engine.js';
@@ -163,8 +163,7 @@ export async function refreshServerConfig() {
         if (config.wsPort && Number.isFinite(config.wsPort)) {
             state.config.wsPort = config.wsPort;
             // Rebuild cached WS URL so reconnects use the updated port
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            state.runtime.wsUrl = `${protocol}//${window.location.hostname}:${config.wsPort}`;
+            state.runtime.wsUrl = buildWsUrl(config.wsPort);
         }
         if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
             state.config.gridSize = config.gridSize;

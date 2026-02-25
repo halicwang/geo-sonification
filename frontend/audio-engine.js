@@ -393,18 +393,10 @@ function swapBusVoice(busIndex, swapTime, phaseDelaySeconds, incomingOffsetSecon
         incoming.gain.gain.cancelScheduledValues(swapTime);
         incoming.gain.gain.setValueAtTime(0, swapTime);
         incoming.gain.gain.setValueCurveAtTime(FADE_IN_CURVE, swapTime, overlapRemaining);
-        incoming.gain.gain.setValueAtTime(
-            1,
-            swapTime + overlapRemaining + VOICE_STOP_GRACE_SECONDS
-        );
 
         outgoing.gain.gain.cancelScheduledValues(swapTime);
         outgoing.gain.gain.setValueAtTime(1, swapTime);
         outgoing.gain.gain.setValueCurveAtTime(FADE_OUT_CURVE, swapTime, overlapRemaining);
-        outgoing.gain.gain.setValueAtTime(
-            0,
-            swapTime + overlapRemaining + VOICE_STOP_GRACE_SECONDS
-        );
 
         scheduleVoiceStop(
             outgoing.source,
@@ -865,10 +857,11 @@ async function stop() {
     suspended = true;
     cancelRaf();
     stopAllSources();
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
     loadingStarted = false; // allow retry of failed samples on next start()
     let loadingStateChanged = false;
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (loadingStates[i].status === 'loading') {
+        if (loadingStates[i].status === 'loading' || loadingStates[i].status === 'error') {
             loadingStates[i] = { status: 'pending', progress: 0, error: null };
             loadingGenerations[i] = 0;
             loadingStateChanged = true;

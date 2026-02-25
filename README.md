@@ -92,6 +92,7 @@ geo-sonification/
 ├── package.json                          # Root scripts: start, dev, check:csv, clean:cache
 ├── .env.example                          # All configurable env vars with defaults
 ├── start.command                         # macOS one-click launcher (double-click)
+├── start.bat                             # Windows one-click launcher (double-click)
 ├── data/
 │   ├── raw/                              # GEE-exported CSVs (source data, do not delete)
 │   │   ├── SCHEMA.md                     # Data contract (fields, types, ranges)
@@ -135,13 +136,16 @@ geo-sonification/
 │   ├── audio-engine.js                   # Web Audio engine: 5-bus EMA crossfade + ocean detector
 │   ├── audio/ambience/                   # Loopable stereo WAVs (one per bus)
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
-└── scripts/
-    ├── check_csv_schema.js                # CSV schema validator
-    ├── build-tiles.js                     # Tile builder
-    ├── benchmark-viewport.js              # Viewport processing benchmark
-    ├── smoke-worldcover.js                # WorldCover smoke test
-    ├── setup-git-hooks.sh                 # Git hooks installer
-    └── test_bounds_validation.sh          # Bounds regression test
+├── scripts/
+│   ├── check_csv_schema.js                # CSV schema validator
+│   ├── build-tiles.js                     # Tile builder
+│   ├── benchmark-viewport.js              # Viewport processing benchmark
+│   ├── smoke-worldcover.js                # WorldCover smoke test
+│   ├── clean-cache.js                     # Cross-platform cache cleaner
+│   ├── setup-git-hooks.js                 # Cross-platform git hooks installer
+│   ├── setup-git-hooks.sh                 # Git hooks installer (Unix)
+│   └── test_bounds_validation.sh          # Bounds regression test (Unix, requires curl)
+└── .gitattributes                         # Line ending rules (CRLF for .bat)
 ```
 
 </details>

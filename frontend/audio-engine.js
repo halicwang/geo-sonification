@@ -139,6 +139,12 @@ let loopCycleSeconds = 0;
 /** Absolute AudioContext time for next global swap event. */
 let nextGlobalSwapTime = 0;
 
+/** AudioContext time anchor for the first voice start (used for drift-free scheduling). */
+let loopClockOrigin = 0;
+
+/** Number of completed swap cycles since loopClockOrigin. */
+let loopCycleCount = 0;
+
 /** @type {number|null} */
 let globalSwapTimerId = null;
 
@@ -150,11 +156,9 @@ let coverageSmoothed = 1;
 let proximityTarget = 0;
 let proximitySmoothed = 0;
 
-// ── Motion state (client-side: velocity + latitude) ──
+// ── Motion state (client-side drag velocity) ──
 let velocityTarget = 0;
 let velocitySmoothed = 0;
-let latitudeTarget = 0;
-let latitudeSmoothed = 0;
 
 // ── Timing ──
 let lastEmaTime = 0;
@@ -303,6 +307,8 @@ function clearGlobalSwapTimer() {
 function clearLoopClockState() {
     loopCycleSeconds = 0;
     nextGlobalSwapTime = 0;
+    loopClockOrigin = 0;
+    loopCycleCount = 0;
     clearGlobalSwapTimer();
 }
 
@@ -483,10 +489,14 @@ function performGlobalSwap() {
         }
     }
 
-    let nextPlannedSwapTime = plannedSwapTime + loopCycleSeconds;
+    // Use multiplication from a fixed origin instead of repeated addition
+    // to prevent floating-point drift over long sessions.
+    loopCycleCount++;
+    let nextPlannedSwapTime = loopClockOrigin + loopCycleCount * loopCycleSeconds;
     const minFutureTime = audioCtx.currentTime + LOOP_TIMER_LOOKAHEAD_SECONDS;
     while (nextPlannedSwapTime <= minFutureTime) {
-        nextPlannedSwapTime += loopCycleSeconds;
+        loopCycleCount++;
+        nextPlannedSwapTime = loopClockOrigin + loopCycleCount * loopCycleSeconds;
     }
     nextGlobalSwapTime = nextPlannedSwapTime;
     scheduleGlobalSwap();
@@ -647,6 +657,8 @@ function startAllSources() {
     if (startedCount === 0) return;
 
     loopCycleSeconds = cycleSeconds;
+    loopClockOrigin = when;
+    loopCycleCount = 1;
     nextGlobalSwapTime = when + cycleSeconds;
     scheduleGlobalSwap();
 }
@@ -697,15 +709,14 @@ function update(audioParams) {
 }
 
 /**
- * Update client-side motion signals (drag velocity + latitude).
+ * Update client-side motion signals.
  * Called directly from map.js — bypasses server for zero latency.
  *
  * @param {number} velocity - normalized drag speed 0–1
- * @param {number} latitude - viewport center latitude in degrees (-90–90)
+ * @param {number} [_latitude] - reserved for future motion mapping
  */
-function updateMotion(velocity, latitude) {
+function updateMotion(velocity, _latitude) {
     velocityTarget = clamp01(velocity);
-    if (Number.isFinite(latitude)) latitudeTarget = latitude;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -742,9 +753,6 @@ function rafLoop() {
     const velAlpha = dt <= 0 || dt > SNAP_THRESHOLD_MS ? 1.0 : 1 - Math.exp(-dt / velTau);
     velocitySmoothed += velAlpha * (velocityTarget - velocitySmoothed);
 
-    // Latitude: standard EMA
-    latitudeSmoothed += alpha * (latitudeTarget - latitudeSmoothed);
-
     // Low-pass cutoff: exponential map proximity 0→500 Hz, 1→20 kHz
     // Logarithmic spacing matches human pitch perception, so zoom-in and
     // zoom-out feel equally gradual.
@@ -755,17 +763,8 @@ function rafLoop() {
 
     // Q modulation on lpFilter1 only: velocity drives resonance peak
     if (lpFilter1) lpFilter1.Q.value = BASE_Q1 + velocitySmoothed * (MAX_Q1 - BASE_Q1);
-
-    // Latitude → playbackRate: equator (0°) → 1.05, poles (±90°) → 0.95
-    const latFactor = 1.0 - Math.abs(latitudeSmoothed) / 90;
-    const rate = 0.95 + latFactor * 0.1;
-    for (let i = 0; i < NUM_BUSES; i++) {
-        const loop = busLoops[i];
-        for (let s = 0; s < 2; s++) {
-            const src = loop.slots[s].source;
-            if (src) src.playbackRate.value = rate;
-        }
-    }
+    // Keep playbackRate fixed at 1.0. Rate-shifting voices changes the
+    // real loop boundary and makes scheduled retriggers sound late.
 
     // Coverage-controlled linear land/ocean split:
     // - coverage 0%  => land:ocean = 0:100
@@ -830,7 +829,6 @@ function handleVisibilityChange() {
             coverageSmoothed = coverageTarget;
             proximitySmoothed = proximityTarget;
             velocitySmoothed = 0;
-            latitudeSmoothed = latitudeTarget;
             lastEmaTime = performance.now();
             startRaf();
             scheduleGlobalSwap();
@@ -993,7 +991,8 @@ function getLoopProgress() {
 function seekLoop(progress) {
     if (!audioCtx || suspended || !(loopCycleSeconds > 0)) return;
 
-    const targetOffset = clamp01(progress) * loopCycleSeconds;
+    const normalizedProgress = clamp01(progress);
+    const targetOffset = normalizedProgress === 1 ? 0 : normalizedProgress * loopCycleSeconds;
     const now = audioCtx.currentTime;
     const startTime = now + LATE_SWAP_LOOKAHEAD_SECONDS;
 
@@ -1018,8 +1017,9 @@ function seekLoop(progress) {
 
     if (startedCount === 0) return;
 
-    const remainingCycle = loopCycleSeconds - targetOffset;
-    nextGlobalSwapTime = startTime + remainingCycle;
+    loopClockOrigin = startTime - targetOffset;
+    loopCycleCount = 1;
+    nextGlobalSwapTime = loopClockOrigin + loopCycleSeconds;
     scheduleGlobalSwap();
 }
 

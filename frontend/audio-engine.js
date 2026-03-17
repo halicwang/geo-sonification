@@ -41,6 +41,16 @@ const PROXIMITY_SMOOTHING_MS = 120;
 /** If dt exceeds this, snap to target instead of smoothing. */
 const SNAP_THRESHOLD_MS = 2000;
 
+/** Velocity EMA attack (fast rise when dragging starts). */
+const VELOCITY_ATTACK_MS = 50;
+
+/** Velocity EMA decay (slow fade when dragging stops). */
+const VELOCITY_DECAY_MS = 600;
+
+/** lpFilter1 Q range: Butterworth base → resonant peak at max velocity. */
+const BASE_Q1 = 0.5176;
+const MAX_Q1 = 4.0;
+
 /** Crossfade overlap between outgoing and incoming loop voices. */
 const LOOP_OVERLAP_SECONDS = 1.875;
 
@@ -139,6 +149,12 @@ let coverageTarget = 1;
 let coverageSmoothed = 1;
 let proximityTarget = 0;
 let proximitySmoothed = 0;
+
+// ── Motion state (client-side: velocity + latitude) ──
+let velocityTarget = 0;
+let velocitySmoothed = 0;
+let latitudeTarget = 0;
+let latitudeSmoothed = 0;
 
 // ── Timing ──
 let lastEmaTime = 0;
@@ -680,6 +696,18 @@ function update(audioParams) {
     }
 }
 
+/**
+ * Update client-side motion signals (drag velocity + latitude).
+ * Called directly from map.js — bypasses server for zero latency.
+ *
+ * @param {number} velocity - normalized drag speed 0–1
+ * @param {number} latitude - viewport center latitude in degrees (-90–90)
+ */
+function updateMotion(velocity, latitude) {
+    velocityTarget = clamp01(velocity);
+    if (Number.isFinite(latitude)) latitudeTarget = latitude;
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  rAF Loop (applies smoothed values to GainNodes)
 // ════════════════════════════════════════════════════════════════════
@@ -709,11 +737,35 @@ function rafLoop() {
         dt <= 0 || dt > SNAP_THRESHOLD_MS ? 1.0 : 1 - Math.exp(-dt / PROXIMITY_SMOOTHING_MS);
     proximitySmoothed += proxAlpha * (proximityTarget - proximitySmoothed);
 
-    // Low-pass cutoff: linear map proximity 0→500 Hz, 1→20 kHz
-    const cutoff = 500 + proximitySmoothed * 19500;
+    // Velocity: asymmetric EMA (fast attack, slow decay)
+    const velTau = velocityTarget > velocitySmoothed ? VELOCITY_ATTACK_MS : VELOCITY_DECAY_MS;
+    const velAlpha = dt <= 0 || dt > SNAP_THRESHOLD_MS ? 1.0 : 1 - Math.exp(-dt / velTau);
+    velocitySmoothed += velAlpha * (velocityTarget - velocitySmoothed);
+
+    // Latitude: standard EMA
+    latitudeSmoothed += alpha * (latitudeTarget - latitudeSmoothed);
+
+    // Low-pass cutoff: exponential map proximity 0→500 Hz, 1→20 kHz
+    // Logarithmic spacing matches human pitch perception, so zoom-in and
+    // zoom-out feel equally gradual.
+    const cutoff = 500 * Math.pow(40, proximitySmoothed);
     if (lpFilter1) lpFilter1.frequency.value = cutoff;
     if (lpFilter2) lpFilter2.frequency.value = cutoff;
     if (lpFilter3) lpFilter3.frequency.value = cutoff;
+
+    // Q modulation on lpFilter1 only: velocity drives resonance peak
+    if (lpFilter1) lpFilter1.Q.value = BASE_Q1 + velocitySmoothed * (MAX_Q1 - BASE_Q1);
+
+    // Latitude → playbackRate: equator (0°) → 1.05, poles (±90°) → 0.95
+    const latFactor = 1.0 - Math.abs(latitudeSmoothed) / 90;
+    const rate = 0.95 + latFactor * 0.1;
+    for (let i = 0; i < NUM_BUSES; i++) {
+        const loop = busLoops[i];
+        for (let s = 0; s < 2; s++) {
+            const src = loop.slots[s].source;
+            if (src) src.playbackRate.value = rate;
+        }
+    }
 
     // Coverage-controlled linear land/ocean split:
     // - coverage 0%  => land:ocean = 0:100
@@ -777,6 +829,8 @@ function handleVisibilityChange() {
             }
             coverageSmoothed = coverageTarget;
             proximitySmoothed = proximityTarget;
+            velocitySmoothed = 0;
+            latitudeSmoothed = latitudeTarget;
             lastEmaTime = performance.now();
             startRaf();
             scheduleGlobalSwap();
@@ -850,6 +904,8 @@ async function start() {
     coverageSmoothed = 1;
     proximityTarget = 0;
     proximitySmoothed = 0;
+    velocityTarget = 0;
+    velocitySmoothed = 0;
 
     // Replay the last audioParams that arrived before AudioContext existed.
     // This sets busTargets to the correct values for the current viewport so
@@ -971,6 +1027,7 @@ export const engine = {
     start,
     stop,
     update,
+    updateMotion,
     getLoadingStates,
     setOnLoadingUpdate,
     isRunning,

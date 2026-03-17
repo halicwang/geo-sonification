@@ -15,6 +15,15 @@ import { escapeHtml, getLandcoverName } from './landcover.js';
 import { updateUI } from './ui.js';
 import { engine } from './audio-engine.js';
 
+// ============ Motion Tracking ============
+
+/** Max expected drag speed in degrees/second for normalization. */
+const MAX_VELOCITY_DEG_PER_SEC = 50;
+
+let prevCenterLat = 0;
+let prevCenterLon = 0;
+let prevMoveTime = 0;
+
 // ============ Grid Overlay ============
 
 /**
@@ -88,9 +97,29 @@ function getViewportBounds() {
     return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
 }
 
-/** Send the current viewport bounds to the server. */
+/** Send the current viewport bounds to the server and update motion signals. */
 function sendViewport() {
     const boundsArray = getViewportBounds();
+
+    // Compute velocity and latitude for audio engine (client-side, no round-trip)
+    const lat = (boundsArray[1] + boundsArray[3]) / 2;
+    const lon = (boundsArray[0] + boundsArray[2]) / 2;
+    const now = performance.now();
+    const dt = now - prevMoveTime;
+
+    let velocity = 0;
+    if (dt > 0 && dt < 2000) {
+        const dlat = lat - prevCenterLat;
+        const dlon = lon - prevCenterLon;
+        const dist = Math.sqrt(dlat * dlat + dlon * dlon);
+        velocity =
+            Math.min(dist / (dt / 1000), MAX_VELOCITY_DEG_PER_SEC) / MAX_VELOCITY_DEG_PER_SEC;
+    }
+    prevCenterLat = lat;
+    prevCenterLon = lon;
+    prevMoveTime = now;
+
+    engine.updateMotion(velocity, lat);
 
     // Send via WebSocket if connected
     if (state.runtime.ws && state.runtime.ws.readyState === WebSocket.OPEN) {

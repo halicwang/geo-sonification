@@ -27,6 +27,7 @@ export const state = {
         ws: null,
         map: null,
         debounceTimer: null,
+        lastViewportSend: 0,
         clientId: null,
         wsUrl: null,
         wsReconnectDelay: 1000,

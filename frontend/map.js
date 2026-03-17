@@ -88,31 +88,42 @@ function getViewportBounds() {
     return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
 }
 
-/** Debounce viewport changes, then send bounds to server for stats + audio params. */
-export function onViewportChange() {
-    clearTimeout(state.runtime.debounceTimer);
-    state.runtime.debounceTimer = setTimeout(() => {
-        const boundsArray = getViewportBounds();
+/** Send the current viewport bounds to the server. */
+function sendViewport() {
+    const boundsArray = getViewportBounds();
 
-        // Send via WebSocket if connected
-        if (state.runtime.ws && state.runtime.ws.readyState === WebSocket.OPEN) {
-            try {
-                state.runtime.ws.send(
-                    JSON.stringify({
-                        type: 'viewport',
-                        bounds: boundsArray,
-                        zoom: state.runtime.map.getZoom(),
-                    })
-                );
-            } catch (err) {
-                console.error('WebSocket send failed, falling back to HTTP:', err);
-                sendViewportHTTP(boundsArray);
-            }
-        } else {
-            // Fallback to HTTP
+    // Send via WebSocket if connected
+    if (state.runtime.ws && state.runtime.ws.readyState === WebSocket.OPEN) {
+        try {
+            state.runtime.ws.send(
+                JSON.stringify({
+                    type: 'viewport',
+                    bounds: boundsArray,
+                    zoom: state.runtime.map.getZoom(),
+                })
+            );
+        } catch (err) {
+            console.error('WebSocket send failed, falling back to HTTP:', err);
             sendViewportHTTP(boundsArray);
         }
-    }, VIEWPORT_DEBOUNCE);
+    } else {
+        // Fallback to HTTP
+        sendViewportHTTP(boundsArray);
+    }
+}
+
+/** Throttle viewport changes: fire at most once per VIEWPORT_DEBOUNCE ms, with a trailing call. */
+export function onViewportChange() {
+    // Trailing: always schedule a final send after activity stops
+    clearTimeout(state.runtime.debounceTimer);
+    state.runtime.debounceTimer = setTimeout(sendViewport, VIEWPORT_DEBOUNCE);
+
+    // Leading/throttle: send immediately if enough time has elapsed
+    const now = performance.now();
+    if (now - state.runtime.lastViewportSend >= VIEWPORT_DEBOUNCE) {
+        state.runtime.lastViewportSend = now;
+        sendViewport();
+    }
 }
 
 // ============ HTTP Fallback ============
@@ -223,7 +234,7 @@ export function initMap() {
         }
 
         // Set up viewport tracking
-        state.runtime.map.on('moveend', () => {
+        state.runtime.map.on('move', () => {
             if (state.els.zoomLevel) {
                 state.els.zoomLevel.textContent = state.runtime.map.getZoom().toFixed(2);
             }

@@ -32,8 +32,11 @@ const BUS_NAMES = Object.freeze(['forest', 'shrub', 'grass', 'crop', 'urban', 'b
 const WATER_BUS_INDEX = 6;
 const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
 
-/** EMA time constant in ms. */
+/** EMA time constant in ms (bus gains and coverage). */
 const SMOOTHING_TIME_MS = 500;
+
+/** Faster EMA time constant for the low-pass filter proximity signal. */
+const PROXIMITY_SMOOTHING_MS = 120;
 
 /** If dt exceeds this, snap to target instead of smoothing. */
 const SNAP_THRESHOLD_MS = 2000;
@@ -700,7 +703,11 @@ function rafLoop() {
         busSmoothed[i] += alpha * (busTargets[i] - busSmoothed[i]);
     }
     coverageSmoothed += alpha * (coverageTarget - coverageSmoothed);
-    proximitySmoothed += alpha * (proximityTarget - proximitySmoothed);
+
+    // Proximity uses a faster EMA for snappier filter response
+    const proxAlpha =
+        dt <= 0 || dt > SNAP_THRESHOLD_MS ? 1.0 : 1 - Math.exp(-dt / PROXIMITY_SMOOTHING_MS);
+    proximitySmoothed += proxAlpha * (proximityTarget - proximitySmoothed);
 
     // Low-pass cutoff: linear map proximity 0→500 Hz, 1→20 kHz
     const cutoff = 500 + proximitySmoothed * 19500;

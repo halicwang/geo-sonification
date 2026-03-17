@@ -113,9 +113,13 @@ const CROSSHAIR_MIN_ZOOM = 4;
 /** Minimum interval (ms) between crosshair rebuilds during continuous interaction. */
 const CROSSHAIR_THROTTLE = 150;
 let lastCrosshairUpdate = 0;
+let crosshairTrailingTimer = 0;
 
-/** Throttled wrapper: rebuilds crosshairs at most once per CROSSHAIR_THROTTLE ms. */
+/** Throttled wrapper: rebuilds crosshairs at most once per CROSSHAIR_THROTTLE ms, with trailing call. */
 function throttledUpdateCrosshairs() {
+    clearTimeout(crosshairTrailingTimer);
+    crosshairTrailingTimer = setTimeout(updateCrosshairs, CROSSHAIR_THROTTLE);
+
     const now = performance.now();
     if (now - lastCrosshairUpdate >= CROSSHAIR_THROTTLE) {
         lastCrosshairUpdate = now;
@@ -179,7 +183,7 @@ let crosshairCacheKey = '';
  */
 function updateCrosshairs() {
     const map = state.runtime.map;
-    if (!map || !map.getSource('crosshair-source')) return;
+    if (!map.getSource('crosshair-source') || !map.getSource('grid-source')) return;
 
     const zoom = map.getZoom();
 

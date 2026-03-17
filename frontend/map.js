@@ -107,6 +107,66 @@ async function addGridLayer() {
     });
 }
 
+/**
+ * Add floating white-glow country border layers.
+ * Reads source/filter from the built-in admin-0-boundary layer so we stay
+ * in sync with whatever tileset version dark-v11 ships.
+ */
+function addBorderGlowLayers() {
+    const map = state.runtime.map;
+
+    // Read source/filter from the built-in admin-0-boundary style spec
+    // so we stay in sync with whatever tileset version dark-v11 ships.
+    const styleLayers = map.getStyle().layers;
+    const builtinLayer = styleLayers.find((l) => l.id === 'admin-0-boundary');
+    if (!builtinLayer) {
+        console.warn('admin-0-boundary layer not found, skipping border glow');
+        return;
+    }
+
+    const src = builtinLayer.source;
+    const srcLayer = builtinLayer['source-layer'];
+    const filter = builtinLayer.filter;
+
+    // Hide built-in admin-0 layers to avoid visual doubling
+    for (const id of ['admin-0-boundary', 'admin-0-boundary-bg', 'admin-0-boundary-disputed']) {
+        if (map.getLayer(id)) {
+            map.setLayoutProperty(id, 'visibility', 'none');
+        }
+    }
+
+    // Shadow layer: dark offset line for depth
+    map.addLayer({
+        id: 'border-shadow',
+        type: 'line',
+        source: src,
+        'source-layer': srcLayer,
+        filter,
+        paint: {
+            'line-color': 'rgba(0, 0, 0, 0.4)',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 2, 6, 5, 10, 10, 14],
+            'line-blur': ['interpolate', ['linear'], ['zoom'], 2, 6, 5, 10, 10, 14],
+            'line-translate': [0, 3],
+            'line-opacity': 0.6,
+        },
+    });
+
+    // Core line: sharp bright white border
+    map.addLayer({
+        id: 'border-core',
+        type: 'line',
+        source: src,
+        'source-layer': srcLayer,
+        filter,
+        paint: {
+            'line-color': 'rgba(255, 255, 255, 0.9)',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 2, 1.5, 5, 2.5, 10, 3.5],
+            'line-blur': 0,
+            'line-opacity': 1.0,
+        },
+    });
+}
+
 /** Zoom threshold below which crosshair generation is skipped. */
 const CROSSHAIR_MIN_ZOOM = 4;
 
@@ -422,6 +482,9 @@ export function initMap() {
                 err
             );
         }
+
+        // Add floating border glow overlay
+        addBorderGlowLayers();
 
         // Update crosshair corner marks: throttled during drag, full on stop & tile load
         state.runtime.map.on('move', throttledUpdateCrosshairs);

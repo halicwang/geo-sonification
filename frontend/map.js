@@ -68,13 +68,13 @@ async function addGridLayer() {
         'source-layer': 'grids',
         paint: {
             'fill-color': buildLandcoverFillColor(),
-            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.4, 6, 0.55, 10, 0.7],
+            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.4, 4, 0.55, 6, 0],
             'fill-opacity-transition': { duration: 150, delay: 0 },
             'fill-color-transition': { duration: 150, delay: 0 },
         },
     });
 
-    // Grid outline — zoom-dependent: hidden at globe, visible at region/city
+    // Grid outline — zoom-dependent: fades out as crosshairs fade in
     state.runtime.map.addLayer({
         id: 'grid-outline',
         type: 'line',
@@ -83,10 +83,167 @@ async function addGridLayer() {
         paint: {
             'line-color': 'rgba(255, 255, 255, 0.15)',
             'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0, 5, 0.3, 8, 0.8],
-            'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0, 5, 0.5, 8, 1],
+            'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0, 4, 0.5, 6, 0],
             'line-opacity-transition': { duration: 150, delay: 0 },
         },
     });
+
+    // Crosshair overlay — corner marks that fade in at higher zoom
+    const emptyFC = { type: 'FeatureCollection', features: [] };
+    state.runtime.map.addSource('crosshair-source', { type: 'geojson', data: emptyFC });
+    state.runtime.map.addLayer({
+        id: 'crosshair-layer',
+        type: 'line',
+        source: 'crosshair-source',
+        paint: {
+            'line-color': buildLandcoverFillColor(),
+            'line-width': 2,
+            'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0, 6, 1],
+            'line-opacity-transition': { duration: 150, delay: 0 },
+        },
+        layout: {
+            'line-cap': 'butt',
+        },
+    });
+}
+
+/** Zoom threshold below which crosshair generation is skipped. */
+const CROSSHAIR_MIN_ZOOM = 4;
+
+/** Minimum interval (ms) between crosshair rebuilds during continuous interaction. */
+const CROSSHAIR_THROTTLE = 150;
+let lastCrosshairUpdate = 0;
+
+/** Throttled wrapper: rebuilds crosshairs at most once per CROSSHAIR_THROTTLE ms. */
+function throttledUpdateCrosshairs() {
+    const now = performance.now();
+    if (now - lastCrosshairUpdate >= CROSSHAIR_THROTTLE) {
+        lastCrosshairUpdate = now;
+        updateCrosshairs();
+    }
+}
+
+/**
+ * Build crosshair corner-mark LineStrings for a single grid cell.
+ * Returns an array of 8 coordinate pairs (4 corners × 2 arms).
+ */
+function gridCrosshairLines(lon, lat, gridSize) {
+    const s = gridSize;
+    const l = s / 5; // arm length = 1/5 of grid size
+    return [
+        // Bottom-left corner
+        [
+            [lon, lat],
+            [lon + l, lat],
+        ],
+        [
+            [lon, lat],
+            [lon, lat + l],
+        ],
+        // Bottom-right corner
+        [
+            [lon + s, lat],
+            [lon + s - l, lat],
+        ],
+        [
+            [lon + s, lat],
+            [lon + s, lat + l],
+        ],
+        // Top-left corner
+        [
+            [lon, lat + s],
+            [lon + l, lat + s],
+        ],
+        [
+            [lon, lat + s],
+            [lon, lat + s - l],
+        ],
+        // Top-right corner
+        [
+            [lon + s, lat + s],
+            [lon + s - l, lat + s],
+        ],
+        [
+            [lon + s, lat + s],
+            [lon + s, lat + s - l],
+        ],
+    ];
+}
+
+/** Cache key for the last crosshair rebuild (sorted grid_id set). */
+let crosshairCacheKey = '';
+
+/**
+ * Query visible grid cells and update the crosshair GeoJSON source
+ * with corner-mark line features. Skipped at low zoom for performance.
+ */
+function updateCrosshairs() {
+    const map = state.runtime.map;
+    if (!map || !map.getSource('crosshair-source')) return;
+
+    const zoom = map.getZoom();
+
+    if (zoom < CROSSHAIR_MIN_ZOOM) {
+        if (crosshairCacheKey !== '') {
+            crosshairCacheKey = '';
+            map.getSource('crosshair-source').setData({
+                type: 'FeatureCollection',
+                features: [],
+            });
+        }
+        return;
+    }
+
+    // Get all grid cells loaded in the current tile set
+    const raw = map.querySourceFeatures('grid-source', { sourceLayer: 'grids' });
+
+    // Deduplicate by grid_id (tiles at boundaries duplicate features)
+    const seen = new Set();
+    const cells = [];
+    const gridSize = state.config.gridSize || 0.5;
+
+    for (const f of raw) {
+        const id = f.properties.grid_id;
+        if (id == null || seen.has(id)) continue;
+        seen.add(id);
+        cells.push(f);
+    }
+
+    // Skip rebuild if the set of visible cells hasn't changed
+    const ids = Array.from(seen);
+    ids.sort();
+    const cacheKey = ids.join(',');
+    if (cacheKey === crosshairCacheKey) return;
+    crosshairCacheKey = cacheKey;
+
+    // Build crosshair features
+    const features = new Array(cells.length);
+    for (let ci = 0; ci < cells.length; ci++) {
+        const f = cells[ci];
+
+        // Snap polygon centroid to grid origin (robust against tile-boundary clipping)
+        const ring = f.geometry.coordinates[0];
+        let sumLon = 0;
+        let sumLat = 0;
+        const n = ring.length - 1; // exclude closing vertex
+        for (let i = 0; i < n; i++) {
+            sumLon += ring[i][0];
+            sumLat += ring[i][1];
+        }
+        const lon = Math.floor((sumLon / n + 180) / gridSize) * gridSize - 180;
+        const lat = Math.floor((sumLat / n + 90) / gridSize) * gridSize - 90;
+
+        features[ci] = {
+            type: 'Feature',
+            properties: { landcover_class: f.properties.landcover_class },
+            geometry: {
+                type: 'MultiLineString',
+                coordinates: gridCrosshairLines(lon, lat, gridSize),
+            },
+        };
+    }
+
+    map.getSource('crosshair-source').setData({ type: 'FeatureCollection', features });
 }
 
 // ============ Viewport ============
@@ -213,17 +370,17 @@ export async function refreshServerConfig() {
             const newKeys = Object.keys(config.landcoverMeta).sort().join(',');
             state.config.landcoverMeta = config.landcoverMeta;
 
-            // Update map layer if metadata changed and map is ready
+            // Update map layers if metadata changed and map is ready
             if (
                 oldKeys !== newKeys &&
                 state.runtime.map &&
                 state.runtime.map.getLayer('grid-layer')
             ) {
-                state.runtime.map.setPaintProperty(
-                    'grid-layer',
-                    'fill-color',
-                    buildLandcoverFillColor()
-                );
+                const colorExpr = buildLandcoverFillColor();
+                state.runtime.map.setPaintProperty('grid-layer', 'fill-color', colorExpr);
+                if (state.runtime.map.getLayer('crosshair-layer')) {
+                    state.runtime.map.setPaintProperty('crosshair-layer', 'line-color', colorExpr);
+                }
             }
         }
     } catch (err) {
@@ -261,6 +418,14 @@ export function initMap() {
                 err
             );
         }
+
+        // Update crosshair corner marks: throttled during drag, full on stop & tile load
+        state.runtime.map.on('move', throttledUpdateCrosshairs);
+        state.runtime.map.on('moveend', updateCrosshairs);
+        state.runtime.map.on('sourcedata', (e) => {
+            if (e.sourceId === 'grid-source' && e.isSourceLoaded) updateCrosshairs();
+        });
+        updateCrosshairs();
 
         // Set up viewport tracking
         state.runtime.map.on('move', () => {

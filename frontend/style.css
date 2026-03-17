@@ -189,6 +189,76 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* ============ Volume Control ============ */
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.volume-label {
+    font-size: 0.8em;
+    color: var(--color-text-dim);
+    width: 24px;
+    flex-shrink: 0;
+}
+
+.volume-value {
+    font-size: 0.75em;
+    color: var(--color-text-muted);
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    border: none;
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 8px var(--color-accent);
+}
+
+.volume-slider::-moz-range-thumb:hover {
+    box-shadow: 0 0 8px var(--color-accent);
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+}
+
 .stat-row {
     display: flex;
     justify-content: space-between;
@@ -309,19 +379,22 @@ body {
 
 .loop-progress-handle {
     position: absolute;
-    bottom: 0;
+    bottom: -4px;
     width: 12px;
     height: 12px;
     border-radius: 50%;
     background: var(--color-accent);
     transform: translateX(-50%);
     opacity: 0;
-    transition: opacity 0.15s;
+    transition:
+        opacity 0.15s,
+        bottom 0.15s;
     pointer-events: none;
 }
 
 .loop-progress:hover .loop-progress-handle,
 .loop-progress.dragging .loop-progress-handle {
+    bottom: -3px;
     opacity: 1;
 }
 

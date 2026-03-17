@@ -98,6 +98,9 @@ const gains = new Array(NUM_BUSES).fill(null);
 /** @type {GainNode|null} */
 let masterGain = null;
 
+/** User-controlled master volume multiplier (0.0–1.2). */
+let masterVolume = 1.0;
+
 /**
  * Three cascaded lowpass BiquadFilterNodes → 36 dB/oct slope.
  * Inserted between masterGain and audioCtx.destination.
@@ -854,7 +857,7 @@ async function start() {
         });
 
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 1.0;
+        masterGain.gain.value = masterVolume;
 
         // 36 dB/oct low-pass: three cascaded 12 dB/oct biquads.
         // Q values for 6th-order Butterworth (maximally flat, no resonance).
@@ -1023,6 +1026,22 @@ function seekLoop(progress) {
     scheduleGlobalSwap();
 }
 
+/**
+ * Set master volume. Uses setTargetAtTime for click-free transitions.
+ * @param {number} value - 0.0 (mute) to 1.5 (max)
+ */
+function setVolume(value) {
+    masterVolume = Math.max(0, Math.min(1.5, value));
+    if (masterGain && audioCtx) {
+        masterGain.gain.setTargetAtTime(masterVolume, audioCtx.currentTime, 0.015);
+    }
+}
+
+/** @returns {number} Current master volume setting (0.0–1.5). */
+function getVolume() {
+    return masterVolume;
+}
+
 export const engine = {
     start,
     stop,
@@ -1033,4 +1052,6 @@ export const engine = {
     isRunning,
     getLoopProgress,
     seekLoop,
+    setVolume,
+    getVolume,
 };

@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         audioIcon: document.getElementById('audio-icon'),
         audioStatus: document.getElementById('audio-status'),
         audioLoading: document.getElementById('audio-loading'),
+        volumeSlider: document.getElementById('volume-slider'),
+        volumeValue: document.getElementById('volume-value'),
         loopProgress: document.getElementById('loop-progress'),
         loopProgressFill: document.getElementById('loop-progress-fill'),
         loopProgressHandle: document.getElementById('loop-progress-handle'),
@@ -115,6 +117,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             await engine.stop();
             stopProgressLoop();
         }
+    });
+
+    // ── Volume slider ──
+    state.els.volumeSlider.addEventListener('input', () => {
+        const raw = parseInt(state.els.volumeSlider.value, 10);
+        const volume = raw / 100;
+        engine.setVolume(volume);
+        state.els.volumeValue.textContent = raw + '%';
     });
 
     /**

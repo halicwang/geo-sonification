@@ -67,6 +67,19 @@
                     </button>
                     <span id="audio-status" class="audio-status">Audio off</span>
                 </div>
+                <div class="volume-control">
+                    <label for="volume-slider" class="volume-label">Vol</label>
+                    <input
+                        type="range"
+                        id="volume-slider"
+                        class="volume-slider"
+                        min="0"
+                        max="150"
+                        value="100"
+                        step="1"
+                    />
+                    <span id="volume-value" class="volume-value">100%</span>
+                </div>
                 <div id="audio-loading" class="audio-loading hidden"></div>
             </div>
 

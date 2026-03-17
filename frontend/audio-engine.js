@@ -716,11 +716,18 @@ function rafLoop() {
     const landMix = clamp01(cov / LAND_FULL_COVERAGE_THRESHOLD);
     const oceanMix = 1.0 - landMix;
 
-    // Apply smoothed values to GainNodes (power curve stretches mid-high differences)
+    // Power-curve shaping + soft-limiter normalization
+    const shaped = new Float64Array(NUM_BUSES);
+    let shapedSum = 0;
+    for (let i = 0; i < NUM_BUSES; i++) {
+        shaped[i] = Math.pow(busSmoothed[i], GAIN_CURVE_EXPONENT);
+        shapedSum += shaped[i];
+    }
+    const norm = Math.max(shapedSum, 1.0);
+
     for (let i = 0; i < NUM_BUSES; i++) {
         if (gains[i] && buffers[i]) {
-            const shaped = Math.pow(busSmoothed[i], GAIN_CURVE_EXPONENT);
-            const landValue = shaped * landMix;
+            const landValue = (shaped[i] / norm) * landMix;
             const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
             gains[i].gain.value = value;
         }

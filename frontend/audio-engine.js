@@ -27,9 +27,9 @@
 //  Constants
 // ════════════════════════════════════════════════════════════════════
 
-const NUM_BUSES = 5;
-const BUS_NAMES = Object.freeze(['tree', 'crop', 'urban', 'bare', 'water']);
-const WATER_BUS_INDEX = 4;
+const NUM_BUSES = 7;
+const BUS_NAMES = Object.freeze(['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water']);
+const WATER_BUS_INDEX = 6;
 const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
 
 /** EMA time constant in ms. */
@@ -62,12 +62,15 @@ const SWAP_LATE_WARN_SECONDS = 0.025;
 /** Resolution of equal-power fade curves. */
 const XF_CURVE_POINTS = 128;
 
+/** Exponent for gain power-curve shaping. Values < 1.0 stretch mid-high range differences. */
+const GAIN_CURVE_EXPONENT = 0.6;
+
 /**
  * Loading priority order (indices into BUS_NAMES).
  * Tree and water first (most common), then crop, urban, bare.
  */
-const PRIORITY_FIRST = [0, 4]; // tree, water
-const PRIORITY_SECOND = [1, 2, 3]; // crop, urban, bare
+const PRIORITY_FIRST = [0, 6]; // forest, water
+const PRIORITY_SECOND = [1, 2, 3, 4, 5]; // shrub, grass, crop, urban, bare
 
 // ════════════════════════════════════════════════════════════════════
 //  State
@@ -713,10 +716,11 @@ function rafLoop() {
     const landMix = clamp01(cov / LAND_FULL_COVERAGE_THRESHOLD);
     const oceanMix = 1.0 - landMix;
 
-    // Apply smoothed values to GainNodes
+    // Apply smoothed values to GainNodes (power curve stretches mid-high differences)
     for (let i = 0; i < NUM_BUSES; i++) {
         if (gains[i] && buffers[i]) {
-            const landValue = busSmoothed[i] * landMix;
+            const shaped = Math.pow(busSmoothed[i], GAIN_CURVE_EXPONENT);
+            const landValue = shaped * landMix;
             const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
             gains[i].gain.value = value;
         }

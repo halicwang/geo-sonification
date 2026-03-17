@@ -13,7 +13,7 @@ Turn geographic data into soundscapes. This project maps ESA WorldCover satellit
 ### How it works
 
 - Frontend (Mapbox) visualizes **landcover** and streams viewport metrics to a Node.js server.
-- The server computes audio parameters (5-bus fold-mapping, land-coverage ratio) and sends them back via WebSocket.
+- The server computes audio parameters (7-bus fold-mapping, land-coverage ratio) and sends them back via WebSocket.
 - The browser's Web Audio engine plays ambient soundscapes that reflect the land cover composition of the current viewport.
 
 ## Architecture
@@ -39,8 +39,8 @@ Turn geographic data into soundscapes. This project maps ESA WorldCover satellit
 
 - Node.js 18+
 - Mapbox account (for access token)
-- Five ambience WAV files in `frontend/audio/ambience/` (gitignored; repository only includes `.gitkeep`):
-    - **Files**: `tree.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`
+- Seven ambience WAV files in `frontend/audio/ambience/` (gitignored; repository only includes `.gitkeep`):
+    - **Files**: `forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`
     - **Format**: WAV, 48 kHz, stereo recommended (mono works — Web Audio upmixes automatically)
     - **Duration**: any length, but the last 1.875 s must be an exact copy of the first 1.875 s. The engine crossfades outgoing/incoming voices over this overlap window — identical head and tail content is what makes the loop seamless. Total duration = desired cycle length + 1.875 s (e.g., 120 s cycle → 121.875 s file)
     - **Source**: record your own or obtain ambient loops from sites like [Freesound](https://freesound.org/). Trim to your desired cycle length in a DAW, then copy the first 1.875 s and append it to the end
@@ -133,7 +133,7 @@ geo-sonification/
 │   ├── map.js                            # Mapbox init, grid overlay, viewport tracking, HTTP fallback
 │   ├── websocket.js                      # WebSocket connection with exponential-backoff reconnect
 │   ├── ui.js                             # DOM updates: stats panel, connection status, toast
-│   ├── audio-engine.js                   # Web Audio engine: 5-bus EMA crossfade + ocean detector
+│   ├── audio-engine.js                   # Web Audio engine: 7-bus EMA crossfade + ocean detector
 │   ├── audio/ambience/                   # Loopable stereo WAVs (one per bus)
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
 ├── scripts/
@@ -166,13 +166,15 @@ Caches live in `data/cache/` and include aggregation version in their keys. Chan
 
 ## Sound Mapping
 
-Five ambience WAV loops represent different land cover types. Land cover channels are folded into 5 audio buses:
+Seven ambience WAV loops represent different land cover types. Land cover channels are folded into 7 audio buses:
 
-- **Tree bus**: classes 10, 20, 30, 90, 95, 100 (natural vegetation)
+- **Forest bus**: classes 10, 95 (tree/forest, mangrove)
+- **Shrub bus**: class 20 (shrubland)
+- **Grass bus**: class 30 (grassland)
 - **Crop bus**: class 40
 - **Urban bus**: class 50
-- **Bare bus**: class 60
-- **Water bus**: classes 70, 80 + coverage-linear ocean mix
+- **Bare bus**: classes 60, 100 (bare, moss/lichen)
+- **Water bus**: classes 70, 80, 90 (snow/ice, water, wetland) + coverage-linear ocean mix
 
 The audio engine uses `coverage` (fraction of viewport cells with land data) as a linear mix rule: `coverage=0%` maps to `land:ocean = 0:100`, `coverage=40%` maps to `100:0`, and values in between interpolate linearly (`land=coverage/0.4`, `ocean=1-land`). Above 40%, playback stays pure land. Ocean rides the Water bus while land buses are attenuated in low-coverage mode. EMA smoothing provides gradual transitions.
 

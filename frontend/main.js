@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ── Audio toggle button ──
-    const BUS_LABELS = ['Tree', 'Crop', 'Urban', 'Bare', 'Water'];
+    const BUS_LABELS = ['Forest', 'Shrub', 'Grass', 'Crop', 'Urban', 'Bare', 'Water'];
 
     state.els.audioToggle.addEventListener('click', async () => {
         if (!state.runtime.audioEnabled) {

@@ -17,8 +17,8 @@ const {
 // ═════════════════════════════════════════════════════════════════
 
 describe('BUS_NAMES', () => {
-    test('has 5 entries in correct order', () => {
-        expect(BUS_NAMES).toEqual(['tree', 'crop', 'urban', 'bare', 'water']);
+    test('has 7 entries in correct order', () => {
+        expect(BUS_NAMES).toEqual(['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water']);
     });
 
     test('is frozen', () => {
@@ -27,24 +27,32 @@ describe('BUS_NAMES', () => {
 });
 
 describe('BUS_LC_INDICES', () => {
-    test('tree bus maps to LC_CLASS_ORDER indices 0,1,2,8,9,10', () => {
-        expect(BUS_LC_INDICES[0]).toEqual([0, 1, 2, 8, 9, 10]);
+    test('forest bus maps to LC_CLASS_ORDER indices 0,9', () => {
+        expect(BUS_LC_INDICES[0]).toEqual([0, 9]);
+    });
+
+    test('shrub bus maps to index 1', () => {
+        expect(BUS_LC_INDICES[1]).toEqual([1]);
+    });
+
+    test('grass bus maps to index 2', () => {
+        expect(BUS_LC_INDICES[2]).toEqual([2]);
     });
 
     test('crop bus maps to index 3', () => {
-        expect(BUS_LC_INDICES[1]).toEqual([3]);
+        expect(BUS_LC_INDICES[3]).toEqual([3]);
     });
 
     test('urban bus maps to index 4', () => {
-        expect(BUS_LC_INDICES[2]).toEqual([4]);
+        expect(BUS_LC_INDICES[4]).toEqual([4]);
     });
 
-    test('bare bus maps to index 5', () => {
-        expect(BUS_LC_INDICES[3]).toEqual([5]);
+    test('bare bus maps to indices 5,10', () => {
+        expect(BUS_LC_INDICES[5]).toEqual([5, 10]);
     });
 
-    test('water bus maps to indices 6,7', () => {
-        expect(BUS_LC_INDICES[4]).toEqual([6, 7]);
+    test('water bus maps to indices 6,7,8', () => {
+        expect(BUS_LC_INDICES[6]).toEqual([6, 7, 8]);
     });
 
     test('all 11 indices are covered exactly once', () => {
@@ -60,72 +68,77 @@ describe('BUS_LC_INDICES', () => {
 describe('computeBusTargets', () => {
     test('100% tree cover (class 10 only)', () => {
         const fracs = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        expect(computeBusTargets(fracs)).toEqual([1, 0, 0, 0, 0]);
+        expect(computeBusTargets(fracs)).toEqual([1, 0, 0, 0, 0, 0, 0]);
     });
 
     test('100% crop cover (class 40)', () => {
         const fracs = [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0];
-        expect(computeBusTargets(fracs)).toEqual([0, 1, 0, 0, 0]);
+        expect(computeBusTargets(fracs)).toEqual([0, 0, 0, 1, 0, 0, 0]);
     });
 
     test('100% urban cover (class 50)', () => {
         const fracs = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
-        expect(computeBusTargets(fracs)).toEqual([0, 0, 1, 0, 0]);
+        expect(computeBusTargets(fracs)).toEqual([0, 0, 0, 0, 1, 0, 0]);
     });
 
     test('100% bare cover (class 60)', () => {
         const fracs = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0];
-        expect(computeBusTargets(fracs)).toEqual([0, 0, 0, 1, 0]);
+        expect(computeBusTargets(fracs)).toEqual([0, 0, 0, 0, 0, 1, 0]);
     });
 
     test('100% water cover (class 80)', () => {
         const fracs = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-        expect(computeBusTargets(fracs)).toEqual([0, 0, 0, 0, 1]);
+        expect(computeBusTargets(fracs)).toEqual([0, 0, 0, 0, 0, 0, 1]);
     });
 
-    test('tree bus sums multiple constituent classes', () => {
+    test('buses sum their constituent classes correctly', () => {
         // tree=0.3, shrub=0.2, grass=0.1, wetland=0.1, mangrove=0.05, moss=0.05
         const fracs = [0.3, 0.2, 0.1, 0, 0, 0, 0, 0, 0.1, 0.05, 0.05];
         const result = computeBusTargets(fracs);
-        expect(result[0]).toBeCloseTo(0.8, 6);
-        expect(result[1]).toBe(0);
-        expect(result[2]).toBe(0);
-        expect(result[3]).toBe(0);
-        expect(result[4]).toBe(0);
+        expect(result[0]).toBeCloseTo(0.35, 6); // forest: 0.3 + 0.05 (mangrove)
+        expect(result[1]).toBeCloseTo(0.2, 6); // shrub: 0.2
+        expect(result[2]).toBeCloseTo(0.1, 6); // grass: 0.1
+        expect(result[3]).toBe(0); // crop
+        expect(result[4]).toBe(0); // urban
+        expect(result[5]).toBeCloseTo(0.05, 6); // bare: 0.05 (moss)
+        expect(result[6]).toBeCloseTo(0.1, 6); // water: 0.1 (wetland)
     });
 
-    test('water bus sums snow/ice (70) + water (80)', () => {
-        const fracs = [0, 0, 0, 0, 0, 0, 0.4, 0.6, 0, 0, 0];
+    test('water bus sums snow/ice (70) + water (80) + wetland (90)', () => {
+        const fracs = [0, 0, 0, 0, 0, 0, 0.3, 0.4, 0.2, 0, 0];
         const result = computeBusTargets(fracs);
-        expect(result[4]).toBeCloseTo(1.0, 6);
+        expect(result[6]).toBeCloseTo(0.9, 6);
     });
 
     test('clamps bus sums exceeding 1.0', () => {
-        const fracs = [0.5, 0.3, 0.3, 0, 0, 0, 0, 0, 0, 0, 0];
+        // forest bus: index 0 + index 9 = 0.6 + 0.5 = 1.1 -> clamped to 1.0
+        const fracs = [0.6, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 0];
         const result = computeBusTargets(fracs);
         expect(result[0]).toBe(1.0);
     });
 
-    test('mixed viewport: tree 60%, urban 20%, water 20%', () => {
+    test('mixed viewport: forest 60%, urban 20%, water 20%', () => {
         const fracs = [0.6, 0, 0, 0, 0.2, 0, 0, 0.2, 0, 0, 0];
         const result = computeBusTargets(fracs);
-        expect(result[0]).toBeCloseTo(0.6, 6);
-        expect(result[1]).toBe(0);
-        expect(result[2]).toBeCloseTo(0.2, 6);
-        expect(result[3]).toBe(0);
-        expect(result[4]).toBeCloseTo(0.2, 6);
+        expect(result[0]).toBeCloseTo(0.6, 6); // forest
+        expect(result[1]).toBe(0); // shrub
+        expect(result[2]).toBe(0); // grass
+        expect(result[3]).toBe(0); // crop
+        expect(result[4]).toBeCloseTo(0.2, 6); // urban
+        expect(result[5]).toBe(0); // bare
+        expect(result[6]).toBeCloseTo(0.2, 6); // water
     });
 
     test('handles null input', () => {
-        expect(computeBusTargets(null)).toEqual([0, 0, 0, 0, 0]);
+        expect(computeBusTargets(null)).toEqual([0, 0, 0, 0, 0, 0, 0]);
     });
 
     test('handles empty array', () => {
-        expect(computeBusTargets([])).toEqual([0, 0, 0, 0, 0]);
+        expect(computeBusTargets([])).toEqual([0, 0, 0, 0, 0, 0, 0]);
     });
 
     test('handles short array', () => {
-        expect(computeBusTargets([0.5])).toEqual([0.5, 0, 0, 0, 0]);
+        expect(computeBusTargets([0.5])).toEqual([0.5, 0, 0, 0, 0, 0, 0]);
     });
 
     test('handles NaN values', () => {

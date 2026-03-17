@@ -15,7 +15,7 @@ Frontend (Mapbox) ──WS──> Server (viewport bounds)
                            │
                            ├── spatial.js (aggregate stats)
                            ├── audio-metrics.js
-                           │     ├── computeBusTargets() — fold 11 LC → 5 buses
+                           │     ├── computeBusTargets() — fold 11 LC → 7 buses
                            │     └── computeOceanLevel() — three-level ocean detection
                            ├── viewport-processor.js — attach audioParams to stats
                            │
@@ -24,23 +24,25 @@ Frontend (Mapbox) ──WS──> Server (viewport bounds)
 Frontend: audio-engine.js
   ├── engine.update(audioParams) — EMA smoothing (performance.now() timing)
   ├── requestAnimationFrame loop — apply smoothed → GainNode.gain
-  ├── AudioBufferSourceNode × 5 — looping ambience WAVs
+  ├── AudioBufferSourceNode × 7 — looping ambience WAVs
   ├── Water bus: Math.max(busSmoothed[water], oceanSmoothed)
   └── visibilitychange — suspend/resume AudioContext
 ```
 
 ---
 
-## Bus Fold-Mapping (11 LC Classes → 5 Audio Buses)
+## Bus Fold-Mapping (11 LC Classes → 7 Audio Buses)
 
-Eleven ESA WorldCover land cover classes are folded into five audio buses:
+Eleven ESA WorldCover land cover classes are folded into seven audio buses:
 
 ```
-Tree bus  = LC 10 (Tree) + 20 (Shrub) + 30 (Grass) + 90 (Wetland) + 95 (Mangrove) + 100 (Moss)
-Crop bus  = LC 40 (Cropland)
-Urban bus = LC 50 (Urban)
-Bare bus  = LC 60 (Bare)
-Water bus = max( LC 70 (Snow/Ice) + 80 (Water),  ocean level )
+Forest bus = LC 10 (Tree/Forest) + 95 (Mangrove)
+Shrub bus  = LC 20 (Shrubland)
+Grass bus  = LC 30 (Grassland)
+Crop bus   = LC 40 (Cropland)
+Urban bus  = LC 50 (Urban)
+Bare bus   = LC 60 (Bare) + 100 (Moss/Lichen)
+Water bus  = max( LC 70 (Snow/Ice) + 80 (Water) + 90 (Wetland),  ocean level )
 ```
 
 The Water bus uses `Math.max(busValue, oceanLevel)` so that open-ocean areas (where no grid data exists) still produce water audio.
@@ -51,7 +53,7 @@ This fold-mapping is defined in `server/audio-metrics.js` (`BUS_LC_INDICES`, `co
 
 ## WAV Loading
 
-Five ambience WAVs are fetched from `/audio/ambience/<name>.wav` with progress tracking via `ReadableStream`. Priority ordering: tree + water first (parallel), then crop + urban + bare (parallel). Each bus uses double-buffered one-shot `AudioBufferSourceNode` voices with equal-power crossfade scheduling to eliminate loop-boundary clicks. These WAV assets are local and gitignored (`frontend/audio/ambience/*.wav`), so a fresh clone must provide them manually; missing files surface as per-bus load errors in the UI.
+Seven ambience WAVs are fetched from `/audio/ambience/<name>.wav` (`forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`) with progress tracking via `ReadableStream`. Priority ordering: forest + water first (parallel), then shrub + grass + crop + urban + bare (parallel). Each bus uses double-buffered one-shot `AudioBufferSourceNode` voices with equal-power crossfade scheduling to eliminate loop-boundary clicks. A power curve (`exponent = 0.6`) is applied to smoothed bus values before gain assignment, stretching mid-high range differences for better perceptual contrast. These WAV assets are local and gitignored (`frontend/audio/ambience/*.wav`), so a fresh clone must provide them manually; missing files surface as per-bus load errors in the UI.
 
 ---
 

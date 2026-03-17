@@ -149,34 +149,36 @@ function computeDeltaMetrics(currentLcFractions, previousSnapshot) {
     return { deltaLc, snapshot: { lcFractions: current } };
 }
 
-// ── Bus fold-mapping (11 LC classes → 5 audio buses) ────────────────
+// ── Bus fold-mapping (11 LC classes → 7 audio buses) ────────────────
 
 /**
  * Bus index-to-name mapping.
  * @type {readonly string[]}
  */
-const BUS_NAMES = Object.freeze(['tree', 'crop', 'urban', 'bare', 'water']);
+const BUS_NAMES = Object.freeze(['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water']);
 
 /**
  * LC_CLASS_ORDER index sets for each bus.
  * @type {readonly number[][]}
  */
 const BUS_LC_INDICES = Object.freeze([
-    [0, 1, 2, 8, 9, 10], // tree: classes 10,20,30,90,95,100
+    [0, 9], // forest: classes 10 (Tree/Forest), 95 (Mangrove)
+    [1], // shrub: class 20 (Shrubland)
+    [2], // grass: class 30 (Grassland)
     [3], // crop: class 40
     [4], // urban: class 50
-    [5], // bare: class 60
-    [6, 7], // water: classes 70,80
+    [5, 10], // bare: classes 60 (Bare), 100 (Moss/Lichen)
+    [6, 7, 8], // water: classes 70 (Snow/Ice), 80 (Water), 90 (Wetland)
 ]);
 
 /**
- * Fold 11-class LC fractions into 5 bus target values.
+ * Fold 11-class LC fractions into 7 bus target values.
  *
  * Each bus value is the sum of its constituent LC class fractions,
  * clamped to [0, 1].
  *
  * @param {number[]} lcFractions - length-11 array of 0-1 fractions (LC_CLASS_ORDER)
- * @returns {number[]} length-5 array [tree, crop, urban, bare, water]
+ * @returns {number[]} length-7 array [forest, shrub, grass, crop, urban, bare, water]
  */
 function computeBusTargets(lcFractions) {
     const f = Array.isArray(lcFractions) ? lcFractions : [];

@@ -142,8 +142,10 @@ describe('P0-A Golden Baseline: ocean viewport', () => {
 
     test('all bus targets are 0 except water', () => {
         const stats = runViewport(goldenOcean.input.bounds, goldenOcean.input.zoom);
-        const [tree, crop, urban, bare, water] = stats.audioParams.busTargets;
-        expect(tree).toBe(0);
+        const [forest, shrub, grass, crop, urban, bare, water] = stats.audioParams.busTargets;
+        expect(forest).toBe(0);
+        expect(shrub).toBe(0);
+        expect(grass).toBe(0);
         expect(crop).toBe(0);
         expect(urban).toBe(0);
         expect(bare).toBe(0);
@@ -185,8 +187,10 @@ describe('P0-A Golden Baseline: urban viewport', () => {
 
     test('urban bus is dominant', () => {
         const stats = runViewport(goldenUrban.input.bounds, goldenUrban.input.zoom);
-        const [tree, crop, urban, bare, water] = stats.audioParams.busTargets;
-        expect(urban).toBeGreaterThan(tree);
+        const [forest, shrub, grass, crop, urban, bare, water] = stats.audioParams.busTargets;
+        expect(urban).toBeGreaterThan(forest);
+        expect(urban).toBeGreaterThan(shrub);
+        expect(urban).toBeGreaterThan(grass);
         expect(urban).toBeGreaterThan(crop);
         expect(urban).toBeGreaterThan(bare);
         expect(urban).toBeGreaterThan(water);
@@ -219,8 +223,8 @@ describe('P0-A Golden Baseline: 14-channel manifest', () => {
         expect(classCodes).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100]);
     });
 
-    test('5 audio bus names: tree, crop, urban, bare, water', () => {
-        expect(BUS_NAMES).toEqual(['tree', 'crop', 'urban', 'bare', 'water']);
+    test('7 audio bus names: forest, shrub, grass, crop, urban, bare, water', () => {
+        expect(BUS_NAMES).toEqual(['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water']);
     });
 
     test('3 metric channels present in land stats', () => {
@@ -238,10 +242,10 @@ describe('P0-A Golden Baseline: 14-channel manifest', () => {
         expect(stats.audioParams.proximity).toBeLessThanOrEqual(1);
     });
 
-    test('5 bus targets in land stats', () => {
+    test('7 bus targets in land stats', () => {
         init(LAND_CELLS, NORMALIZE_PARAMS);
         const stats = runViewport(goldenLand.input.bounds, goldenLand.input.zoom);
-        expect(stats.audioParams.busTargets).toHaveLength(5);
+        expect(stats.audioParams.busTargets).toHaveLength(7);
         expect(stats.audioParams.busNames).toEqual(BUS_NAMES);
     });
 });

@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-03-16 | Refactor   | [Sync ARCHITECTURE.md and Code Comments with Implementation](devlog/M2/2026-03-16-M2-doc-code-sync.md)                                                                                        |
 | 2026-03-16 | Fix        | [Loop Retrigger Phase Lock](devlog/M2/2026-03-16-M2-loop-retrigger-phase-lock.md)                                                                                                             |
 | 2026-03-16 | Feature    | [Split Tree Bus into Forest/Shrub/Grass (5→7 Buses)](devlog/M2/2026-03-16-M2-split-tree-bus.md)                                                                                               |
 | 2026-02-24 | Refactor   | [README GitHub Polish](devlog/M2/2026-02-24-M2-readme-github-polish.md)                                                                                                                       |

@@ -4,7 +4,7 @@
 /**
  * Geo-Sonification — Web Audio engine.
  *
- * Five-bus ambient crossfade with three-level ocean detection.
+ * Seven-bus ambient crossfade with coverage-linear ocean detection.
  * Receives server-computed bus targets via engine.update(audioParams).
  * Applies EMA smoothing and writes to GainNodes via requestAnimationFrame.
  *
@@ -674,7 +674,7 @@ function startAllSources() {
  * smooth gain transitions regardless of server message rate.
  *
  * @param {Object} audioParams
- * @param {number[]} audioParams.busTargets - 5 floats [tree, crop, urban, bare, water]
+ * @param {number[]} audioParams.busTargets - 7 floats [forest, shrub, grass, crop, urban, bare, water]
  * @param {number} audioParams.coverage - 0-1 land/grid coverage ratio
  */
 function update(audioParams) {

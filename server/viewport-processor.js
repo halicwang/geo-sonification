@@ -22,7 +22,6 @@ const {
     computeDeltaMetrics,
     BUS_NAMES,
     computeBusTargets,
-    computeOceanLevel,
 } = require('./audio-metrics');
 const {
     applyHysteresis,
@@ -67,7 +66,6 @@ function processViewport(bounds, modeState, deltaState, zoom) {
     stats.audioParams = {
         busTargets: computeBusTargets(lcFractions),
         busNames: BUS_NAMES,
-        oceanLevel: computeOceanLevel(proximity, stats.landCoverageRatio),
         proximity,
         coverage: stats.landCoverageRatio,
     };

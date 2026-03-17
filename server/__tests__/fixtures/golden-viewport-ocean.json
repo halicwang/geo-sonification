@@ -24,7 +24,6 @@
         "audioParams": {
             "busTargets": [0, 0, 0, 0, 0, 0, 1],
             "busNames": ["forest", "shrub", "grass", "crop", "urban", "bare", "water"],
-            "oceanLevel": 1,
             "proximity": 0,
             "coverage": 0
         }

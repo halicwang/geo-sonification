@@ -64,7 +64,6 @@
                 0.6706773618538323, 0.08952762923351158, 0.03475935828877005
             ],
             "busNames": ["forest", "shrub", "grass", "crop", "urban", "bare", "water"],
-            "oceanLevel": 0.16666666666666674,
             "proximity": 1,
             "coverage": 0.3333333333333333
         }

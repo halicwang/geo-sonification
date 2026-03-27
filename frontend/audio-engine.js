@@ -18,10 +18,13 @@
  *   - stop() suspends context and clears loop graph
  *   - visibilitychange: suspend on hidden, resume+snap on visible
  *
- * No icon triggers — sample folders are empty (YAGNI).
+ * Granulation layer (granulator.js) overlays density-driven grains
+ * on top of the ambience buses, connected to masterGain.
  *
  * @module frontend/audio-engine
  */
+
+import { granulator } from './granulator.js';
 
 // ════════════════════════════════════════════════════════════════════
 //  Constants
@@ -794,6 +797,13 @@ function rafLoop() {
         }
     }
 
+    // Update granulation layer: density derived from smoothed bus values
+    granulator.update({
+        wildlifeDensity: Math.max(busSmoothed[0], busSmoothed[1], busSmoothed[2]),
+        humanDensity: busSmoothed[4],
+        landMix,
+    });
+
     rafId = requestAnimationFrame(rafLoop);
 }
 
@@ -818,6 +828,7 @@ function handleVisibilityChange() {
 
     if (document.hidden) {
         clearGlobalSwapTimer();
+        granulator.stop();
         if (audioCtx.state === 'running') {
             audioCtx.suspend();
         }
@@ -834,6 +845,7 @@ function handleVisibilityChange() {
             velocitySmoothed = 0;
             lastEmaTime = performance.now();
             startRaf();
+            granulator.start();
             scheduleGlobalSwap();
         }
     }
@@ -889,6 +901,9 @@ async function start() {
         }
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Initialize granulation layer (loads grain buffers in background)
+        granulator.init(audioCtx, masterGain);
     }
 
     if (audioCtx.state === 'suspended') {
@@ -920,6 +935,7 @@ async function start() {
 
     lastEmaTime = performance.now();
     startRaf();
+    granulator.start();
 
     loadGeneration++;
     await loadAllSamples(loadGeneration);
@@ -931,6 +947,7 @@ async function start() {
 async function stop() {
     suspended = true;
     cancelRaf();
+    granulator.stop();
     stopAllSources();
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     loadingStarted = false; // allow retry of failed samples on next start()

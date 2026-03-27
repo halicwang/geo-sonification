@@ -21,12 +21,13 @@ Frontend (Mapbox) ──WS──> Server (viewport bounds + zoom)
                            │
                       <──WS──  { type: 'stats', ..., audioParams }
                            │
-Frontend: audio-engine.js
+Frontend: audio-engine.js + granulator.js
   ├── engine.update(audioParams) — store bus/coverage/proximity targets
   ├── engine.updateMotion(velocity) — client-side drag velocity (no server round-trip)
   ├── requestAnimationFrame loop
   │     ├── EMA smoothing (4 parallel signals, performance.now() timing)
   │     ├── coverage-linear land/ocean mix → GainNode.gain
+  │     ├── granulator.update() — wildlife/human density from busSmoothed
   │     ├── proximity → 3-stage LP filter cutoff (500 Hz–20 kHz)
   │     └── velocity → lpFilter1 Q modulation
   ├── AudioBufferSourceNode × 7 — double-buffered crossfade loop
@@ -119,6 +120,32 @@ Q = BASE_Q1 + velocitySmoothed * (MAX_Q1 - BASE_Q1)
 
 ---
 
+## Granulation Layer
+
+A density-driven granulation overlay sits on top of the 7-bus ambience engine. Two voices (wildlife and human) read short grains from prepared audio files where activity naturally increases over time (sparse → dense). The read position in the file controls perceived density.
+
+```
+wildlifeGain ─┐
+humanGain ────┤
+              └─ granMasterGain ──→ masterGain (shared LP filter chain)
+```
+
+**Source files**: `frontend/audio/grains/wildlife.wav` and `human.wav` — natural recordings with gradually increasing activity (e.g., sparse birdsong → dense chorus). Gitignored.
+
+**Density derivation** from EMA-smoothed bus values (no server changes):
+
+- Wildlife density = `max(busSmoothed[forest], busSmoothed[shrub], busSmoothed[grass])`
+- Human density = `busSmoothed[urban]`
+- Both scaled by `landMix` (silent over ocean)
+
+**Grain scheduling**: A `setInterval`-based lookahead scheduler (25 ms interval, 100 ms lookahead) schedules grains independently of the rAF loop. Each grain is an `AudioBufferSourceNode` with a Hann-window `GainNode` envelope (click-free). Inter-onset interval uses exponential mapping: `IOI = 0.5 * (0.08 / 0.5)^density` — low density is sparse (500 ms), high density is rapid (80 ms). Maximum 20 concurrent grains across both voices.
+
+**Sliding window technique** (professor's recommendation): `grainOffset = density * (bufferDuration - grainDuration) + scatter`. Higher density reads from later in the file where the source recording is denser, combined with shorter IOI for more overlapping grains.
+
+Implementation: `frontend/granulator.js`. Integration points in `audio-engine.js`: `init()`, `start()`, `stop()`, `rafLoop()`, `handleVisibilityChange()`.
+
+---
+
 ## Client-Side Motion Signals
 
 Drag velocity is computed in `map.js` from consecutive viewport center positions and fed directly to the audio engine via `engine.updateMotion(velocity)` — no server round-trip, for zero-latency response. The velocity signal (0–1, capped at 50 deg/sec) controls the lpFilter1 Q modulation described above.
@@ -159,3 +186,9 @@ On `document.hidden`: cancel rAF, clear swap timer, and suspend `AudioContext`. 
 | `BASE_Q1`                      | 0.5176  | audio-engine.js | lpFilter1 Q at rest (Butterworth)           |
 | `MAX_Q1`                       | 4.0     | audio-engine.js | lpFilter1 Q at max velocity                 |
 | `LAND_FULL_COVERAGE_THRESHOLD` | 0.4     | audio-engine.js | Coverage at which land mix reaches 100%     |
+| `SCHEDULER_INTERVAL_MS`        | 25 ms   | granulator.js   | Grain scheduler tick interval               |
+| `SCHEDULER_LOOKAHEAD_S`        | 0.1 s   | granulator.js   | Grain scheduling lookahead window           |
+| `IOI_MIN_S`                    | 0.08 s  | granulator.js   | Inter-onset at max density                  |
+| `IOI_MAX_S`                    | 0.5 s   | granulator.js   | Inter-onset at min density                  |
+| `GRAN_MAX_GAIN`                | 0.4     | granulator.js   | Max granulation output gain                 |
+| `MAX_ACTIVE_GRAINS`            | 20      | granulator.js   | Total grain cap across both voices          |

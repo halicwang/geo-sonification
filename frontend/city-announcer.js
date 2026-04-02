@@ -40,8 +40,11 @@ const MOVE_THROTTLE_MS = 200;
 /** Max cached AudioBuffers for city clips. */
 const BUFFER_CACHE_SIZE = 50;
 
+/** Population priority exponent. Higher = more weight to big cities. */
+const POP_PRIORITY_EXPONENT = 0.15;
+
 /** TTS gain relative to master volume. */
-const TTS_GAIN_RATIO = 0.4;
+const TTS_GAIN_RATIO = 0.3;
 
 /** Fade-in duration for the announcement (seconds). */
 const FADE_IN_S = 0.05;
@@ -148,7 +151,7 @@ function findNearestCity(centerLat, centerLng, bounds) {
     const viewport = normalizeViewportBounds(bounds);
     const projectedCenterLng = projectLngToViewport(centerLng, viewport);
     let best = null;
-    let bestDist = Infinity;
+    let bestScore = Infinity;
 
     for (const city of cities) {
         const projectedCityLng = projectLngToViewport(city.lng, viewport);
@@ -166,9 +169,10 @@ function findNearestCity(centerLat, centerLng, bounds) {
         const dlat = city.lat - centerLat;
         const dlng = projectedCityLng - projectedCenterLng;
         const dist = dlat * dlat + dlng * dlng;
+        const score = dist / Math.pow(Math.max(city.pop, 1), POP_PRIORITY_EXPONENT);
 
-        if (dist < bestDist) {
-            bestDist = dist;
+        if (score < bestScore) {
+            bestScore = score;
             best = city;
         }
     }
@@ -321,7 +325,7 @@ function findCityInCenter(centerLat, centerLng, bounds) {
     const r2 = radiusLng * radiusLng + radiusLat * radiusLat;
 
     let best = null;
-    let bestDist = Infinity;
+    let bestScore = Infinity;
 
     for (const city of cities) {
         if (city.lat < viewport.south || city.lat > viewport.north) continue;
@@ -337,9 +341,12 @@ function findCityInCenter(centerLat, centerLng, bounds) {
         const dlat = city.lat - centerLat;
         const dlng = projectedCityLng - projectedCenterLng;
         const dist = dlat * dlat + dlng * dlng;
-        if (dist < r2 && dist < bestDist) {
-            bestDist = dist;
-            best = city;
+        if (dist < r2) {
+            const score = dist / Math.pow(Math.max(city.pop, 1), POP_PRIORITY_EXPONENT);
+            if (score < bestScore) {
+                bestScore = score;
+                best = city;
+            }
         }
     }
 

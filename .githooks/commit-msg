@@ -15,6 +15,28 @@ if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
     exit 0
 fi
 
+# ── Devlog file gate ──
+# feat/fix/refactor commits that touch code dirs must include a devlog entry.
+CODE_DIRS="^(frontend|server|scripts)/"
+DEVLOG_DIR="^docs/devlog/"
+COMMIT_MSG_LINE="$(head -1 "$MSG_FILE")"
+COMMIT_TYPE="$(echo "$COMMIT_MSG_LINE" | sed -n 's/^\([a-z]*\).*/\1/p')"
+
+if [[ "$COMMIT_TYPE" =~ ^(feat|fix|refactor)$ ]]; then
+    HAS_CODE=0
+    HAS_DEVLOG=0
+    while IFS= read -r -d '' file; do
+        [[ "$file" =~ $CODE_DIRS ]] && HAS_CODE=1
+        [[ "$file" =~ $DEVLOG_DIR ]] && HAS_DEVLOG=1
+    done < <(git diff --cached --name-only -z)
+
+    if [[ "$HAS_CODE" -eq 1 && "$HAS_DEVLOG" -eq 0 ]]; then
+        echo "Commit blocked: '$COMMIT_TYPE' commit touches code but has no devlog entry." >&2
+        echo "Add a docs/devlog/M*/ entry and update docs/DEVLOG.md before committing." >&2
+        exit 1
+    fi
+fi
+
 trailer_value="$(
     git interpret-trailers --parse "$MSG_FILE" \
         | awk -F': ' -v key="$TRAILER_KEY" '$1 == key {print $2; exit}'

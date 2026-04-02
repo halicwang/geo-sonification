@@ -15,7 +15,7 @@ cd /d "%~dp0"
 setlocal
 if exist ".env" (
     for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
-        set "%%A=%%B"
+        set "%%A=%%~B"
     )
 )
 
@@ -55,13 +55,13 @@ if not exist "server\node_modules" (
 )
 
 :: Check if ports are already in use
-for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr ":%HTTP_PORT% " ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr /R ":%HTTP_PORT%[^0-9]" ^| findstr "LISTENING"') do (
     echo Port %HTTP_PORT% in use ^(pid: %%P^) -- stopping...
-    taskkill /PID %%P /F >nul 2>&1
+    taskkill /PID %%P /T /F >nul 2>&1
 )
-for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr ":%WS_PORT% " ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr /R ":%WS_PORT%[^0-9]" ^| findstr "LISTENING"') do (
     echo Port %WS_PORT% in use ^(pid: %%P^) -- stopping...
-    taskkill /PID %%P /F >nul 2>&1
+    taskkill /PID %%P /T /F >nul 2>&1
 )
 
 :: Start server in background
@@ -90,7 +90,7 @@ echo   OK: Server is ready
 
 :: Capture server PID for cleanup
 set SERVER_PID=
-for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr ":%HTTP_PORT% " ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr /R ":%HTTP_PORT%[^0-9]" ^| findstr "LISTENING"') do (
     if not defined SERVER_PID set "SERVER_PID=%%P"
 )
 
@@ -116,7 +116,7 @@ pause >nul
 echo.
 echo Stopping server...
 if defined SERVER_PID (
-    taskkill /PID !SERVER_PID! /F >nul 2>&1
+    taskkill /PID !SERVER_PID! /T /F >nul 2>&1
 )
 endlocal
 endlocal

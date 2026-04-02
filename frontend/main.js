@@ -25,6 +25,7 @@ import { showToast, updateUI, updateConnectionStatus } from './ui.js';
 import { initMap, onViewportChange, refreshServerConfig } from './map.js';
 import { connectWebSocket } from './websocket.js';
 import { engine } from './audio-engine.js';
+import { announcer } from './city-announcer.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Cache fixed DOM element references once
@@ -68,6 +69,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initMap();
 
+    // City name announcement — dwell trigger on settle, flyby trigger on drag
+    function getAnnouncerArgs() {
+        const { lng, lat } = state.runtime.map.getCenter();
+        const zoom = state.runtime.map.getZoom();
+        const b = state.runtime.map.getBounds();
+        return [
+            lat,
+            lng,
+            zoom,
+            { west: b.getWest(), east: b.getEast(), north: b.getNorth(), south: b.getSouth() },
+        ];
+    }
+    state.runtime.map.on('moveend', () => announcer.onViewportSettle(...getAnnouncerArgs()));
+    state.runtime.map.on('move', () => announcer.onViewportMove(...getAnnouncerArgs()));
+
     // Connect WebSocket — wire callbacks to map/ui modules
     connectWebSocket({
         onOpen: async () => {
@@ -100,6 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             engine.setOnLoadingUpdate(renderLoadingUI);
             await engine.start();
+            announcer.setEnabled(true);
             startProgressLoop();
 
             // Re-send current viewport so the server returns fresh
@@ -115,6 +132,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.els.audioStatus.textContent = 'Audio off';
             state.els.audioLoading.classList.add('hidden');
             await engine.stop();
+            announcer.setEnabled(false);
+            announcer.reset();
             stopProgressLoop();
         }
     });

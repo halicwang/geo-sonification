@@ -1042,6 +1042,11 @@ function getVolume() {
     return masterVolume;
 }
 
+/** @returns {AudioContext|null} The shared AudioContext (null if not started). */
+function getContext() {
+    return audioCtx;
+}
+
 export const engine = {
     start,
     stop,
@@ -1054,4 +1059,5 @@ export const engine = {
     seekLoop,
     setVolume,
     getVolume,
+    getContext,
 };

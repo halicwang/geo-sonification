@@ -165,6 +165,9 @@ app.use('/tiles', express.static(path.join(__dirname, '../data/tiles')));
 // Serve ambience audio samples for Web Audio frontend.
 app.use('/audio/ambience', express.static(path.join(__dirname, '../frontend/audio/ambience')));
 
+// Serve city data (JSON database for city announcer)
+app.use('/data', express.static(path.join(__dirname, '../data'), { extensions: ['json'] }));
+
 // Health check (used by start.command readiness probe)
 app.get('/health', (req, res) => {
     res.status(200).json({

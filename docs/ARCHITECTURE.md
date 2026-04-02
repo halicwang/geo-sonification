@@ -3,7 +3,7 @@
 This document describes the browser-based Web Audio engine.
 
 For the overall system architecture (Frontend → Server → Browser Audio), see `README.md`.
-For the frontend module structure (7 ES modules: config, landcover, ui, map, websocket, audio-engine, main), see `docs/devlog/M2/2026-02-20-frontend-module-split.md` and `docs/devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-21-web-audio-migration.md`.
+For the frontend module structure (8 ES modules: config, landcover, ui, map, websocket, audio-engine, city-announcer, main), see `docs/devlog/M2/2026-02-20-frontend-module-split.md` and `docs/devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-21-web-audio-migration.md`.
 For sound design rationale and task specs, see `docs/plans/M2/2026-02-19-M2-sound-design-plan.md`.
 
 ---
@@ -159,3 +159,46 @@ On `document.hidden`: cancel rAF, clear swap timer, and suspend `AudioContext`. 
 | `BASE_Q1`                      | 0.5176  | audio-engine.js | lpFilter1 Q at rest (Butterworth)           |
 | `MAX_Q1`                       | 4.0     | audio-engine.js | lpFilter1 Q at max velocity                 |
 | `LAND_FULL_COVERAGE_THRESHOLD` | 0.4     | audio-engine.js | Coverage at which land mix reaches 100%     |
+
+---
+
+## City Announcer
+
+`frontend/city-announcer.js` — announces the nearest major city name via pre-generated TTS audio with stereo panning when the user dwells at a location.
+
+### Trigger Conditions (all must be true)
+
+| Condition        | Value          | Detail                                                  |
+| ---------------- | -------------- | ------------------------------------------------------- |
+| Dwell time       | 500 ms         | Viewport must stay still for 0.5 s after last `moveend` |
+| Min zoom         | >= 3           | World view does not trigger                             |
+| City in viewport | bounds check   | Nearest city must be within current viewport bounds     |
+| City changed     | name differs   | Same city is not re-announced on small pans             |
+| Cooldown         | 4 000 ms       | Minimum gap between announcements                       |
+| Audio enabled    | engine running | Respects the user's play/stop toggle                    |
+
+### City Database
+
+Pre-built `data/cities.json` (~1 100 entries, population > 500 K, sourced from GeoNames CC BY 4.0). Each entry: `{ name, lat, lng, pop, slug }`. Loaded once on module init via `fetch('/data/cities.json')`. Nearest-city lookup is a linear scan filtered to the viewport bounding box.
+
+### Audio Routing
+
+Pre-generated M4A clips in `frontend/audio/cities/{slug}.m4a` (macOS `say -v Samantha`, ~3–5 KB each). Loaded on demand with a 50-entry LRU AudioBuffer cache. Playback bypasses the ambient LP filter chain:
+
+```
+[AudioBufferSource] → [GainNode] → [StereoPannerNode] → audioCtx.destination
+```
+
+Pan value is computed from the city's horizontal position in the viewport: `pan = clamp((cityLng − west) / (east − west) × 2 − 1, −1, +1)`. Gain respects master volume (`masterVolume × 0.8`).
+
+### Data Flow
+
+```
+map 'moveend'
+  → main.js passes center, zoom, viewport bounds
+  → announcer.onViewportSettle(lat, lng, zoom, bounds)
+    → 500 ms dwell timer (reset on each moveend)
+    → findNearestCity(center, bounds)  [local JSON database]
+    → loadCityAudio(slug)              [fetch + decodeAudioData, cached]
+    → playAnnouncement(buffer, pan)    [Web Audio, stereo-panned]
+```

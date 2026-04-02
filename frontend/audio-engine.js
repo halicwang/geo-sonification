@@ -887,9 +887,11 @@ async function start() {
             gains[i].gain.value = 0;
             gains[i].connect(masterGain);
         }
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
     }
+
+    // Re-attach on every explicit start(). stop() removes the listener so
+    // hidden-tab suspend/resume keeps working across multiple sessions.
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     if (audioCtx.state === 'suspended') {
         await audioCtx.resume();

@@ -85,6 +85,59 @@ loadCities();
 // ============ Spatial Lookup ============
 
 /**
+ * Normalize viewport longitude bounds into a continuous range so antimeridian
+ * crossings (for example 170 -> -170) become 170 -> 190.
+ *
+ * @param {{west: number, east: number, north: number, south: number}} bounds
+ * @returns {{west: number, east: number, north: number, south: number, span: number, centerLng: number}}
+ */
+function normalizeViewportBounds(bounds) {
+    const west = Number.isFinite(bounds?.west) ? bounds.west : 0;
+    let east = Number.isFinite(bounds?.east) ? bounds.east : west;
+    if (east < west) {
+        east += 360;
+    }
+    if (east - west >= 360) {
+        east = west + 360;
+    }
+
+    return {
+        west,
+        east,
+        south: Number.isFinite(bounds?.south) ? bounds.south : -90,
+        north: Number.isFinite(bounds?.north) ? bounds.north : 90,
+        span: east - west,
+        centerLng: west + (east - west) / 2,
+    };
+}
+
+/**
+ * Project a longitude into the viewport's continuous longitude range.
+ *
+ * @param {number} lng
+ * @param {{west: number, east: number, centerLng: number, span: number}} viewport
+ * @returns {number}
+ */
+function projectLngToViewport(lng, viewport) {
+    const candidates = [lng - 360, lng, lng + 360];
+    let best = lng;
+    let bestDist = Infinity;
+
+    for (const candidate of candidates) {
+        const dist = Math.abs(candidate - viewport.centerLng);
+        if (dist < bestDist) {
+            best = candidate;
+            bestDist = dist;
+        }
+        if (viewport.span >= 360 || (candidate >= viewport.west && candidate <= viewport.east)) {
+            return candidate;
+        }
+    }
+
+    return best;
+}
+
+/**
  * Find the nearest major city within the current viewport bounds.
  * @param {number} centerLat
  * @param {number} centerLng
@@ -92,22 +145,26 @@ loadCities();
  * @returns {{name: string, slug: string, lat: number, lng: number, pop: number}|null}
  */
 function findNearestCity(centerLat, centerLng, bounds) {
+    const viewport = normalizeViewportBounds(bounds);
+    const projectedCenterLng = projectLngToViewport(centerLng, viewport);
     let best = null;
     let bestDist = Infinity;
 
     for (const city of cities) {
+        const projectedCityLng = projectLngToViewport(city.lng, viewport);
+
         // Skip cities outside viewport
         if (
-            city.lat < bounds.south ||
-            city.lat > bounds.north ||
-            city.lng < bounds.west ||
-            city.lng > bounds.east
+            city.lat < viewport.south ||
+            city.lat > viewport.north ||
+            (viewport.span < 360 &&
+                (projectedCityLng < viewport.west || projectedCityLng > viewport.east))
         ) {
             continue;
         }
 
         const dlat = city.lat - centerLat;
-        const dlng = city.lng - centerLng;
+        const dlng = projectedCityLng - projectedCenterLng;
         const dist = dlat * dlat + dlng * dlng;
 
         if (dist < bestDist) {
@@ -127,9 +184,10 @@ function findNearestCity(centerLat, centerLng, bounds) {
  * @returns {number}  -1 (left) to +1 (right)
  */
 function computePan(cityLng, west, east) {
-    const span = east - west;
-    if (span <= 0) return 0;
-    const viewportX = (cityLng - west) / span; // 0..1
+    const viewport = normalizeViewportBounds({ west, east, south: -90, north: 90 });
+    if (viewport.span <= 0) return 0;
+    const projectedCityLng = projectLngToViewport(cityLng, viewport);
+    const viewportX = (projectedCityLng - viewport.west) / viewport.span; // 0..1
     return Math.max(-1, Math.min(1, viewportX * 2 - 1));
 }
 
@@ -256,16 +314,28 @@ async function checkAndAnnounce(centerLat, centerLng, bounds) {
  * @returns {{name: string, slug: string, lat: number, lng: number, pop: number}|null}
  */
 function findCityInCenter(centerLat, centerLng, bounds) {
-    const radiusLng = (bounds.east - bounds.west) * CENTER_RADIUS_FRACTION;
-    const radiusLat = (bounds.north - bounds.south) * CENTER_RADIUS_FRACTION;
+    const viewport = normalizeViewportBounds(bounds);
+    const projectedCenterLng = projectLngToViewport(centerLng, viewport);
+    const radiusLng = viewport.span * CENTER_RADIUS_FRACTION;
+    const radiusLat = (viewport.north - viewport.south) * CENTER_RADIUS_FRACTION;
     const r2 = radiusLng * radiusLng + radiusLat * radiusLat;
 
     let best = null;
     let bestDist = Infinity;
 
     for (const city of cities) {
+        if (city.lat < viewport.south || city.lat > viewport.north) continue;
+
+        const projectedCityLng = projectLngToViewport(city.lng, viewport);
+        if (
+            viewport.span < 360 &&
+            (projectedCityLng < viewport.west || projectedCityLng > viewport.east)
+        ) {
+            continue;
+        }
+
         const dlat = city.lat - centerLat;
-        const dlng = city.lng - centerLng;
+        const dlng = projectedCityLng - projectedCenterLng;
         const dist = dlat * dlat + dlng * dlng;
         if (dist < r2 && dist < bestDist) {
             bestDist = dist;

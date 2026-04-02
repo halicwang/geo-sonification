@@ -171,7 +171,7 @@ On `document.hidden`: cancel rAF, clear swap timer, and suspend `AudioContext`. 
 | Condition        | Value          | Detail                                                  |
 | ---------------- | -------------- | ------------------------------------------------------- |
 | Dwell time       | 500 ms         | Viewport must stay still for 0.5 s after last `moveend` |
-| Min zoom         | >= 3           | World view does not trigger                             |
+| Min zoom         | >= 5           | World view does not trigger                             |
 | City in viewport | bounds check   | Nearest city must be within current viewport bounds     |
 | City changed     | name differs   | Same city is not re-announced on small pans             |
 | Cooldown         | 4 000 ms       | Minimum gap between announcements                       |
@@ -189,7 +189,7 @@ Pre-generated M4A clips in `frontend/audio/cities/{slug}.m4a` (macOS `say -v Sam
 [AudioBufferSource] → [GainNode] → [StereoPannerNode] → audioCtx.destination
 ```
 
-Pan value is computed from the city's horizontal position in the viewport: `pan = clamp((cityLng − west) / (east − west) × 2 − 1, −1, +1)`. Gain respects master volume (`masterVolume × 0.8`).
+Pan value is computed from the city's horizontal position in the viewport: `pan = clamp((cityLng − west) / (east − west) × 2 − 1, −1, +1)`. Gain respects master volume (`masterVolume × 0.4`).
 
 ### Data Flow
 

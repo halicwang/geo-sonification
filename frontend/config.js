@@ -51,7 +51,11 @@ const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 
 /** Read token from config.local.js (not committed to repo). */
 export function getMapboxToken() {
-    if (window.MAPBOX_TOKEN && window.MAPBOX_TOKEN !== 'YOUR_MAPBOX_ACCESS_TOKEN_HERE') {
+    if (
+        window.MAPBOX_TOKEN &&
+        window.MAPBOX_TOKEN !== 'YOUR_MAPBOX_ACCESS_TOKEN_HERE' &&
+        window.MAPBOX_TOKEN !== 'your-token-here'
+    ) {
         return window.MAPBOX_TOKEN;
     }
     return null;

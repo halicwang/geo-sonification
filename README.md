@@ -97,6 +97,7 @@ geo-sonification/
 │   ├── raw/                              # GEE-exported CSVs (source data, do not delete)
 │   │   ├── SCHEMA.md                     # Data contract (fields, types, ranges)
 │   │   └── <continent>_grid.csv          # One CSV per continent (exported from GEE)
+│   ├── cities.json                       # City database (~1100 entries, pop > 500K)
 │   ├── cache/                            # Derived data (safe to delete, auto-rebuilt)
 │   │   ├── all_grids.json
 │   │   └── normalize.json
@@ -134,7 +135,9 @@ geo-sonification/
 │   ├── websocket.js                      # WebSocket connection with exponential-backoff reconnect
 │   ├── ui.js                             # DOM updates: stats panel, connection status, toast
 │   ├── audio-engine.js                   # Web Audio engine: 7-bus EMA crossfade + ocean detector
+│   ├── city-announcer.js                 # City name voice announcement with stereo panning
 │   ├── audio/ambience/                   # Loopable stereo WAVs (one per bus)
+│   ├── audio/cities/                     # Pre-generated TTS M4A clips (one per city)
 │   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
 ├── scripts/
 │   ├── check_csv_schema.js                # CSV schema validator
@@ -142,6 +145,7 @@ geo-sonification/
 │   ├── benchmark-viewport.js              # Viewport processing benchmark
 │   ├── smoke-worldcover.js                # WorldCover smoke test
 │   ├── clean-cache.js                     # Cross-platform cache cleaner
+│   ├── generate-city-audio.js             # City TTS audio generator (macOS `say`)
 │   ├── setup-git-hooks.js                 # Cross-platform git hooks installer
 │   ├── setup-git-hooks.sh                 # Git hooks installer (Unix)
 │   └── test_bounds_validation.sh          # Bounds regression test (Unix, requires curl)

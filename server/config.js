@@ -8,6 +8,10 @@
  * Override via environment variables or a .env file.
  */
 
+const { loadEnvFile } = require('./load-env');
+
+loadEnvFile();
+
 // ---- Env helpers ----
 
 /**

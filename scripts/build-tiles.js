@@ -5,7 +5,7 @@
 /**
  * Build PMTiles from grid data for the map overlay.
  *
- * Generates a single .pmtiles file with 0.5° base cells across all zoom levels (0-12).
+ * Generates a single .pmtiles file with base cells (size from GRID_SIZE) across all zoom levels (0-12).
  *
  * Usage:
  *   node scripts/build-tiles.js
@@ -16,10 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-
-// Reuse server modules for data loading
-const { loadGridData } = require('../server/data-loader');
-const spatial = require('../server/spatial');
+const { GRID_SIZE } = require('../server/config');
 
 const TILES_DIR = path.join(__dirname, '../data/tiles');
 const SRC_DIR = path.join(TILES_DIR, '_src');
@@ -72,19 +69,27 @@ function gridToFeature(grid, gridSize, minzoom, maxzoom) {
     };
 }
 
+function buildTileFeatures(grids, gridSize = GRID_SIZE, minzoom = 0, maxzoom = 12) {
+    return grids.map((grid) => gridToFeature(grid, gridSize, minzoom, maxzoom));
+}
+
 async function main() {
+    // Reuse server modules for data loading
+    const { loadGridData } = require('../server/data-loader');
+    const spatial = require('../server/spatial');
+
     // 1. Load grid data
     console.log('[build-tiles] Loading grid data...');
     const { gridData, normalizeParams } = await loadGridData();
     spatial.init(gridData, normalizeParams);
     const allGrids = spatial.getGridData();
-    console.log(`[build-tiles] Loaded ${allGrids.length} base cells (0.5°)`);
+    console.log(`[build-tiles] Loaded ${allGrids.length} base cells (${GRID_SIZE}°)`);
 
-    // 2. Build GeoJSON — all cells at full 0.5° resolution across all zoom levels
-    const features = allGrids.map((g) => gridToFeature(g, 0.5, 0, 12));
+    // 2. Build GeoJSON — all cells at configured base resolution across all zoom levels
+    const features = buildTileFeatures(allGrids);
 
     const geojson = { type: 'FeatureCollection', features };
-    console.log(`[build-tiles] ${features.length} features (0.5° base cells, zoom 0-12)`);
+    console.log(`[build-tiles] ${features.length} features (${GRID_SIZE}° base cells, zoom 0-12)`);
 
     // 3. Write temporary GeoJSON
     fs.mkdirSync(SRC_DIR, { recursive: true });
@@ -122,7 +127,15 @@ async function main() {
     console.log('[build-tiles] Done!');
 }
 
-main().catch((err) => {
-    console.error('[build-tiles] FATAL:', err);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch((err) => {
+        console.error('[build-tiles] FATAL:', err);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    stripProps,
+    gridToFeature,
+    buildTileFeatures,
+};

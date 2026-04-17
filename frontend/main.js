@@ -48,6 +48,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loopProgress: document.getElementById('loop-progress'),
         loopProgressFill: document.getElementById('loop-progress-fill'),
         loopProgressHandle: document.getElementById('loop-progress-handle'),
+        infoPanel: document.getElementById('info-panel'),
+        panelToggle: document.getElementById('panel-toggle'),
     };
 
     getClientId();
@@ -101,6 +103,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
         onError: (msg) => showToast(`Error: ${msg}`, 5000),
         onDisconnect: () => updateConnectionStatus(false),
+    });
+
+    // ── Info panel toggle ──
+    state.els.panelToggle.addEventListener('click', () => {
+        const hidden = state.els.infoPanel.classList.toggle('hidden');
+        state.els.panelToggle.classList.toggle('open', !hidden);
     });
 
     // ── Audio toggle button ──

@@ -24,8 +24,28 @@
             <div id="loop-progress-handle" class="loop-progress-handle"></div>
         </div>
 
+        <!-- Floating control strip (top-right): audio play + panel toggle -->
+        <div id="controls-bar">
+            <button
+                id="audio-toggle"
+                class="floating-btn audio-btn-floating"
+                title="Start/Stop Audio"
+            >
+                <span id="audio-icon">&#9654;</span>
+            </button>
+            <button
+                id="panel-toggle"
+                class="floating-btn panel-toggle-btn"
+                aria-label="Toggle panel"
+            >
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+            </button>
+        </div>
+
         <!-- Floating info panel: stats updated in real time by updateUI() -->
-        <div id="info-panel">
+        <div id="info-panel" class="hidden">
             <h2>Geo-Sonification</h2>
             <p class="subtitle">Interactive Sound Map</p>
 
@@ -61,10 +81,7 @@
             </div>
 
             <div class="audio-section">
-                <div class="audio-controls">
-                    <button id="audio-toggle" class="audio-btn" title="Start/Stop Audio">
-                        <span id="audio-icon">&#9654;</span>
-                    </button>
+                <div class="audio-status-row">
                     <span id="audio-status" class="audio-status">Audio off</span>
                 </div>
                 <div class="volume-control">

@@ -19,6 +19,7 @@ const express = require('express');
 const cors = require('cors');
 const WebSocket = require('ws');
 const { WebSocketServer } = WebSocket;
+const fs = require('fs');
 const path = require('path');
 
 const { HTTP_PORT, WS_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
@@ -46,6 +47,19 @@ const WS_PING_INTERVAL_MS = 30000; // 30 seconds
 
 /** Max buffered bytes per WS client before skipping sends (backpressure). */
 const WS_MAX_BUFFERED = 64 * 1024; // 64KB
+
+const EXPECTED_AMBIENCE_FILES = [
+    'forest.wav',
+    'shrub.wav',
+    'grass.wav',
+    'crop.wav',
+    'urban.wav',
+    'bare.wav',
+    'water.wav',
+];
+
+const AMBIENCE_DIR = path.join(__dirname, '../frontend/audio/ambience');
+const PMTILES_PATH = path.join(__dirname, '../data/tiles/grids.pmtiles');
 
 // ============ State ============
 let dataLoaded = false;
@@ -89,6 +103,27 @@ function parseViewportBounds(bounds, clientLabel = 'request') {
         };
     }
     return { bounds };
+}
+
+/** Warn when local-only static assets are missing from a checkout. */
+function warnIfStaticAssetsMissing() {
+    const missingAmbience = EXPECTED_AMBIENCE_FILES.filter(
+        (filename) => !fs.existsSync(path.join(AMBIENCE_DIR, filename))
+    );
+
+    if (missingAmbience.length > 0) {
+        console.warn(
+            `[Static Assets] Missing ambience WAVs (${missingAmbience.join(', ')}). ` +
+                'Copy all required files into frontend/audio/ambience/ before using audio.'
+        );
+    }
+
+    if (!fs.existsSync(PMTILES_PATH)) {
+        console.warn(
+            '[Static Assets] Missing data/tiles/grids.pmtiles. ' +
+                'Run npm --prefix server run build:tiles to restore the grid overlay.'
+        );
+    }
 }
 
 /**
@@ -376,6 +411,7 @@ async function startServer() {
 
         console.log(`HTTP server running at http://localhost:${HTTP_PORT}`);
         console.log(`WebSocket server running at ws://localhost:${WS_PORT}`);
+        warnIfStaticAssetsMissing();
 
         // Runtime HTTP errors should be logged to avoid unhandled 'error' events.
         httpServer.on('error', (err) => {

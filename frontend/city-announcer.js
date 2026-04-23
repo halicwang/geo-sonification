@@ -4,7 +4,7 @@
 /**
  * Geo-Sonification — City name voice announcement with stereo panning.
  *
- * After the user dwells at a location for 2 seconds, finds the nearest
+ * After the user dwells at a location for 500 ms, finds the nearest
  * major city (from a pre-built database) and plays a pre-generated TTS
  * audio clip through Web Audio with a StereoPannerNode.  The pan value
  * is derived from the city's horizontal position in the viewport.

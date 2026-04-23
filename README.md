@@ -33,17 +33,19 @@ Turn geographic data into soundscapes. This project maps ESA WorldCover satellit
 
 ## Quick Start
 
-> **One-click start (macOS):** Double-click `start.command` to start the Node server and open the browser. Requires steps 1–4 below to be completed first.
+> **One-click start (macOS):** Double-click `start.command` to start the Node server and open the browser. Requires steps 1-4 below to be completed first.
 
 ### 1. Prerequisites
 
 - Node.js 18+
 - Mapbox account (for access token)
+- Tippecanoe CLI for PMTiles generation (`brew install tippecanoe` on macOS)
 - Seven ambience WAV files in `frontend/audio/ambience/` (gitignored; repository only includes `.gitkeep`):
     - **Files**: `forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`
     - **Format**: WAV, 48 kHz, stereo recommended (mono works — Web Audio upmixes automatically)
     - **Duration**: any length, but the last 1.875 s must be an exact copy of the first 1.875 s. The engine crossfades outgoing/incoming voices over this overlap window — identical head and tail content is what makes the loop seamless. Total duration = desired cycle length + 1.875 s (e.g., 120 s cycle → 121.875 s file)
     - **Source**: record your own or obtain ambient loops from sites like [Freesound](https://freesound.org/). Trim to your desired cycle length in a DAW, then copy the first 1.875 s and append it to the end
+    - **Setup**: copy all seven files into `frontend/audio/ambience/` before starting audio. Missing files leave their buses silent and surface as loading errors in the UI.
 
 ### 2. Get Mapbox Token
 
@@ -57,11 +59,19 @@ Turn geographic data into soundscapes. This project maps ESA WorldCover satellit
 npm install && cd server && npm install
 ```
 
-### 4. Run GEE Export (if not done)
+### 4. Run GEE Export and Build PMTiles (if not done)
 
 Run the scripts in `gee-scripts/` and download CSVs to `data/raw/`. See `gee-scripts/README_EXPORT.md`.
 
-**Before starting the server**: Confirm CSVs in `data/raw/` match the schema in `data/raw/SCHEMA.md`. If you have old `loss_*` CSVs, re-export and replace them. Validate with `npm run check:csv`. Delete `data/cache/` then start Node.
+**Before starting the server**: Confirm CSVs in `data/raw/` match the schema in `data/raw/SCHEMA.md`. If you have old `loss_*` CSVs, re-export and replace them. Validate the CSVs, clear derived caches, then rebuild the gitignored PMTiles overlay:
+
+```bash
+npm run check:csv
+npm run clean:cache
+npm --prefix server run build:tiles
+```
+
+`data/tiles/grids.pmtiles` is generated locally and is not committed. Re-run the build step whenever the raw CSVs or grid size change.
 
 ### 5. Start the System
 
@@ -74,7 +84,7 @@ npm start
 **Browser: Open Frontend**
 
 - Navigate to http://localhost:3000
-- Click the play button in the info panel to start audio
+- Click the play button in the top-right control strip to start audio
 
 ### 6. Interact!
 
@@ -97,7 +107,7 @@ geo-sonification/
 │   ├── raw/                              # GEE-exported CSVs (source data, do not delete)
 │   │   ├── SCHEMA.md                     # Data contract (fields, types, ranges)
 │   │   └── <continent>_grid.csv          # One CSV per continent (exported from GEE)
-│   ├── cities.json                       # City database (~1100 entries, pop > 500K)
+│   ├── cities.json                       # City database (~555 entries, pop > 1M)
 │   ├── cache/                            # Derived data (safe to delete, auto-rebuilt)
 │   │   ├── all_grids.json
 │   │   └── normalize.json
@@ -186,7 +196,7 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 
 ### Audio Controls and Lifecycle
 
-- Play/Stop toggle in the info panel
+- Play/Stop toggle in the top-right control strip
 - Per-bus loading progress indicators
 - Audio automatically suspends when the browser tab is hidden (`visibilitychange`), resumes and snaps to current targets on return
 - When viewport updates pause (for example, map is stationary), audio keeps looping at the last targets; no idle auto-fade is applied.
@@ -220,6 +230,13 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 - Run GEE export first for each continent
 - Place CSV files in `data/raw/` (e.g., `data/raw/africa_grid.csv`, `data/raw/asia_grid.csv`, etc.)
 - Each file should match the schema in `data/raw/SCHEMA.md`
+- Install `tippecanoe`, then rebuild the local PMTiles file with `npm --prefix server run build:tiles`
+- Confirm `data/tiles/grids.pmtiles` exists after the build
+
+### No ambience audio
+
+- Copy `forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, and `water.wav` into `frontend/audio/ambience/`
+- Keep the files as loopable WAV assets; missing files make the corresponding buses silent
 
 ## API Endpoints
 

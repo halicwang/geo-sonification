@@ -460,7 +460,7 @@ async function loadGridData() {
 
     await fs.mkdir(cacheDir, { recursive: true });
 
-    // Require all continent CSV files up front (including Antarctica),
+    // Require all configured continent CSV files up front,
     // even if cache exists and fingerprint matches.
     const requiredCsvPaths = await assertRequiredCsvFiles(csvDir, GRID_FILES);
 

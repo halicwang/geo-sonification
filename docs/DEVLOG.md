@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-23 | Fix        | [Review Finding Follow-Ups](devlog/M3/2026-04-23-M3-review-finding-follow-ups.md)                                                                                                             |
 | 2026-04-16 | Fix        | [Globe Dot Overlay + UI Overhaul](devlog/M3/2026-04-16-M3-globe-dot-overlay-fix.md)                                                                                                           |
 | 2026-04-02 | Feature    | [City Announcer Population-Weighted Priority](devlog/M3/2026-04-02-M3-city-announcer-population-priority.md)                                                                                  |
 | 2026-04-02 | Feature    | [City Name Announcer with Stereo Panning](devlog/M3/2026-04-02-M3-city-name-announcer.md)                                                                                                     |

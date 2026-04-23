@@ -114,11 +114,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Audio toggle button ──
     const BUS_LABELS = ['Forest', 'Shrub', 'Grass', 'Crop', 'Urban', 'Bare', 'Water'];
 
+    function setAudioToggleState(enabled) {
+        state.els.audioIcon.textContent = enabled ? '\u25A0' : '\u25B6';
+        state.els.audioToggle.classList.toggle('active', enabled);
+        state.els.audioToggle.setAttribute('aria-pressed', String(enabled));
+        state.els.audioToggle.setAttribute('aria-label', enabled ? 'Stop audio' : 'Start audio');
+    }
+
     state.els.audioToggle.addEventListener('click', async () => {
         if (!state.runtime.audioEnabled) {
             state.runtime.audioEnabled = true;
-            state.els.audioIcon.textContent = '\u25A0';
-            state.els.audioToggle.classList.add('active');
+            setAudioToggleState(true);
             state.els.audioStatus.textContent = 'Loading\u2026';
             state.els.audioLoading.classList.remove('hidden');
 
@@ -135,8 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             onViewportChange();
         } else {
             state.runtime.audioEnabled = false;
-            state.els.audioIcon.textContent = '\u25B6';
-            state.els.audioToggle.classList.remove('active');
+            setAudioToggleState(false);
             state.els.audioStatus.textContent = 'Audio off';
             state.els.audioLoading.classList.add('hidden');
             await engine.stop();

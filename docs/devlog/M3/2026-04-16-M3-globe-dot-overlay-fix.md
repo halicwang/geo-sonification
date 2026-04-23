@@ -39,7 +39,7 @@ black theme).
 - `gridToFeature` now emits a `Point` at the cell centroid
   (`lon + gridSize/2`, `lat + gridSize/2`) instead of a five-vertex
   `Polygon`. Circle layers require point geometry.
-- **Deployment note**: existing `data/cache/grids.pmtiles` generated before
+- **Deployment note**: existing `data/tiles/grids.pmtiles` generated before
   this change will render empty. Run `npm run clean:cache` and rebuild
   tiles after pulling.
 

@@ -12,7 +12,7 @@
 
 import { state, VIEWPORT_DEBOUNCE, getClientId, buildWsUrl } from './config.js';
 import { escapeHtml, getLandcoverName } from './landcover.js';
-import { updateUI } from './ui.js';
+import { updateUI, showToast } from './ui.js';
 import { engine } from './audio-engine.js';
 
 // ============ Motion Tracking ============
@@ -284,6 +284,10 @@ export function initMap() {
             console.warn(
                 'Grid layer failed to load (PMTiles missing?), continuing without overlay:',
                 err
+            );
+            showToast(
+                'Grid tiles failed to load \u2014 run npm run build:tiles to regenerate.',
+                8000
             );
         }
 

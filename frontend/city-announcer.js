@@ -49,6 +49,9 @@ const TTS_GAIN_RATIO = 0.3;
 /** Fade-in duration for the announcement (seconds). */
 const FADE_IN_S = 0.05;
 
+/** Backoff between cities.json retry attempts while still unloaded (ms). */
+const CITIES_RETRY_MS = 30000;
+
 // ============ Module State ============
 
 let lastAnnouncedCity = null;
@@ -61,6 +64,7 @@ let lastMoveCheck = 0;
 /** @type {Array<{name: string, lat: number, lng: number, pop: number, slug: string}>} */
 let cities = [];
 let citiesLoaded = false;
+let lastLoadAttempt = 0;
 
 /** @type {Map<string, AudioBuffer>} slug → decoded AudioBuffer */
 const bufferCache = new Map();
@@ -69,6 +73,7 @@ const bufferCache = new Map();
 
 async function loadCities() {
     if (citiesLoaded) return;
+    lastLoadAttempt = performance.now();
     try {
         const res = await fetch('/data/cities.json');
         if (!res.ok) {
@@ -84,6 +89,13 @@ async function loadCities() {
 
 // Start loading immediately on module init
 loadCities();
+
+/** Re-issue a cities.json fetch if the previous attempt failed and the backoff elapsed. */
+function maybeRetryLoadCities() {
+    if (citiesLoaded) return;
+    if (performance.now() - lastLoadAttempt < CITIES_RETRY_MS) return;
+    loadCities();
+}
 
 // ============ Spatial Lookup ============
 
@@ -214,7 +226,7 @@ async function loadCityAudio(slug) {
         const arrayBuf = await res.arrayBuffer();
         const audioBuffer = await ctx.decodeAudioData(arrayBuf);
 
-        // LRU eviction
+        // FIFO eviction — buffers are write-once, so insertion-order works.
         if (bufferCache.size >= BUFFER_CACHE_SIZE) {
             const oldest = bufferCache.keys().next().value;
             bufferCache.delete(oldest);
@@ -286,6 +298,7 @@ function playAnnouncement(buffer, pan) {
  */
 async function checkAndAnnounce(centerLat, centerLng, bounds) {
     if (!enabled || !engine.isRunning()) return;
+    maybeRetryLoadCities();
     if (!citiesLoaded || cities.length === 0) return;
 
     const now = performance.now();
@@ -387,6 +400,7 @@ function onViewportSettle(centerLat, centerLng, zoom, bounds) {
  */
 function onViewportMove(centerLat, centerLng, zoom, bounds) {
     if (!enabled || zoom < FLYBY_MIN_ZOOM) return;
+    maybeRetryLoadCities();
     if (!citiesLoaded || cities.length === 0) return;
 
     const now = performance.now();
@@ -415,11 +429,14 @@ function onViewportMove(centerLat, centerLng, zoom, bounds) {
 }
 
 /**
- * Enable or disable announcements.
+ * Enable or disable announcements.  Disabling internally calls reset() so
+ * pending dwell timers and in-flight audio do not leak past the toggle.
  * @param {boolean} value
  */
 function setEnabled(value) {
+    const wasEnabled = enabled;
     enabled = value;
+    if (wasEnabled && !value) reset();
 }
 
 /** Clear state (on audio stop). */

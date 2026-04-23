@@ -114,6 +114,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Audio toggle button ──
     const BUS_LABELS = ['Forest', 'Shrub', 'Grass', 'Crop', 'Urban', 'Bare', 'Water'];
 
+    let audioAllFailedToastShown = false;
+
     function setAudioToggleState(enabled) {
         state.els.audioIcon.textContent = enabled ? '\u25A0' : '\u25B6';
         state.els.audioToggle.classList.toggle('active', enabled);
@@ -127,6 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             setAudioToggleState(true);
             state.els.audioStatus.textContent = 'Loading\u2026';
             state.els.audioLoading.classList.remove('hidden');
+            audioAllFailedToastShown = false;
 
             engine.setOnLoadingUpdate(renderLoadingUI);
             await engine.start();
@@ -198,7 +201,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const readyCount = states.filter((s) => s.status === 'ready').length;
         const errorCount = states.filter((s) => s.status === 'error').length;
-        if (readyCount + errorCount === states.length) {
+        const allFailed = errorCount === states.length && states.length > 0;
+
+        if (allFailed) {
+            state.els.audioStatus.textContent =
+                'Audio init failed \u2014 check frontend/audio/ambience/';
+            if (!audioAllFailedToastShown) {
+                showToast(
+                    'All ambience samples failed to load. Verify frontend/audio/ambience/.',
+                    8000
+                );
+                audioAllFailedToastShown = true;
+            }
+        } else if (readyCount + errorCount === states.length) {
             state.els.audioStatus.textContent =
                 errorCount > 0 ? 'Playing (' + errorCount + ' failed)' : 'Playing';
         } else if (states.some((s) => s.status === 'loading')) {

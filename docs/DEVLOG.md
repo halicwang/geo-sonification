@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-23 | Fix        | [Frontend Lifecycle & Asset Failure Hardening](devlog/M3/2026-04-23-M3-frontend-lifecycle-and-asset-hardening.md)                                                                             |
 | 2026-04-23 | Design     | [M3 Tech Debt Audit](devlog/M3/2026-04-23-M3-tech-debt-audit.md)                                                                                                                              |
 | 2026-04-23 | Fix        | [Review Finding Follow-Ups](devlog/M3/2026-04-23-M3-review-finding-follow-ups.md)                                                                                                             |
 | 2026-04-16 | Fix        | [Globe Dot Overlay + UI Overhaul](devlog/M3/2026-04-16-M3-globe-dot-overlay-fix.md)                                                                                                           |

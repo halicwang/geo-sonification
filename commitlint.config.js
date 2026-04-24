@@ -24,7 +24,7 @@ module.exports = {
         'subject-full-stop': [2, 'never', '.'],
 
         // --- Header ---
-        'header-max-length': [2, 'always', 72],
+        'header-max-length': [2, 'always', 100],
 
         // --- Body ---
         'body-max-line-length': [2, 'always', 72],

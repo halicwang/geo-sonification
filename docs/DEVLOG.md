@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-24 | Refactor   | [Anti-Moiré via Sub-Pixel Low-Zoom Dot Radius](devlog/M3/2026-04-24-M3-sub-pixel-dot-anti-moire.md)                                                                                           |
 | 2026-04-24 | Refactor   | [Tile LOD via Per-Feature Minzoom (Square 2-Tier)](devlog/M3/2026-04-24-M3-tile-lod-per-feature-minzoom.md)                                                                                   |
 | 2026-04-23 | Fix        | [Tile LOD Actually Applies (Switch to --cluster-distance)](devlog/M3/2026-04-23-M3-tile-lod-cluster-distance.md)                                                                              |
 | 2026-04-23 | Refactor   | [Bump Tile LOD Base-Zoom 8 → 10](devlog/M3/2026-04-23-M3-tile-lod-base-zoom-10.md)                                                                                                            |

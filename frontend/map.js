@@ -62,15 +62,44 @@ async function addGridLayer() {
         'source-layer': 'grids',
         paint: {
             'circle-color': DOT_COLOR,
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
-            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
+            // Radius shrinks aggressively at low zoom so the 67k full-grid
+            // dots fall well below one screen pixel wide (~0.2-0.4 px)
+            // when cells pack at ~2 px apart on a globe view. Mapbox's
+            // antialiasing then dissolves the regular grid into a smooth
+            // gray wash — the dot pattern has no coherent pixel-width
+            // stripes to beat with the screen grid, so no moiré. Past
+            // zoom 4 the radius catches up to its previous curve and
+            // individual dots become resolvable.
+            'circle-radius': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                0,
+                0.2,
+                2,
+                0.4,
+                4,
+                1.2,
+                5,
+                2.2,
+                8,
+                4.9,
+                12,
+                8.2,
+            ],
+            'circle-opacity': 1,
             'circle-stroke-color': 'rgba(255, 255, 255, 0.32)',
+            // Stroke width tracks the radius — no stroke while dots are
+            // sub-pixel (it would swamp them); same curve as before at
+            // zoom ≥ 5.
             'circle-stroke-width': [
                 'interpolate',
                 ['linear'],
                 ['zoom'],
-                2,
-                0.15,
+                0,
+                0,
+                4,
+                0,
                 5,
                 0.35,
                 8,

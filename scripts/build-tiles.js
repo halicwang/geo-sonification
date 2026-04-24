@@ -50,29 +50,18 @@ function stripProps(grid) {
 }
 
 /**
- * Pick a per-feature minzoom from the cell's integer grid position so the
- * overlay thins at low zoom while preserving every surviving dot's
- * original 0.5° grid coordinate. Two tiers only, both rectangular —
- * zooming past the breakpoint strictly reveals the "in-between" 0.5°
- * cells without moving anything on screen.
- *
- *   zoom 0-3: 1° sub-grid (every other cell on both axes, ~17k features
- *             globally, clean square lattice at 1° spacing)
- *   zoom 4+ : every 0.5° cell (~67k, full-resolution square lattice)
+ * Emit every cell at every zoom level. The dot overlay relies on the
+ * frontend's circle-radius paint curve to handle low-zoom density by
+ * shrinking dots to sub-pixel size, which lets Mapbox's antialiasing
+ * dissolve the regular 0.5° grid into a smooth gray wash instead of
+ * beating against the screen pixel grid. No feature is dropped or
+ * moved — every emitted dot sits at its exact original centroid.
  */
-function gridMinZoom(i, j) {
-    if (i % 2 === 0 && j % 2 === 0) return 0;
-    return 4;
-}
-
-function gridToFeature(grid, gridSize, maxzoom) {
+function gridToFeature(grid, gridSize, minzoom, maxzoom) {
     const half = gridSize / 2;
-    // Integer cell indices on the global grid.
-    const i = Math.round(grid.lon / gridSize);
-    const j = Math.round(grid.lat / gridSize);
     return {
         type: 'Feature',
-        tippecanoe: { minzoom: gridMinZoom(i, j), maxzoom },
+        tippecanoe: { minzoom, maxzoom },
         properties: stripProps(grid),
         geometry: {
             type: 'Point',
@@ -81,8 +70,8 @@ function gridToFeature(grid, gridSize, maxzoom) {
     };
 }
 
-function buildTileFeatures(grids, gridSize = GRID_SIZE, maxzoom = 12) {
-    return grids.map((grid) => gridToFeature(grid, gridSize, maxzoom));
+function buildTileFeatures(grids, gridSize = GRID_SIZE, minzoom = 0, maxzoom = 12) {
+    return grids.map((grid) => gridToFeature(grid, gridSize, minzoom, maxzoom));
 }
 
 async function main() {

@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-24 | Milestone  | [Production Deployment Handoff](devlog/M3/2026-04-24-M3-production-deployment-handoff.md)                                                                                                     |
 | 2026-04-24 | Feature    | [Pages Build + Cloudflare Worker Subpath Proxy](devlog/M3/2026-04-24-M3-pages-deploy-and-worker-subpath-proxy.md)                                                                             |
 | 2026-04-24 | Fix        | [Docker Cache Fingerprint + Fly VM Sizing](devlog/M3/2026-04-24-M3-docker-cache-fingerprint-and-fly-sizing.md)                                                                                |
 | 2026-04-24 | Refactor   | [Single-Port Server + Fly.io Docker Setup](devlog/M3/2026-04-24-M3-single-port-server-and-fly-docker.md)                                                                                      |

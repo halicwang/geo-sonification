@@ -16,6 +16,13 @@ Turn geographic data into soundscapes. This project maps ESA WorldCover satellit
 - The server computes audio parameters (7-bus fold-mapping, land-coverage ratio) and sends them back via WebSocket.
 - The browser's Web Audio engine plays ambient soundscapes that reflect the land cover composition of the current viewport.
 
+### Live demo
+
+Production deployment lives at **https://placeecho.com/geo-sonification/**.
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the topology
+(Cloudflare Pages + Worker reverse proxy + R2 + Fly.io), redeploy
+commands, credential map, and known production issues.
+
 ## Architecture
 
 ```

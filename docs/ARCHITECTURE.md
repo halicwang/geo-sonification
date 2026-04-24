@@ -3,6 +3,7 @@
 This document describes the browser-based Web Audio engine.
 
 For the overall system architecture (Frontend → Server → Browser Audio), see `README.md`.
+For the **production deployment topology** (Cloudflare Pages + Worker + R2 + Fly.io), see [`DEPLOYMENT.md`](DEPLOYMENT.md).
 For the frontend module structure (8 ES modules: config, landcover, ui, map, websocket, audio-engine, city-announcer, main), see `docs/devlog/M2/2026-02-20-frontend-module-split.md` and `docs/devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-21-web-audio-migration.md`.
 For sound design rationale and task specs, see `docs/plans/M2/2026-02-19-M2-sound-design-plan.md`.
 

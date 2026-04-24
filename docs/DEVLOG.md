@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-24 | Refactor   | [Nudge Dot Fill One More Step to #606060](devlog/M3/2026-04-24-M3-dot-color-grey-tighter.md)                                                                                                  |
 | 2026-04-24 | Refactor   | [Push Dot Overlay Further Into Mid-Grey](devlog/M3/2026-04-24-M3-dot-color-darker-grey.md)                                                                                                    |
 | 2026-04-24 | Refactor   | [Darken Dot Overlay from #d0d0d0 to #b0b0b0](devlog/M3/2026-04-24-M3-darken-dot-overlay.md)                                                                                                   |
 | 2026-04-24 | Refactor   | [Roll Back Dot Rendering Experiments to Pre-LOD State](devlog/M3/2026-04-24-M3-revert-dot-rendering-experiments.md)                                                                           |

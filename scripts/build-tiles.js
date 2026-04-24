@@ -93,19 +93,32 @@ async function main() {
     );
 
     // 4. Run tippecanoe
-    // LOD strategy: explicit base-zoom + drop-rate so low-zoom tiles don't
-    // pack all 67k 0.5° grid points into a 2-pixel-per-degree canvas
-    // (which caused visible moiré + stutter at zoom 2-4). Zoom 10+ keeps
-    // 100% of features; each zoom level below drops by half
-    // (-r 2 means "keep 1/2 of the prior zoom's features"). At zoom 4
-    // this yields ~1k features globally, at zoom 2 ~250 — sparse enough
-    // that the regular grid no longer beats with the screen pixel grid
-    // and the dot overlay reads as a data sketch rather than a wash.
+    // LOD strategy: --cluster-distance=N clusters point features within N
+    // tile-pixels of each other at each zoom level. For the 0.5°-spaced
+    // grid this produces clean LOD — aggressive at low zoom (cells only
+    // a few pixels apart get merged), no-op at high zoom (0.5° >> N px
+    // at zoom ≥ 10). Without this the dot overlay packed all 67k cells
+    // at zoom 2-4, producing visible moiré against the screen pixel
+    // grid and dragging frame rate during pan.
     //
-    // --no-tile-size-limit keeps the deterministic drop-rate output even
-    // if a tile ends up >500 KB (which won't happen with this feature
-    // density). Skipping --drop-densest-as-needed avoids the iterative
-    // "try X%, try Y%…" that made this step take 30+ minutes.
+    // Earlier attempts with `--base-zoom=10 --drop-rate=2` by themselves
+    // did NOT actually drop features — those flags only configure the
+    // rate used by `--drop-*-as-needed` siblings, and without one of
+    // those the fixed-fraction "dropping" never kicks in. Verified
+    // empirically via `pmtiles tile` + MVT feature count: early
+    // attempts still had 67k features in the zoom 0 tile.
+    //
+    // N=16 was picked by measuring per-tile feature counts at each zoom
+    // (see devlog). Bumping N reduces density further if needed
+    // (cluster area scales with N²).
+    //
+    // Clustered features lose their original `landcover_class` property
+    // (tippecanoe replaces them with a cluster centroid carrying a
+    // `point_count`), so click popups at low zoom show "Unknown" for
+    // clustered regions — an acceptable tradeoff since clicking a
+    // low-zoom dot that represents multiple cells wasn't meaningful to
+    // begin with. At zoom ≥ 10 each cell is its own feature with full
+    // properties intact.
     const tippecanoeArgs = [
         '-o',
         OUTPUT,
@@ -113,9 +126,7 @@ async function main() {
         '--layer=grids',
         '--minimum-zoom=0',
         '--maximum-zoom=12',
-        '--base-zoom=10',
-        '--drop-rate=2',
-        '--no-tile-size-limit',
+        '--cluster-distance=16',
         '--no-tile-compression',
         GEOJSON_PATH,
     ];

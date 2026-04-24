@@ -49,13 +49,13 @@ const WS_PING_INTERVAL_MS = 30000; // 30 seconds
 const WS_MAX_BUFFERED = 64 * 1024; // 64KB
 
 const EXPECTED_AMBIENCE_FILES = [
-    'forest.wav',
-    'shrub.wav',
-    'grass.wav',
-    'crop.wav',
-    'urban.wav',
-    'bare.wav',
-    'water.wav',
+    'forest.opus',
+    'shrub.opus',
+    'grass.opus',
+    'crop.opus',
+    'urban.opus',
+    'bare.opus',
+    'water.opus',
 ];
 
 const AMBIENCE_DIR = path.join(__dirname, '../frontend/audio/ambience');

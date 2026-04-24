@@ -23,8 +23,9 @@ frontend/config.local.js
 # Max/MSP artifacts
 sonification/
 
-# Audio samples (too large for git)
+# Audio samples (too large for git) — both source WAVs and Opus derivatives
 frontend/audio/ambience/*.wav
+frontend/audio/ambience/*.opus
 
 # AI agent config (local-only)
 .claude/

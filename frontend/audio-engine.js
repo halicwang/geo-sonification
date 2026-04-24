@@ -608,9 +608,9 @@ async function loadSample(busIndex, generation) {
     notifyLoadingUpdate();
 
     try {
-        const response = await fetch(`${ASSET_BASE}/audio/ambience/${name}.wav`);
+        const response = await fetch(`${ASSET_BASE}/audio/ambience/${name}.opus`);
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status} for ${name}.wav`);
+            throw new Error(`HTTP ${response.status} for ${name}.opus`);
         }
 
         // Abort if stop() was called while fetching

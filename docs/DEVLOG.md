@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-24 | Fix        | [Docker Cache Fingerprint + Fly VM Sizing](devlog/M3/2026-04-24-M3-docker-cache-fingerprint-and-fly-sizing.md)                                                                                |
 | 2026-04-24 | Refactor   | [Single-Port Server + Fly.io Docker Setup](devlog/M3/2026-04-24-M3-single-port-server-and-fly-docker.md)                                                                                      |
 | 2026-04-24 | Refactor   | [Frontend Deployment Runtime Config](devlog/M3/2026-04-24-M3-frontend-deployment-runtime-config.md)                                                                                           |
 | 2026-04-24 | Design     | [Raise Commit Header Max Length to 100](devlog/M3/2026-04-24-M3-commit-header-max-100.md)                                                                                                     |

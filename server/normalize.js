@@ -77,7 +77,12 @@ function normalize(value, p1, p99, useLog = false) {
 }
 
 /**
- * Compute a short hash fingerprint from CSV file metadata + content snippets.
+ * Compute a short hash fingerprint from CSV filename, size, and content
+ * snippets. mtime is intentionally excluded: it's unstable across Docker
+ * image extraction, rsync, and file copies, which would force needless
+ * cache invalidation. Size + head/tail content hash catches every real
+ * change we care about (re-exports, edits, different files).
+ *
  * @param {string[]} csvPaths - Absolute paths to CSV files
  * @returns {string} 12-char hex fingerprint
  */
@@ -86,8 +91,6 @@ function calcCsvFingerprint(csvPaths) {
     const parts = csvPaths.map((p) => {
         try {
             const stat = fs.statSync(p);
-            // Include content hash of first+last 1KB for robustness against
-            // same-size files with different content (e.g., cp -p or re-exports)
             const fd = fs.openSync(p, 'r');
             try {
                 const readLen = Math.min(1024, stat.size);
@@ -102,7 +105,7 @@ function calcCsvFingerprint(csvPaths) {
                     .update(tailBuf)
                     .digest('hex')
                     .slice(0, 8);
-                return `${path.basename(p)}:${stat.mtimeMs}:${stat.size}:${contentSnippet}`;
+                return `${path.basename(p)}:${stat.size}:${contentSnippet}`;
             } finally {
                 fs.closeSync(fd);
             }

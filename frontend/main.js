@@ -42,12 +42,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         audioToggle: document.getElementById('audio-toggle'),
         audioIcon: document.getElementById('audio-icon'),
         audioStatus: document.getElementById('audio-status'),
-        audioLoading: document.getElementById('audio-loading'),
         volumeSlider: document.getElementById('volume-slider'),
         volumeValue: document.getElementById('volume-value'),
         loopProgress: document.getElementById('loop-progress'),
         loopProgressFill: document.getElementById('loop-progress-fill'),
         loopProgressHandle: document.getElementById('loop-progress-handle'),
+        infoPanel: document.getElementById('info-panel'),
+        panelToggle: document.getElementById('panel-toggle'),
     };
 
     getClientId();
@@ -103,18 +104,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         onDisconnect: () => updateConnectionStatus(false),
     });
 
+    // ── Info panel toggle ──
+    state.els.panelToggle.addEventListener('click', () => {
+        const hidden = state.els.infoPanel.classList.toggle('hidden');
+        state.els.panelToggle.classList.toggle('open', !hidden);
+    });
+
     // ── Audio toggle button ──
-    const BUS_LABELS = ['Forest', 'Shrub', 'Grass', 'Crop', 'Urban', 'Bare', 'Water'];
+    let audioAllFailedToastShown = false;
+
+    function setAudioToggleState(enabled) {
+        state.els.audioIcon.textContent = enabled ? '\u25A0' : '\u25B6';
+        state.els.audioToggle.classList.toggle('active', enabled);
+        state.els.audioToggle.setAttribute('aria-pressed', String(enabled));
+        state.els.audioToggle.setAttribute('aria-label', enabled ? 'Stop audio' : 'Start audio');
+    }
 
     state.els.audioToggle.addEventListener('click', async () => {
         if (!state.runtime.audioEnabled) {
             state.runtime.audioEnabled = true;
-            state.els.audioIcon.textContent = '\u25A0';
-            state.els.audioToggle.classList.add('active');
+            setAudioToggleState(true);
             state.els.audioStatus.textContent = 'Loading\u2026';
-            state.els.audioLoading.classList.remove('hidden');
+            audioAllFailedToastShown = false;
 
             engine.setOnLoadingUpdate(renderLoadingUI);
+            // setOnLoadingUpdate only stores the callback reference; on a
+            // second start the buffers are already cached and no load
+            // event will ever fire, which would leave the "Loading…"
+            // text from above stuck forever. Render once against the
+            // current states so an all-ready engine flips to "Playing"
+            // immediately and a pending engine stays on "Loading…".
+            renderLoadingUI(engine.getLoadingStates());
             await engine.start();
             announcer.setEnabled(true);
             startProgressLoop();
@@ -127,10 +147,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             onViewportChange();
         } else {
             state.runtime.audioEnabled = false;
-            state.els.audioIcon.textContent = '\u25B6';
-            state.els.audioToggle.classList.remove('active');
+            setAudioToggleState(false);
             state.els.audioStatus.textContent = 'Audio off';
-            state.els.audioLoading.classList.add('hidden');
             await engine.stop();
             announcer.setEnabled(false);
             announcer.reset();
@@ -139,53 +157,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ── Volume slider ──
+    // --fill-pct drives the gradient fill on the Webkit track so the
+    // active (left) portion tracks the thumb in real time. Firefox
+    // uses ::-moz-range-progress natively and ignores this var.
+    function updateVolumeFillPct() {
+        const el = state.els.volumeSlider;
+        const raw = parseFloat(el.value) || 0;
+        const min = parseFloat(el.min) || 0;
+        const max = parseFloat(el.max) || 100;
+        const span = max - min;
+        const pct = span > 0 ? ((raw - min) / span) * 100 : 0;
+        el.style.setProperty('--fill-pct', pct + '%');
+    }
+
     state.els.volumeSlider.addEventListener('input', () => {
         const raw = parseInt(state.els.volumeSlider.value, 10);
         const volume = raw / 100;
         engine.setVolume(volume);
         state.els.volumeValue.textContent = raw + '%';
+        updateVolumeFillPct();
     });
 
+    updateVolumeFillPct();
+
     /**
-     * Render per-bus loading progress bars.
+     * Update the audio status text and surface an all-failed toast based on
+     * per-bus loading progress reported by the engine. No per-bus list is
+     * rendered into the info panel.
      * @param {Array<{status: string, progress: number, error: string|null}>} states
      */
     function renderLoadingUI(states) {
-        const el = state.els.audioLoading;
-        el.innerHTML = states
-            .map((s, i) => {
-                const statusClass =
-                    s.status === 'error' ? ' error' : s.status === 'ready' ? ' ready' : '';
-                const pct = Math.round(s.progress * 100);
-                let statusText;
-                if (s.status === 'ready') statusText = '\u2713';
-                else if (s.status === 'error') statusText = '\u2717';
-                else if (s.status === 'pending') statusText = '\u2014';
-                else statusText = pct + '%';
-
-                return (
-                    '<div class="audio-load-item' +
-                    statusClass +
-                    '">' +
-                    '<span class="audio-load-name">' +
-                    BUS_LABELS[i] +
-                    '</span>' +
-                    '<div class="audio-load-bar">' +
-                    '<div class="audio-load-fill" style="width:' +
-                    pct +
-                    '%"></div>' +
-                    '</div>' +
-                    '<span class="audio-load-status">' +
-                    statusText +
-                    '</span>' +
-                    '</div>'
-                );
-            })
-            .join('');
-
         const readyCount = states.filter((s) => s.status === 'ready').length;
         const errorCount = states.filter((s) => s.status === 'error').length;
-        if (readyCount + errorCount === states.length) {
+        const allFailed = errorCount === states.length && states.length > 0;
+
+        if (allFailed) {
+            state.els.audioStatus.textContent =
+                'Audio init failed \u2014 check frontend/audio/ambience/';
+            if (!audioAllFailedToastShown) {
+                showToast(
+                    'All ambience samples failed to load. Verify frontend/audio/ambience/.',
+                    8000
+                );
+                audioAllFailedToastShown = true;
+            }
+        } else if (readyCount + errorCount === states.length) {
             state.els.audioStatus.textContent =
                 errorCount > 0 ? 'Playing (' + errorCount + ' failed)' : 'Playing';
         } else if (states.some((s) => s.status === 'loading')) {

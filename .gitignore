@@ -13,6 +13,9 @@ data/cache/
 # Pre-built vector tiles (regenerate with: npm run build:tiles --prefix server)
 data/tiles/
 
+# Third-party source data (e.g. Natural Earth) — downloaded locally, not tracked
+data/sources/
+
 # Local configuration (not in repository)
 .env
 frontend/config.local.js

@@ -22,14 +22,14 @@ let _toastTimerId = null;
 export function updateUI(stats) {
     const els = state.els;
 
-    // Grid count display
+    // Grid count display (with thousands separators for readability)
     const gc = stats.gridCount || 0;
     const tgc = stats.theoreticalGridCount;
     if (tgc != null && tgc > 0) {
         const pct = ((stats.landCoverageRatio || 0) * 100).toFixed(0);
-        els.gridCount.textContent = `${gc} / ${tgc} (${pct}%)`;
+        els.gridCount.textContent = `${gc.toLocaleString('en-US')} / ${tgc.toLocaleString('en-US')} (${pct}%)`;
     } else {
-        els.gridCount.textContent = gc;
+        els.gridCount.textContent = gc.toLocaleString('en-US');
     }
 
     // Mode indicator (aggregated vs per-grid)
@@ -72,12 +72,14 @@ export function updateUI(stats) {
                 const swatchColor = isOther ? null : getLandcoverColor(item.class);
                 const formattedPercent = (item.percentage ?? 0).toFixed(1);
                 const otherClass = isOther ? ' landcover-other' : '';
+                // --pct drives the inline micro-bar width; --bar-color tints it.
+                const itemStyle = `--pct: ${formattedPercent}; --bar-color: ${
+                    isOther ? 'transparent' : escapeHtml(swatchColor)
+                };`;
 
-                return `<div class="landcover-item${otherClass}">
-                <span class="landcover-name">
-                    ${swatchColor ? `<span class="landcover-swatch" style="background:${escapeHtml(swatchColor)}"></span>` : ''}
-                    ${escapeHtml(displayName)}
-                </span>
+                return `<div class="landcover-item${otherClass}" style="${itemStyle}">
+                <span class="landcover-swatch"${swatchColor ? ` style="background:${escapeHtml(swatchColor)}"` : ''}></span>
+                <span class="landcover-name">${escapeHtml(displayName)}</span>
                 <span class="landcover-percent">${formattedPercent}%</span>
             </div>`;
             })
@@ -85,7 +87,9 @@ export function updateUI(stats) {
     } else {
         els.landcoverList.innerHTML = `
             <div class="landcover-item empty">
+                <span class="landcover-swatch"></span>
                 <span class="landcover-name">No data</span>
+                <span class="landcover-percent"></span>
             </div>
         `;
     }

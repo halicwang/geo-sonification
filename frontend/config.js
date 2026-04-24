@@ -139,3 +139,24 @@ export function getClientId() {
 
     return state.runtime.clientId;
 }
+
+// ============ Audio Loudness Normalization ============
+
+const LOUDNESS_NORM_STORAGE_KEY = 'ENABLE_LOUDNESS_NORM';
+
+/**
+ * Whether to route the master output through the loudness-normalization
+ * chain (static makeup gain + peak limiter) in audio-engine.js. Reads
+ * localStorage so it can be flipped from the browser console without
+ * redeploying:
+ *   localStorage.setItem('ENABLE_LOUDNESS_NORM', 'false'); location.reload();
+ * Defaults to true; only the literal string 'false' disables the chain
+ * so a missing or unreadable storage entry leaves the default on.
+ */
+export function getLoudnessNormEnabled() {
+    try {
+        return window.localStorage.getItem(LOUDNESS_NORM_STORAGE_KEY) !== 'false';
+    } catch {
+        return true;
+    }
+}

@@ -2,22 +2,46 @@
  * Geo-Sonification UI
  *
  * Layout: full-screen Mapbox map + floating info panel (top-right).
- * Color scheme: dark (#1a1a2e base) to match mapbox dark-v11 style.
+ * Color scheme: pure black background to match the mapbox dark-v10 basemap
+ * (forced to an all-black background by applyMinimalBasemap in map.js).
  */
 
 /* ============ Theme Variables ============ */
 :root {
-    --color-bg: #1a1a2e;
-    --color-bg-panel: rgba(26, 26, 46, 0.55);
-    --color-bg-70: rgba(26, 26, 46, 0.7);
+    --color-bg: #000000;
+    --color-bg-panel: rgba(0, 0, 0, 0.55);
+    --color-bg-70: rgba(0, 0, 0, 0.7);
     --color-text: #eee;
     --color-text-bright: #fff;
     --color-text-muted: #aaa;
     --color-text-dim: #888;
-    --color-accent: #4ecdc4;
+    --color-accent: #5cffc8;
+    --color-accent-rgb: 92 255 200;
     --color-accent-info: #4fc3f7;
     --color-danger: #ff6b6b;
     --color-border: rgba(255, 255, 255, 0.1);
+
+    /* Typography stacks */
+    --font-sans:
+        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+    /* Text tiers — tier1 = values/titles, tier2 = labels, tier3 = meta */
+    --color-text-tier1: rgba(255, 255, 255, 0.92);
+    --color-text-tier2: rgba(255, 255, 255, 0.55);
+    --color-text-tier3: rgba(255, 255, 255, 0.3);
+
+    /* Panel surfaces */
+    --color-panel-bg-v2: rgba(12, 12, 14, 0.85);
+    --color-divider: rgba(255, 255, 255, 0.08);
+    --color-border-soft: rgba(255, 255, 255, 0.06);
+
+    /* Type scale */
+    --fs-title: 1.05rem;
+    --fs-subtitle: 0.72rem;
+    --fs-meta: 0.65rem;
+    --fs-label: 0.72rem;
+    --fs-value: 0.78rem;
 }
 
 /* ============ Reset & Base ============ */
@@ -28,7 +52,7 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    font-family: var(--font-sans);
     background: var(--color-bg);
     color: var(--color-text);
     overflow: hidden;
@@ -43,253 +67,326 @@ body {
     bottom: 0;
 }
 
-/* ============ Info Panel (floating top-right) ============ */
-#info-panel {
-    position: absolute;
+/* ============ Controls Bar (floating top-right) ============ */
+#controls-bar {
+    position: fixed;
     top: 20px;
     right: 20px;
-    width: 280px;
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+}
+
+.floating-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
     background: var(--color-bg-panel);
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--color-border);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--color-border);
-}
-
-#info-panel h2 {
-    font-size: 1.4em;
-    margin-bottom: 4px;
     color: var(--color-text-bright);
-}
-
-.subtitle {
-    font-size: 0.85em;
-    color: var(--color-text-dim);
-    margin-bottom: 20px;
-}
-
-/* Data vintage label + "By land area" note */
-.stats-section .vintage {
-    font-size: 0.8em;
-    color: var(--color-text-dim);
-    margin-bottom: 12px;
-}
-
-.stats-section .stat-note {
-    font-size: 0.75em;
-    color: var(--color-text-dim);
-    margin-top: -4px;
-    margin-bottom: 10px;
-}
-
-.stats-section {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-}
-
-/* ============ Audio Controls ============ */
-.audio-section {
-    margin-bottom: 15px;
-}
-
-.audio-controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-
-.audio-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 2px solid var(--color-accent);
-    background: transparent;
-    color: var(--color-accent);
-    font-size: 1em;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    font-size: 1em;
     transition:
         background 0.2s,
-        color 0.2s;
-    flex-shrink: 0;
+        border-color 0.2s,
+        transform 0.1s;
 }
 
-.audio-btn:hover {
-    background: var(--color-accent);
-    color: var(--color-bg);
+.floating-btn:hover {
+    background: rgb(var(--color-accent-rgb) / 0.18);
+    border-color: rgb(var(--color-accent-rgb) / 0.5);
 }
 
-.audio-btn.active {
+.floating-btn:active {
+    transform: scale(0.96);
+}
+
+.floating-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
+}
+
+.audio-btn-floating {
+    color: var(--color-accent);
+}
+
+.audio-btn-floating.active {
     background: var(--color-accent);
     color: var(--color-bg);
+    border-color: var(--color-accent);
+}
+
+.panel-toggle-btn {
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hamburger-bar {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 1px;
+    transform-origin: center;
+    transition:
+        transform 0.25s,
+        opacity 0.2s;
+}
+
+.panel-toggle-btn.open .hamburger-bar:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+}
+
+.panel-toggle-btn.open .hamburger-bar:nth-child(2) {
+    opacity: 0;
+}
+
+.panel-toggle-btn.open .hamburger-bar:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+}
+
+/* ============ Info Panel (floating top-right, below controls-bar) ============ */
+#info-panel {
+    position: absolute;
+    top: 76px;
+    right: 20px;
+    width: 280px;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+    background: var(--color-panel-bg-v2);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid var(--color-border-soft);
+    color: var(--color-text-tier1);
+    font-family: var(--font-sans);
+    z-index: 50;
+    transition:
+        opacity 0.25s ease,
+        transform 0.25s ease;
+}
+
+#info-panel.hidden {
+    opacity: 0;
+    transform: translateX(20px);
+    pointer-events: none;
+}
+
+#info-panel h2 {
+    font-family: var(--font-sans);
+    font-size: var(--fs-title);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-text-tier1);
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: var(--fs-subtitle);
+    font-weight: 300;
+    color: var(--color-text-tier2);
+    margin-bottom: 2px;
+}
+
+/* Data vintage: sits directly under the subtitle as title-block metadata. */
+#info-panel > .vintage {
+    font-size: var(--fs-meta);
+    color: var(--color-text-tier3);
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--color-divider);
+}
+
+.stats-section {
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--color-divider);
+}
+
+/* ============ Audio Controls ============ */
+.audio-section {
+    padding-bottom: 14px;
+    margin-bottom: 0;
+}
+
+.audio-status-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
 }
 
 .audio-status {
-    font-size: 0.8em;
-    color: var(--color-text-dim);
-}
-
-.audio-loading {
-    padding: 4px 0;
-}
-
-.audio-loading.hidden {
-    display: none;
-}
-
-.audio-load-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-    font-size: 0.75em;
-    color: var(--color-text-muted);
-}
-
-.audio-load-name {
-    width: 40px;
-    flex-shrink: 0;
-}
-
-.audio-load-bar {
-    flex: 1;
-    height: 3px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.audio-load-fill {
-    height: 100%;
-    background: var(--color-accent);
-    border-radius: 2px;
-    transition: width 0.3s;
-}
-
-.audio-load-item.error .audio-load-fill {
-    background: var(--color-danger);
-    width: 100% !important;
-}
-
-.audio-load-item.ready .audio-load-bar {
-    display: none;
-}
-
-.audio-load-status {
-    width: 45px;
-    text-align: right;
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-label);
+    color: var(--color-text-tier2);
 }
 
 /* ============ Volume Control ============ */
 .volume-control {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 6px;
+    margin-bottom: 0;
 }
 
 .volume-label {
-    font-size: 0.8em;
-    color: var(--color-text-dim);
-    width: 24px;
+    font-size: var(--fs-meta);
+    color: var(--color-text-tier2);
+    width: 20px;
     flex-shrink: 0;
 }
 
 .volume-value {
-    font-size: 0.75em;
-    color: var(--color-text-muted);
-    width: 36px;
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    color: var(--color-text-tier2);
+    width: 32px;
     text-align: right;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Volume slider: native <input type="range"> fully repainted.
+ * Input box is 20 px tall for a forgiving hit area; the visible track
+ * is 2 px drawn inside ::-webkit-slider-runnable-track (centered
+ * vertically in the input box), and the filled portion is driven by
+ * --fill-pct (set by main.js on input + init) via a hard-stop
+ * gradient on Webkit and ::-moz-range-progress on Firefox. Thumb is
+ * 10 px accent-colored with progressive glow on hover / active /
+ * focus-visible.
+ */
 .volume-slider {
     -webkit-appearance: none;
     appearance: none;
     flex: 1;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
     outline: none;
     cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(
+        to right,
+        var(--color-accent) 0,
+        var(--color-accent) var(--fill-pct, 100%),
+        rgba(255, 255, 255, 0.1) var(--fill-pct, 100%),
+        rgba(255, 255, 255, 0.1) 100%
+    );
 }
 
 .volume-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 14px;
-    height: 14px;
-    margin-top: -5px;
-    border-radius: 50%;
-    background: var(--color-accent);
-    cursor: pointer;
-    transition: box-shadow 0.2s;
-}
-
-.volume-slider::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
+    width: 10px;
+    height: 10px;
+    margin-top: -4px;
     border-radius: 50%;
     background: var(--color-accent);
     border: none;
     cursor: pointer;
-    transition: box-shadow 0.2s;
+    transition: box-shadow 150ms ease;
 }
 
-.volume-slider::-webkit-slider-thumb:hover {
-    box-shadow: 0 0 8px var(--color-accent);
+.volume-slider:hover::-webkit-slider-thumb {
+    box-shadow: 0 0 10px rgb(var(--color-accent-rgb) / 0.5);
 }
 
-.volume-slider::-moz-range-thumb:hover {
-    box-shadow: 0 0 8px var(--color-accent);
+.volume-slider:active::-webkit-slider-thumb {
+    box-shadow: 0 0 14px rgb(var(--color-accent-rgb) / 0.6);
 }
 
-.volume-slider::-webkit-slider-runnable-track {
-    height: 4px;
-    border-radius: 2px;
+.volume-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
+}
+
+.volume-slider::-moz-range-track {
+    height: 2px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+}
+
+.volume-slider::-moz-range-progress {
+    height: 2px;
+    border-radius: 1px;
+    background: var(--color-accent);
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    border: none;
+    cursor: pointer;
+    transition: box-shadow 150ms ease;
+}
+
+.volume-slider:hover::-moz-range-thumb {
+    box-shadow: 0 0 10px rgb(var(--color-accent-rgb) / 0.5);
+}
+
+.volume-slider:active::-moz-range-thumb {
+    box-shadow: 0 0 14px rgb(var(--color-accent-rgb) / 0.6);
+}
+
+.volume-slider:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
 }
 
 .stat-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
+    align-items: baseline;
+    margin-bottom: 6px;
 }
 
 .stat-label {
-    color: var(--color-text-muted);
-    font-size: 0.9em;
+    font-size: var(--fs-label);
+    font-weight: 400;
+    color: var(--color-text-tier2);
 }
 
 .stat-value {
-    font-weight: 600;
-    font-size: 1.1em;
-    color: var(--color-text-bright);
+    font-family: var(--font-mono);
+    font-size: var(--fs-value);
+    font-weight: 500;
+    color: var(--color-text-tier1);
     font-variant-numeric: tabular-nums;
 }
 
 /* ============ Stale Data Indicator (shown when disconnected 2+ times) ============ */
-#info-panel.stale .stats-section {
-    opacity: 0.5;
+/*
+ * Scope the stale-dim to direct children (stat-rows, landcover-items)
+ * instead of the section itself, so the "Data may be stale" ::after
+ * generated on .stats-section is not swept up by the parent's
+ * opacity stacking context and keeps its full-strength red.
+ */
+#info-panel.stale .stats-section > *,
+#info-panel.stale .landcover-list > * {
+    opacity: 0.55;
+    transition: opacity 0.3s;
 }
 
 #info-panel.stale .stats-section::after {
     content: 'Data may be stale';
     display: block;
     text-align: center;
-    font-size: 0.75em;
+    font-size: var(--fs-meta);
     color: var(--color-danger);
-    margin-top: 8px;
+    margin-top: 6px;
     font-style: italic;
 }
 
@@ -297,28 +394,28 @@ body {
 .connection-status {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid var(--color-border);
-    font-size: 0.8em;
-    color: var(--color-text-dim);
+    gap: 6px;
+    margin-top: 12px;
+    font-size: var(--fs-meta);
+    color: var(--color-text-tier3);
 }
 
 .status-dot {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    background: var(--color-text-dim);
+    background: var(--color-text-tier3);
+    flex-shrink: 0;
 }
 
 .status-dot.connected {
     background: var(--color-accent);
-    box-shadow: 0 0 8px var(--color-accent); /* glow when connected */
+    box-shadow: 0 0 6px var(--color-accent); /* glow when connected */
 }
 
 .status-dot.disconnected {
     background: var(--color-danger);
+    opacity: 0.6;
 }
 
 /* ============ Toast Notification (bottom-center, auto-hides) ============ */
@@ -430,86 +527,97 @@ body {
 
 /* ============ Landcover Breakdown (dynamically built by updateUI) ============ */
 .landcover-list {
-    margin-top: 8px;
+    margin: 0 0 14px;
+    padding-bottom: 14px;
     max-height: 200px;
     overflow-y: auto;
+    border-bottom: 1px solid var(--color-divider);
 }
 
 .landcover-item {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 12px 1fr auto;
+    column-gap: 8px;
     align-items: center;
-    padding: 6px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    font-size: 0.9em;
+    padding: 3px 0 6px;
+    position: relative;
 }
 
-.landcover-item:last-child {
-    border-bottom: none;
-}
-
-.landcover-name {
-    color: var(--color-accent);
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* Small colored square matching the ESA WorldCover class color */
+/* ESA WorldCover class swatch. Matches the dot overlay color on the map. */
 .landcover-swatch {
     width: 10px;
     height: 10px;
     border-radius: 2px;
     display: inline-block;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    flex: 0 0 auto;
+}
+
+.landcover-name {
+    font-family: var(--font-sans);
+    font-size: var(--fs-label);
+    font-weight: 400;
+    color: var(--color-text-tier2);
 }
 
 .landcover-percent {
-    color: var(--color-text-bright);
-    font-weight: 600;
-    margin-left: 10px;
+    font-family: var(--font-mono);
+    font-size: var(--fs-value);
+    font-weight: 500;
+    color: var(--color-text-tier1);
     font-variant-numeric: tabular-nums;
 }
 
+/* Inline micro-bar under each row: width proportional to --pct, tint = swatch color. */
+.landcover-item::after {
+    content: '';
+    position: absolute;
+    left: 20px; /* swatch column (12) + gap (8) */
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    max-width: calc(100% - 20px);
+    width: calc(var(--pct, 0) * 1%);
+    background: var(--bar-color, transparent);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
 /* Dimmed states: "Other" (classes below 1% threshold) and "empty" (no land data) */
-.landcover-item.landcover-other,
-.landcover-item.empty {
-    font-style: italic;
+.landcover-item.landcover-other .landcover-name,
+.landcover-item.landcover-other .landcover-percent {
+    color: var(--color-text-tier3);
 }
 
-.landcover-item.landcover-other {
-    opacity: 0.7;
+.landcover-item.landcover-other .landcover-swatch {
+    visibility: hidden;
 }
 
-.landcover-item.landcover-other .landcover-name {
-    color: var(--color-text-muted);
-}
-
-.landcover-item.empty {
-    opacity: 0.6;
+.landcover-item.landcover-other::after,
+.landcover-item.empty::after {
+    display: none;
 }
 
 .landcover-item.empty .landcover-name {
-    color: var(--color-text-dim);
+    color: var(--color-text-tier3);
+    font-style: italic;
 }
 
 /* ============ Data Attribution (bottom of info panel) ============ */
 .data-attribution {
     margin-top: 10px;
-    font-size: 0.65em;
-    line-height: 1.4;
-    color: var(--color-text-dim);
+    font-size: var(--fs-meta);
+    line-height: 1.5;
+    color: var(--color-text-tier3);
 }
 
 .data-attribution a {
-    color: var(--color-text-muted);
+    color: inherit;
     text-decoration: none;
+    border-bottom: 1px dotted currentColor;
 }
 
 .data-attribution a:hover {
-    text-decoration: underline;
+    color: var(--color-text-tier2);
 }
 
 /* ============ Responsive: narrow screens ============ */
@@ -520,13 +628,14 @@ body {
         left: 0;
         right: 0;
         width: 100%;
+        padding: 16px 18px;
         border-radius: 12px 12px 0 0;
-        max-height: 40vh;
+        max-height: 50vh;
         overflow-y: auto;
     }
 
-    #info-panel h2 {
-        font-size: 1.2em;
+    #info-panel.hidden {
+        transform: translateY(20px);
     }
 
     .landcover-list {

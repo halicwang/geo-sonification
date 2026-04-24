@@ -23,6 +23,8 @@
  * @module frontend/audio-engine
  */
 
+import { getLoudnessNormEnabled } from './config.js';
+
 // ════════════════════════════════════════════════════════════════════
 //  Constants
 // ════════════════════════════════════════════════════════════════════
@@ -79,11 +81,66 @@ const XF_CURVE_POINTS = 128;
 const GAIN_CURVE_EXPONENT = 0.6;
 
 /**
+ * Per-bus preamp (linear gain), multiplied into the rafLoop's per-bus
+ * gain assignment before it reaches the corresponding GainNode. Used
+ * to correct source-level loudness imbalance without re-authoring the
+ * WAVs. Values come from scripts/measure-loudness.js — most files
+ * cluster around -31 to -33 LUFS integrated, but urban.wav runs ~6 LU
+ * hotter and peaks ~15 dB above the others (-6.6 dBTP vs -21 dBTP).
+ * At MAKEUP_GAIN_DB = 12, an un-attenuated urban would peak at
+ * ~+5.4 dBTP and pin the limiter. Scaling urban by ~-10 dB keeps
+ * its post-makeup peak below the limiter threshold. Bus order
+ * matches BUS_NAMES.
+ */
+const BUS_PREAMP_GAIN = [
+    1.0, // 0 forest
+    1.0, // 1 shrub
+    1.0, // 2 grass
+    1.0, // 3 crop
+    0.316, // 4 urban — -10 dB to avoid limiter at MAKEUP_GAIN_DB = 12
+    1.0, // 5 bare
+    1.0, // 6 water
+];
+
+/**
  * Loading priority order (indices into BUS_NAMES).
  * Tree and water first (most common), then crop, urban, bare.
  */
 const PRIORITY_FIRST = [0, 6]; // forest, water
 const PRIORITY_SECOND = [1, 2, 3, 4, 5]; // shrub, grass, crop, urban, bare
+
+/**
+ * Master makeup gain in dB, calibrated by scripts/measure-loudness.js
+ * against a -16 LUFS target. Applied post-masterGain (i.e. after the
+ * user's volume slider) and pre-limiter, so per-bus mix math stays
+ * untouched while the average summed output is pulled toward target.
+ */
+const MAKEUP_GAIN_DB = 12;
+
+/**
+ * Soft peak limiter settings. -3 dB threshold + 20:1 ratio catches
+ * transient peaks from the summed bus mix, keeping true peak below
+ * -1 dBTP on ambient content. Web Audio's DynamicsCompressorNode has
+ * ~6 ms lookahead — sufficient for non-percussive sources.
+ */
+const LIMITER_THRESHOLD_DB = -3;
+const LIMITER_RATIO = 20;
+const LIMITER_ATTACK_SEC = 0.003;
+const LIMITER_RELEASE_SEC = 0.25;
+const LIMITER_KNEE_DB = 0;
+
+/**
+ * Sidechain-style ducking applied to the ambience chain while the
+ * city-announcer speaks. Linear gain (0.3 ≈ -10.5 dB); announcer TTS
+ * plays at masterVolume * TTS_GAIN_RATIO (0.3), so a ~-10 dB duck on
+ * ambience leaves the TTS clearly audible above the environment.
+ * Attack / release time constants chosen for broadcast voice-over
+ * feel: fast enough to get out of the way on the first syllable,
+ * gentle enough on the release that ambience doesn't snap back.
+ */
+const DUCK_DEPTH = 0.3;
+const DUCK_ATTACK_TC = 0.05;
+const DUCK_RELEASE_TC = 0.15;
 
 // ════════════════════════════════════════════════════════════════════
 //  State
@@ -98,7 +155,7 @@ const gains = new Array(NUM_BUSES).fill(null);
 /** @type {GainNode|null} */
 let masterGain = null;
 
-/** User-controlled master volume multiplier (0.0–1.2). */
+/** User-controlled master volume multiplier (0.0–1.0). */
 let masterVolume = 1.0;
 
 /**
@@ -109,6 +166,14 @@ let masterVolume = 1.0;
 let lpFilter1 = null;
 let lpFilter2 = null;
 let lpFilter3 = null;
+
+/**
+ * Static gain node inserted between masterGain and the rest of the
+ * ambience chain; modulated by duck() / unduck() while the
+ * city-announcer speaks so TTS sits clearly above ambience.
+ * @type {GainNode|null}
+ */
+let duckGain = null;
 
 /** @type {AudioBuffer[]} */
 const buffers = new Array(NUM_BUSES).fill(null);
@@ -790,7 +855,7 @@ function rafLoop() {
         if (gains[i] && buffers[i]) {
             const landValue = (shaped[i] / norm) * landMix;
             const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
-            gains[i].gain.value = value;
+            gains[i].gain.value = value * BUS_PREAMP_GAIN[i];
         }
     }
 
@@ -877,7 +942,39 @@ async function start() {
         lpFilter3.frequency.value = 20000;
         lpFilter3.Q.value = 1.9319;
 
-        masterGain.connect(lpFilter1);
+        // duckGain is driven by duck() / unduck(); unity while idle, pulls
+        // down to DUCK_DEPTH during city-announcer speech.
+        duckGain = audioCtx.createGain();
+        duckGain.gain.value = 1.0;
+
+        if (getLoudnessNormEnabled()) {
+            // makeupGain offsets the summed-bus output toward the
+            // -16 LUFS target; limiter catches transients so the
+            // true peak stays below -1 dBTP. Both are created once
+            // per AudioContext lifetime and never revisited, so
+            // neither needs a module-level handle.
+            const makeupGain = audioCtx.createGain();
+            makeupGain.gain.value = Math.pow(10, MAKEUP_GAIN_DB / 20);
+
+            const limiter = audioCtx.createDynamicsCompressor();
+            limiter.threshold.value = LIMITER_THRESHOLD_DB;
+            limiter.ratio.value = LIMITER_RATIO;
+            limiter.attack.value = LIMITER_ATTACK_SEC;
+            limiter.release.value = LIMITER_RELEASE_SEC;
+            limiter.knee.value = LIMITER_KNEE_DB;
+
+            masterGain.connect(duckGain);
+            duckGain.connect(makeupGain);
+            makeupGain.connect(limiter);
+            limiter.connect(lpFilter1);
+            console.info(
+                `[audio] Loudness norm ON — makeup ${MAKEUP_GAIN_DB.toFixed(1)} dB, limiter threshold ${LIMITER_THRESHOLD_DB} dB`
+            );
+        } else {
+            masterGain.connect(duckGain);
+            duckGain.connect(lpFilter1);
+            console.info('[audio] Loudness norm OFF — legacy chain');
+        }
         lpFilter1.connect(lpFilter2);
         lpFilter2.connect(lpFilter3);
         lpFilter3.connect(audioCtx.destination);
@@ -1030,16 +1127,16 @@ function seekLoop(progress) {
 
 /**
  * Set master volume. Uses setTargetAtTime for click-free transitions.
- * @param {number} value - 0.0 (mute) to 1.5 (max)
+ * @param {number} value - 0.0 (mute) to 1.0 (max, unity)
  */
 function setVolume(value) {
-    masterVolume = Math.max(0, Math.min(1.5, value));
+    masterVolume = Math.max(0, Math.min(1.0, value));
     if (masterGain && audioCtx) {
         masterGain.gain.setTargetAtTime(masterVolume, audioCtx.currentTime, 0.015);
     }
 }
 
-/** @returns {number} Current master volume setting (0.0–1.5). */
+/** @returns {number} Current master volume setting (0.0–1.0). */
 function getVolume() {
     return masterVolume;
 }
@@ -1047,6 +1144,28 @@ function getVolume() {
 /** @returns {AudioContext|null} The shared AudioContext (null if not started). */
 function getContext() {
     return audioCtx;
+}
+
+/**
+ * Apply the announcer-triggered sidechain duck. Called by
+ * city-announcer.js immediately before starting a TTS source. Safe
+ * to call before the AudioContext exists (no-op guard).
+ */
+function duck() {
+    if (!duckGain || !audioCtx) return;
+    duckGain.gain.setTargetAtTime(DUCK_DEPTH, audioCtx.currentTime, DUCK_ATTACK_TC);
+}
+
+/**
+ * Release the duck. Called by city-announcer.js in source.onended,
+ * which fires both on natural end and on explicit source.stop().
+ * Consecutive duck()/unduck() calls are safe: setTargetAtTime
+ * cancels any pending automation on the same AudioParam, so
+ * overlapping announcements don't pump.
+ */
+function unduck() {
+    if (!duckGain || !audioCtx) return;
+    duckGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, DUCK_RELEASE_TC);
 }
 
 export const engine = {
@@ -1062,4 +1181,6 @@ export const engine = {
     setVolume,
     getVolume,
     getContext,
+    duck,
+    unduck,
 };

@@ -4,15 +4,15 @@
 /**
  * Geo-Sonification — Map initialization & viewport tracking.
  *
- * Mapbox GL setup, PMTiles grid overlay, viewport change handler
- * (with debounce), HTTP fallback, and server config refresh.
+ * Mapbox GL (globe projection) + PMTiles grid dots, viewport change
+ * handler with debounce, HTTP fallback, and server config refresh.
  *
  * @module frontend/map
  */
 
 import { state, VIEWPORT_DEBOUNCE, getClientId, buildWsUrl } from './config.js';
 import { escapeHtml, getLandcoverName } from './landcover.js';
-import { updateUI } from './ui.js';
+import { updateUI, showToast } from './ui.js';
 import { engine } from './audio-engine.js';
 
 // ============ Motion Tracking ============
@@ -26,22 +26,13 @@ let prevMoveTime = 0;
 
 // ============ Grid Overlay ============
 
-/**
- * Build a Mapbox match expression that maps landcover_class → color
- * from state.config.landcoverMeta (single source of truth from server/landcover.js).
- */
-function buildLandcoverFillColor() {
-    const entries = Object.entries(state.config.landcoverMeta);
-    if (entries.length === 0) return 'rgba(255, 255, 255, 0.10)';
-    const expr = ['match', ['get', 'landcover_class']];
-    for (const [cls, meta] of entries) {
-        expr.push(Number(cls), meta.color);
-    }
-    expr.push('rgba(255, 255, 255, 0.10)'); // fallback for null/unknown
-    return expr;
-}
+/** Layer id for the per-grid dot overlay. */
+const GRID_DOT_LAYER = 'grid-dots';
 
-/** Add PMTiles vector source + fill/outline layers for the grid overlay. */
+/** Fixed neutral grey for the dot overlay (landcover is surfaced in popups, not colors). */
+const DOT_COLOR = '#606060';
+
+/** Add PMTiles vector source + single circle layer for per-grid dots. */
 async function addGridLayer() {
     const PMTILES_URL = `${window.location.origin}/tiles/grids.pmtiles`;
 
@@ -60,254 +51,55 @@ async function addGridLayer() {
         maxzoom: header.maxZoom,
     });
 
-    // Grid fill layer (neutral overlay; data values shown in side panel)
+    // Per-grid dot layer. pitch-alignment defaults to 'viewport' and
+    // pitch-scale defaults to 'map' — leaving both at defaults avoids the
+    // globe→mercator transition bug around zoom 6 where explicitly setting
+    // both to 'viewport' caused circles to cull themselves to invisible.
     state.runtime.map.addLayer({
-        id: 'grid-layer',
-        type: 'fill',
+        id: GRID_DOT_LAYER,
+        type: 'circle',
         source: 'grid-source',
         'source-layer': 'grids',
         paint: {
-            'fill-color': buildLandcoverFillColor(),
-            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.4, 4, 0.55, 6, 0],
-            'fill-opacity-transition': { duration: 150, delay: 0 },
-            'fill-color-transition': { duration: 150, delay: 0 },
-        },
-    });
-
-    // Grid outline — zoom-dependent: fades out as crosshairs fade in
-    state.runtime.map.addLayer({
-        id: 'grid-outline',
-        type: 'line',
-        source: 'grid-source',
-        'source-layer': 'grids',
-        paint: {
-            'line-color': 'rgba(255, 255, 255, 0.15)',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0, 5, 0.3, 8, 0.8],
-            'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0, 4, 0.5, 6, 0],
-            'line-opacity-transition': { duration: 150, delay: 0 },
-        },
-    });
-
-    // Crosshair overlay — corner marks that fade in at higher zoom
-    const emptyFC = { type: 'FeatureCollection', features: [] };
-    state.runtime.map.addSource('crosshair-source', { type: 'geojson', data: emptyFC });
-    state.runtime.map.addLayer({
-        id: 'crosshair-layer',
-        type: 'line',
-        source: 'crosshair-source',
-        paint: {
-            'line-color': buildLandcoverFillColor(),
-            'line-width': 2,
-            'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0, 6, 1],
-            'line-opacity-transition': { duration: 150, delay: 0 },
-        },
-        layout: {
-            'line-cap': 'butt',
+            'circle-color': DOT_COLOR,
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
+            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
+            'circle-stroke-color': 'rgba(255, 255, 255, 0.18)',
+            'circle-stroke-width': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                2,
+                0.15,
+                5,
+                0.35,
+                8,
+                0.6,
+                12,
+                0.9,
+            ],
+            'circle-stroke-opacity': 0.8,
+            'circle-blur': 0,
         },
     });
 }
 
 /**
- * Add floating white-glow country border layers.
- * Reads source/filter from the built-in admin-0-boundary layer so we stay
- * in sync with whatever tileset version dark-v11 ships.
+ * Paint every non-background layer transparent and force the background
+ * to pure black. Combined with dark-v10, this keeps the globe view focused
+ * on the dot overlay without extra basemap clutter.
  */
-function addBorderGlowLayers() {
+function applyMinimalBasemap() {
     const map = state.runtime.map;
+    const layers = map.getStyle().layers || [];
 
-    // Read source/filter from the built-in admin-0-boundary style spec
-    // so we stay in sync with whatever tileset version dark-v11 ships.
-    const styleLayers = map.getStyle().layers;
-    const builtinLayer = styleLayers.find((l) => l.id === 'admin-0-boundary');
-    if (!builtinLayer) {
-        console.warn('admin-0-boundary layer not found, skipping border glow');
-        return;
-    }
-
-    const src = builtinLayer.source;
-    const srcLayer = builtinLayer['source-layer'];
-    const filter = builtinLayer.filter;
-
-    // Hide built-in admin-0 layers to avoid visual doubling
-    for (const id of ['admin-0-boundary', 'admin-0-boundary-bg', 'admin-0-boundary-disputed']) {
-        if (map.getLayer(id)) {
-            map.setLayoutProperty(id, 'visibility', 'none');
+    for (const layer of layers) {
+        if (layer.type === 'background') {
+            map.setPaintProperty(layer.id, 'background-color', '#000');
+        } else {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
         }
     }
-
-    // Shadow layer: dark offset line for depth
-    map.addLayer({
-        id: 'border-shadow',
-        type: 'line',
-        source: src,
-        'source-layer': srcLayer,
-        filter,
-        paint: {
-            'line-color': 'rgba(0, 0, 0, 0.4)',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 2, 6, 5, 10, 10, 14],
-            'line-blur': ['interpolate', ['linear'], ['zoom'], 2, 6, 5, 10, 10, 14],
-            'line-translate': [0, 3],
-            'line-opacity': 0.6,
-        },
-    });
-
-    // Core line: sharp bright white border
-    map.addLayer({
-        id: 'border-core',
-        type: 'line',
-        source: src,
-        'source-layer': srcLayer,
-        filter,
-        paint: {
-            'line-color': 'rgba(255, 255, 255, 0.9)',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 2, 1.5, 5, 2.5, 10, 3.5],
-            'line-blur': 0,
-            'line-opacity': 1.0,
-        },
-    });
-}
-
-/** Zoom threshold below which crosshair generation is skipped. */
-const CROSSHAIR_MIN_ZOOM = 4;
-
-/** Minimum interval (ms) between crosshair rebuilds during continuous interaction. */
-const CROSSHAIR_THROTTLE = 150;
-let lastCrosshairUpdate = 0;
-let crosshairTrailingTimer = 0;
-
-/** Throttled wrapper: rebuilds crosshairs at most once per CROSSHAIR_THROTTLE ms, with trailing call. */
-function throttledUpdateCrosshairs() {
-    clearTimeout(crosshairTrailingTimer);
-    crosshairTrailingTimer = setTimeout(updateCrosshairs, CROSSHAIR_THROTTLE);
-
-    const now = performance.now();
-    if (now - lastCrosshairUpdate >= CROSSHAIR_THROTTLE) {
-        lastCrosshairUpdate = now;
-        updateCrosshairs();
-    }
-}
-
-/**
- * Build crosshair corner-mark LineStrings for a single grid cell.
- * Returns an array of 8 coordinate pairs (4 corners × 2 arms).
- */
-function gridCrosshairLines(lon, lat, gridSize) {
-    const s = gridSize;
-    const l = s / 5; // arm length = 1/5 of grid size
-    return [
-        // Bottom-left corner
-        [
-            [lon, lat],
-            [lon + l, lat],
-        ],
-        [
-            [lon, lat],
-            [lon, lat + l],
-        ],
-        // Bottom-right corner
-        [
-            [lon + s, lat],
-            [lon + s - l, lat],
-        ],
-        [
-            [lon + s, lat],
-            [lon + s, lat + l],
-        ],
-        // Top-left corner
-        [
-            [lon, lat + s],
-            [lon + l, lat + s],
-        ],
-        [
-            [lon, lat + s],
-            [lon, lat + s - l],
-        ],
-        // Top-right corner
-        [
-            [lon + s, lat + s],
-            [lon + s - l, lat + s],
-        ],
-        [
-            [lon + s, lat + s],
-            [lon + s, lat + s - l],
-        ],
-    ];
-}
-
-/** Cache key for the last crosshair rebuild (sorted grid_id set). */
-let crosshairCacheKey = '';
-
-/**
- * Query visible grid cells and update the crosshair GeoJSON source
- * with corner-mark line features. Skipped at low zoom for performance.
- */
-function updateCrosshairs() {
-    const map = state.runtime.map;
-    if (!map.getSource('crosshair-source') || !map.getSource('grid-source')) return;
-
-    const zoom = map.getZoom();
-
-    if (zoom < CROSSHAIR_MIN_ZOOM) {
-        if (crosshairCacheKey !== '') {
-            crosshairCacheKey = '';
-            map.getSource('crosshair-source').setData({
-                type: 'FeatureCollection',
-                features: [],
-            });
-        }
-        return;
-    }
-
-    // Get all grid cells loaded in the current tile set
-    const raw = map.querySourceFeatures('grid-source', { sourceLayer: 'grids' });
-
-    // Deduplicate by grid_id (tiles at boundaries duplicate features)
-    const seen = new Set();
-    const cells = [];
-    const gridSize = state.config.gridSize || 0.5;
-
-    for (const f of raw) {
-        const id = f.properties.grid_id;
-        if (id == null || seen.has(id)) continue;
-        seen.add(id);
-        cells.push(f);
-    }
-
-    // Skip rebuild if the set of visible cells hasn't changed
-    const ids = Array.from(seen);
-    ids.sort();
-    const cacheKey = ids.join(',');
-    if (cacheKey === crosshairCacheKey) return;
-    crosshairCacheKey = cacheKey;
-
-    // Build crosshair features
-    const features = new Array(cells.length);
-    for (let ci = 0; ci < cells.length; ci++) {
-        const f = cells[ci];
-
-        // Snap polygon centroid to grid origin (robust against tile-boundary clipping)
-        const ring = f.geometry.coordinates[0];
-        let sumLon = 0;
-        let sumLat = 0;
-        const n = ring.length - 1; // exclude closing vertex
-        for (let i = 0; i < n; i++) {
-            sumLon += ring[i][0];
-            sumLat += ring[i][1];
-        }
-        const lon = Math.floor((sumLon / n + 180) / gridSize) * gridSize - 180;
-        const lat = Math.floor((sumLat / n + 90) / gridSize) * gridSize - 90;
-
-        features[ci] = {
-            type: 'Feature',
-            properties: { landcover_class: f.properties.landcover_class },
-            geometry: {
-                type: 'MultiLineString',
-                coordinates: gridCrosshairLines(lon, lat, gridSize),
-            },
-        };
-    }
-
-    map.getSource('crosshair-source').setData({ type: 'FeatureCollection', features });
 }
 
 // ============ Viewport ============
@@ -412,8 +204,8 @@ async function sendViewportHTTP(bounds) {
 
 /**
  * Re-fetch /api/config from the server and update local state.
- * If landcoverMeta changes, also update the map grid layer's fill-color
- * expression so the new colors are reflected without a full page reload.
+ * The dot layer uses a fixed colour, so landcoverMeta updates only affect
+ * side-panel labels (handled by ui.js) and popup text.
  */
 export async function refreshServerConfig() {
     try {
@@ -430,22 +222,7 @@ export async function refreshServerConfig() {
             state.config.gridSize = config.gridSize;
         }
         if (config.landcoverMeta) {
-            const oldKeys = Object.keys(state.config.landcoverMeta).sort().join(',');
-            const newKeys = Object.keys(config.landcoverMeta).sort().join(',');
             state.config.landcoverMeta = config.landcoverMeta;
-
-            // Update map layers if metadata changed and map is ready
-            if (
-                oldKeys !== newKeys &&
-                state.runtime.map &&
-                state.runtime.map.getLayer('grid-layer')
-            ) {
-                const colorExpr = buildLandcoverFillColor();
-                state.runtime.map.setPaintProperty('grid-layer', 'fill-color', colorExpr);
-                if (state.runtime.map.getLayer('crosshair-layer')) {
-                    state.runtime.map.setPaintProperty('crosshair-layer', 'line-color', colorExpr);
-                }
-            }
         }
     } catch (err) {
         console.warn('Failed to refresh server config:', err.message || err);
@@ -458,9 +235,12 @@ export async function refreshServerConfig() {
 export function initMap() {
     mapboxgl.accessToken = state.config.mapboxToken;
 
+    // Keep the globe view, but use a static v8 style to avoid dark-v11
+    // imports changing the layer stack after our overlay is added.
     state.runtime.map = new mapboxgl.Map({
         container: 'map',
-        style: 'mapbox://styles/mapbox/dark-v11',
+        style: 'mapbox://styles/mapbox/dark-v10',
+        projection: 'globe',
         center: [-55, -10], // Amazon region
         zoom: 4,
         minZoom: 2,
@@ -470,10 +250,34 @@ export function initMap() {
     state.runtime.map.addControl(new mapboxgl.NavigationControl(), 'top-left');
     state.runtime.map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
 
-    state.runtime.map.on('load', async () => {
-        console.log('Map loaded');
+    // Using 'style.load' rather than 'load' — dark-v10 is a v8 style, but
+    // keeping 'style.load' keeps the setup path generic.
+    let setupDone = false;
+    state.runtime.map.on('style.load', async () => {
+        if (setupDone) return;
+        setupDone = true;
 
-        // Add vector tile grid overlay (PMTiles)
+        applyMinimalBasemap();
+
+        state.runtime.map.setFog(null);
+
+        // Mapbox's globe projection renders the circle layer as pitch
+        // black at assorted zoom levels past ~5 (visible as "all dots
+        // disappear" around zoom 5.5, 6.0, 6.44, etc.). Mercator doesn't
+        // have this bug. Keep globe for the low-zoom "sphere" view and
+        // switch to mercator as soon as the user zooms in — this also
+        // matches the intent: globe for the overview, mercator for
+        // detail work.
+        let currentProjectionIsGlobe = true;
+        const GLOBE_ZOOM_CUTOFF = 5;
+        function updateProjection() {
+            const wantGlobe = state.runtime.map.getZoom() < GLOBE_ZOOM_CUTOFF;
+            if (wantGlobe === currentProjectionIsGlobe) return;
+            currentProjectionIsGlobe = wantGlobe;
+            state.runtime.map.setProjection(wantGlobe ? 'globe' : 'mercator');
+        }
+        state.runtime.map.on('zoom', updateProjection);
+
         try {
             await addGridLayer();
         } catch (err) {
@@ -481,20 +285,12 @@ export function initMap() {
                 'Grid layer failed to load (PMTiles missing?), continuing without overlay:',
                 err
             );
+            showToast(
+                'Grid tiles failed to load \u2014 run npm run build:tiles to regenerate.',
+                8000
+            );
         }
 
-        // Add floating border glow overlay
-        addBorderGlowLayers();
-
-        // Update crosshair corner marks: throttled during drag, full on stop & tile load
-        state.runtime.map.on('move', throttledUpdateCrosshairs);
-        state.runtime.map.on('moveend', updateCrosshairs);
-        state.runtime.map.on('sourcedata', (e) => {
-            if (e.sourceId === 'grid-source' && e.isSourceLoaded) updateCrosshairs();
-        });
-        updateCrosshairs();
-
-        // Set up viewport tracking
         state.runtime.map.on('move', () => {
             if (state.els.zoomLevel) {
                 state.els.zoomLevel.textContent = state.runtime.map.getZoom().toFixed(2);
@@ -502,15 +298,20 @@ export function initMap() {
             onViewportChange();
         });
 
-        // Initial viewport calculation
         if (state.els.zoomLevel) {
             state.els.zoomLevel.textContent = state.runtime.map.getZoom().toFixed(2);
         }
         onViewportChange();
+
+        // Kick the renderer in case the container measured 0 during init.
+        requestAnimationFrame(() => {
+            state.runtime.map.resize();
+            state.runtime.map.triggerRepaint();
+        });
     });
 
-    // Grid cell click → popup with landcover breakdown
-    state.runtime.map.on('click', 'grid-layer', (e) => {
+    // Dot click → popup with landcover breakdown
+    state.runtime.map.on('click', GRID_DOT_LAYER, (e) => {
         if (e.features.length > 0) {
             const props = e.features[0].properties;
             const landcoverDisplay =
@@ -557,11 +358,11 @@ export function initMap() {
         }
     });
 
-    // Change cursor on grid hover
-    state.runtime.map.on('mouseenter', 'grid-layer', () => {
+    // Change cursor on dot hover
+    state.runtime.map.on('mouseenter', GRID_DOT_LAYER, () => {
         state.runtime.map.getCanvas().style.cursor = 'pointer';
     });
-    state.runtime.map.on('mouseleave', 'grid-layer', () => {
+    state.runtime.map.on('mouseleave', GRID_DOT_LAYER, () => {
         state.runtime.map.getCanvas().style.cursor = '';
     });
 }

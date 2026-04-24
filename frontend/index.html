@@ -12,6 +12,14 @@
         <!-- PMTiles vector source for Mapbox GL -->
         <script src="https://cdn.jsdelivr.net/npm/mapbox-pmtiles@1.0.56/dist/mapbox-pmtiles.umd.min.js"></script>
 
+        <!-- Typography: Inter (UI) + JetBrains Mono (numeric values) -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+            rel="stylesheet"
+        />
+
         <link rel="stylesheet" href="style.css" />
     </head>
     <body>
@@ -24,13 +32,35 @@
             <div id="loop-progress-handle" class="loop-progress-handle"></div>
         </div>
 
+        <!-- Floating control strip (top-right): audio play + panel toggle -->
+        <div id="controls-bar">
+            <button
+                id="audio-toggle"
+                class="floating-btn audio-btn-floating"
+                title="Start/Stop Audio"
+                aria-label="Start audio"
+                aria-pressed="false"
+            >
+                <span id="audio-icon">&#9654;</span>
+            </button>
+            <button
+                id="panel-toggle"
+                class="floating-btn panel-toggle-btn"
+                aria-label="Toggle panel"
+            >
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+            </button>
+        </div>
+
         <!-- Floating info panel: stats updated in real time by updateUI() -->
-        <div id="info-panel">
+        <div id="info-panel" class="hidden">
             <h2>Geo-Sonification</h2>
             <p class="subtitle">Interactive Sound Map</p>
+            <p class="vintage">Data vintage: 2020–2021</p>
 
             <div class="stats-section">
-                <p class="vintage">Data vintage: 2020–2021</p>
                 <div class="stat-row">
                     <span class="stat-label">Zoom:</span>
                     <span id="zoom-level" class="stat-value">—</span>
@@ -51,20 +81,14 @@
                     <span class="stat-label">Proximity:</span>
                     <span id="proximity" class="stat-value">—</span>
                 </div>
-                <div class="stat-row">
-                    <span class="stat-label">Land Cover:</span>
-                </div>
-                <p class="stat-note">By land area</p>
-                <div id="landcover-list" class="landcover-list">
-                    <!-- Dynamically generated -->
-                </div>
+            </div>
+
+            <div id="landcover-list" class="landcover-list">
+                <!-- Dynamically generated -->
             </div>
 
             <div class="audio-section">
-                <div class="audio-controls">
-                    <button id="audio-toggle" class="audio-btn" title="Start/Stop Audio">
-                        <span id="audio-icon">&#9654;</span>
-                    </button>
+                <div class="audio-status-row">
                     <span id="audio-status" class="audio-status">Audio off</span>
                 </div>
                 <div class="volume-control">
@@ -74,13 +98,12 @@
                         id="volume-slider"
                         class="volume-slider"
                         min="0"
-                        max="150"
+                        max="100"
                         value="100"
                         step="1"
                     />
                     <span id="volume-value" class="volume-value">100%</span>
                 </div>
-                <div id="audio-loading" class="audio-loading hidden"></div>
             </div>
 
             <div class="connection-status">

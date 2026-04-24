@@ -179,7 +179,7 @@ On `document.hidden`: cancel rAF, clear swap timer, and suspend `AudioContext`. 
 
 ### City Database
 
-Pre-built `data/cities.json` (~1 100 entries, population > 500 K, sourced from GeoNames CC BY 4.0). Each entry: `{ name, lat, lng, pop, slug }`. Loaded once on module init via `fetch('/data/cities.json')`. Nearest-city lookup is a linear scan filtered to the viewport bounding box.
+Pre-built `data/cities.json` (~555 entries, population > 1M, sourced from GeoNames CC BY 4.0). Each entry: `{ name, lat, lng, pop, slug }`. Loaded once on module init via `fetch('/data/cities.json')`. Nearest-city lookup is a linear scan filtered to the viewport bounding box.
 
 ### Audio Routing
 
@@ -189,7 +189,7 @@ Pre-generated M4A clips in `frontend/audio/cities/{slug}.m4a` (macOS `say -v Sam
 [AudioBufferSource] → [GainNode] → [StereoPannerNode] → audioCtx.destination
 ```
 
-Pan value is computed from the city's horizontal position in the viewport: `pan = clamp((cityLng − west) / (east − west) × 2 − 1, −1, +1)`. Gain respects master volume (`masterVolume × 0.4`).
+Pan value is computed from the city's horizontal position in the viewport: `pan = clamp((cityLng − west) / (east − west) × 2 − 1, −1, +1)`. Gain respects master volume (`masterVolume × 0.3`).
 
 ### Data Flow
 

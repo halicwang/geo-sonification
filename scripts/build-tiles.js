@@ -50,21 +50,14 @@ function stripProps(grid) {
 }
 
 function gridToFeature(grid, gridSize, minzoom, maxzoom) {
+    const half = gridSize / 2;
     return {
         type: 'Feature',
         tippecanoe: { minzoom, maxzoom },
         properties: stripProps(grid),
         geometry: {
-            type: 'Polygon',
-            coordinates: [
-                [
-                    [grid.lon, grid.lat],
-                    [grid.lon + gridSize, grid.lat],
-                    [grid.lon + gridSize, grid.lat + gridSize],
-                    [grid.lon, grid.lat + gridSize],
-                    [grid.lon, grid.lat],
-                ],
-            ],
+            type: 'Point',
+            coordinates: [grid.lon + half, grid.lat + half],
         },
     };
 }

@@ -106,6 +106,11 @@ body {
     transform: scale(0.96);
 }
 
+.floating-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.25);
+}
+
 .audio-btn-floating {
     color: var(--color-accent);
 }
@@ -209,7 +214,6 @@ body {
 .audio-section {
     padding-bottom: 14px;
     margin-bottom: 0;
-    border-bottom: 1px solid var(--color-divider);
 }
 
 .audio-status-row {
@@ -362,8 +366,14 @@ body {
 }
 
 /* ============ Stale Data Indicator (shown when disconnected 2+ times) ============ */
-#info-panel.stale .stats-section,
-#info-panel.stale .landcover-list {
+/*
+ * Scope the stale-dim to direct children (stat-rows, landcover-items)
+ * instead of the section itself, so the "Data may be stale" ::after
+ * generated on .stats-section is not swept up by the parent's
+ * opacity stacking context and keeps its full-strength red.
+ */
+#info-panel.stale .stats-section > *,
+#info-panel.stale .landcover-list > * {
     opacity: 0.55;
     transition: opacity 0.3s;
 }

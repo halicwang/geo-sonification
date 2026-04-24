@@ -243,14 +243,14 @@ body {
 .volume-control {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 0;
 }
 
 .volume-label {
     font-size: var(--fs-meta);
-    color: var(--color-text-tier3);
-    width: 24px;
+    color: var(--color-text-tier2);
+    width: 20px;
     flex-shrink: 0;
 }
 
@@ -258,21 +258,40 @@ body {
     font-family: var(--font-mono);
     font-size: var(--fs-meta);
     color: var(--color-text-tier2);
-    width: 36px;
+    width: 32px;
     text-align: right;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Volume slider: native <input type="range"> fully repainted.
+ * Track is 2px; the filled portion is driven by --fill-pct (set by
+ * main.js on input + init) via a hard-stop gradient on Webkit and
+ * ::-moz-range-progress on Firefox. Thumb is 10px mint with
+ * progressive glow on hover / active / focus-visible.
+ */
 .volume-slider {
     -webkit-appearance: none;
     appearance: none;
     flex: 1;
     height: 2px;
-    background: rgba(255, 255, 255, 0.12);
-    border-radius: 2px;
+    padding: 0;
+    background: transparent;
     outline: none;
     cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(
+        to right,
+        #5cffc8 0,
+        #5cffc8 var(--fill-pct, 67%),
+        rgba(255, 255, 255, 0.1) var(--fill-pct, 67%),
+        rgba(255, 255, 255, 0.1) 100%
+    );
 }
 
 .volume-slider::-webkit-slider-thumb {
@@ -282,37 +301,57 @@ body {
     height: 10px;
     margin-top: -4px;
     border-radius: 50%;
-    background: var(--color-accent);
+    background: #5cffc8;
+    border: none;
     cursor: pointer;
-    transition: box-shadow 0.18s ease;
+    transition: box-shadow 150ms ease;
+}
+
+.volume-slider:hover::-webkit-slider-thumb {
+    box-shadow: 0 0 10px rgba(92, 255, 200, 0.5);
+}
+
+.volume-slider:active::-webkit-slider-thumb {
+    box-shadow: 0 0 14px rgba(92, 255, 200, 0.6);
+}
+
+.volume-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(92, 255, 200, 0.25);
+}
+
+.volume-slider::-moz-range-track {
+    height: 2px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+}
+
+.volume-slider::-moz-range-progress {
+    height: 2px;
+    border-radius: 1px;
+    background: #5cffc8;
 }
 
 .volume-slider::-moz-range-thumb {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--color-accent);
+    background: #5cffc8;
     border: none;
     cursor: pointer;
-    transition: box-shadow 0.18s ease;
+    transition: box-shadow 150ms ease;
 }
 
-.volume-slider::-webkit-slider-thumb:hover {
-    box-shadow: 0 0 8px var(--color-accent);
+.volume-slider:hover::-moz-range-thumb {
+    box-shadow: 0 0 10px rgba(92, 255, 200, 0.5);
 }
 
-.volume-slider::-moz-range-thumb:hover {
-    box-shadow: 0 0 8px var(--color-accent);
+.volume-slider:active::-moz-range-thumb {
+    box-shadow: 0 0 14px rgba(92, 255, 200, 0.6);
 }
 
-.volume-slider::-webkit-slider-runnable-track {
-    height: 2px;
-    border-radius: 2px;
-}
-
-.volume-slider::-moz-range-track {
-    height: 2px;
-    border-radius: 2px;
+.volume-slider:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px rgba(92, 255, 200, 0.25);
 }
 
 .stat-row {

@@ -150,12 +150,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ── Volume slider ──
+    // --fill-pct drives the gradient fill on the Webkit track so the
+    // active (left) portion tracks the thumb in real time. Firefox
+    // uses ::-moz-range-progress natively and ignores this var.
+    function updateVolumeFillPct() {
+        const el = state.els.volumeSlider;
+        const raw = parseFloat(el.value) || 0;
+        const min = parseFloat(el.min) || 0;
+        const max = parseFloat(el.max) || 100;
+        const span = max - min;
+        const pct = span > 0 ? ((raw - min) / span) * 100 : 0;
+        el.style.setProperty('--fill-pct', pct + '%');
+    }
+
     state.els.volumeSlider.addEventListener('input', () => {
         const raw = parseInt(state.els.volumeSlider.value, 10);
         const volume = raw / 100;
         engine.setVolume(volume);
         state.els.volumeValue.textContent = raw + '%';
+        updateVolumeFillPct();
     });
+
+    updateVolumeFillPct();
 
     /**
      * Update the audio status text and surface an all-failed toast based on

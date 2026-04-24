@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-23 | Refactor   | [Volume Slider Custom Paint](devlog/M3/2026-04-23-M3-volume-slider-custom-paint.md)                                                                                                           |
 | 2026-04-23 | Refactor   | [Remove Per-Bus Audio Loading List](devlog/M3/2026-04-23-M3-remove-audio-bus-list.md)                                                                                                         |
 | 2026-04-23 | Feature    | [Info Panel Visual Overhaul](devlog/M3/2026-04-23-M3-info-panel-visual-overhaul.md)                                                                                                           |
 | 2026-04-23 | Fix        | [Frontend Lifecycle & Asset Failure Hardening](devlog/M3/2026-04-23-M3-frontend-lifecycle-and-asset-hardening.md)                                                                             |

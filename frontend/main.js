@@ -128,6 +128,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             audioAllFailedToastShown = false;
 
             engine.setOnLoadingUpdate(renderLoadingUI);
+            // setOnLoadingUpdate only stores the callback reference; on a
+            // second start the buffers are already cached and no load
+            // event will ever fire, which would leave the "Loading…"
+            // text from above stuck forever. Render once against the
+            // current states so an all-ready engine flips to "Playing"
+            // immediately and a pending engine stays on "Loading…".
+            renderLoadingUI(engine.getLoadingStates());
             await engine.start();
             announcer.setEnabled(true);
             startProgressLoop();

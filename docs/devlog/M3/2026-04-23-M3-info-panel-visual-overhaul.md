@@ -142,10 +142,41 @@ restraint, the functional-aesthetic class of NASA Worldview / Windy.com.
 
 ## Verification
 
-(Filled in after implementation — `npm run lint`, `npm run format:check`,
-`npm test`, and a manual preview pass including desktop and mobile
-widths plus the `.stale` connection state.)
+- `npm run format:check` — clean across the whole tree.
+- `npm run lint` — clean.
+- `npm test` — 14 suites / 154 tests pass. No server-side code
+  changed, so this was a sanity pass.
+- Content served by the running dev server (`http://localhost:3000`)
+  was spot-checked via `curl`:
+    - Google Fonts `<link>` tags rendered into the served HTML.
+    - `--font-sans`, `--font-mono`, tier-color, and type-scale tokens
+      appear in the served `style.css`.
+    - `.landcover-item::after` rule with `width: calc(var(--pct, 0)
+      * 1%)` is in the served CSS.
+    - `ui.js` serves the `toLocaleString('en-US')` grid-count line
+      and the `--pct` / `--bar-color` custom properties on the
+      land-cover template.
+- Visual pass deferred to the user's in-browser reload on the
+  already-running dev server (port 3000 was held by that instance,
+  so a managed preview couldn't be started). Checklist for that pass
+  is captured in the plan file.
 
 ## Files Changed
 
-(Populated at close-out.)
+- **Modified**: `frontend/index.html` — Google Fonts `<link>` +
+  title-block restructure (vintage moved out of stats-section) +
+  `<h3 class="section-subheader">` replacing the "Land Cover:" /
+  "By land area" pair.
+- **Modified**: `frontend/style.css` — full visual overhaul of the
+  info panel: `:root` token additions, panel surface, title block,
+  stats, legend micro-bars, audio section divider, slider, connection
+  row, attribution, stale state, and mobile padding.
+- **Modified**: `frontend/ui.js` — `gridCount` thousands separators
+  via `toLocaleString('en-US')`; `.landcover-item` template passes
+  `--pct` / `--bar-color` as inline custom properties; "No data"
+  fallback emits the three-column grid cells.
+- **Modified**: `docs/DEVLOG.md` — add this entry to the `## Entries`
+  index.
+- **Added**:
+  `docs/devlog/M3/2026-04-23-M3-info-panel-visual-overhaul.md` —
+  this entry.

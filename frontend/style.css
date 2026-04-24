@@ -19,6 +19,29 @@
     --color-accent-info: #4fc3f7;
     --color-danger: #ff6b6b;
     --color-border: rgba(255, 255, 255, 0.1);
+
+    /* Typography stacks */
+    --font-sans:
+        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+    /* Text tiers — tier1 = values/titles, tier2 = labels, tier3 = meta */
+    --color-text-tier1: rgba(255, 255, 255, 0.92);
+    --color-text-tier2: rgba(255, 255, 255, 0.55);
+    --color-text-tier3: rgba(255, 255, 255, 0.3);
+
+    /* Panel surfaces */
+    --color-panel-bg-v2: rgba(12, 12, 14, 0.85);
+    --color-divider: rgba(255, 255, 255, 0.08);
+    --color-border-soft: rgba(255, 255, 255, 0.06);
+
+    /* Type scale */
+    --fs-title: 1.05rem;
+    --fs-subtitle: 0.72rem;
+    --fs-meta: 0.65rem;
+    --fs-label: 0.72rem;
+    --fs-value: 0.78rem;
+    --fs-section: 0.62rem;
 }
 
 /* ============ Reset & Base ============ */
@@ -29,7 +52,7 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    font-family: var(--font-sans);
     background: var(--color-bg);
     color: var(--color-text);
     overflow: hidden;

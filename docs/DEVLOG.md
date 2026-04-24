@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-23 | Refactor   | [Makeup Gain +12 dB with Urban Bus Preamp](devlog/M3/2026-04-23-M3-makeup-12db-urban-preamp.md)                                                                                               |
 | 2026-04-23 | Refactor   | [Bump Master Makeup Gain from +8 dB to +10 dB](devlog/M3/2026-04-23-M3-makeup-gain-bump-10db.md)                                                                                              |
 | 2026-04-23 | Feature    | [Announcer Sidechain Ducking](devlog/M3/2026-04-23-M3-announcer-sidechain-ducking.md)                                                                                                         |
 | 2026-04-23 | Fix        | [Info Panel Post-Audit Cleanup](devlog/M3/2026-04-23-M3-info-panel-audit-cleanup.md)                                                                                                          |

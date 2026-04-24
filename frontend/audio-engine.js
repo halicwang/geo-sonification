@@ -81,6 +81,28 @@ const XF_CURVE_POINTS = 128;
 const GAIN_CURVE_EXPONENT = 0.6;
 
 /**
+ * Per-bus preamp (linear gain), multiplied into the rafLoop's per-bus
+ * gain assignment before it reaches the corresponding GainNode. Used
+ * to correct source-level loudness imbalance without re-authoring the
+ * WAVs. Values come from scripts/measure-loudness.js — most files
+ * cluster around -31 to -33 LUFS integrated, but urban.wav runs ~6 LU
+ * hotter and peaks ~15 dB above the others (-6.6 dBTP vs -21 dBTP).
+ * At MAKEUP_GAIN_DB = 12, an un-attenuated urban would peak at
+ * ~+5.4 dBTP and pin the limiter. Scaling urban by ~-10 dB keeps
+ * its post-makeup peak below the limiter threshold. Bus order
+ * matches BUS_NAMES.
+ */
+const BUS_PREAMP_GAIN = [
+    1.0, // 0 forest
+    1.0, // 1 shrub
+    1.0, // 2 grass
+    1.0, // 3 crop
+    0.316, // 4 urban — -10 dB to avoid limiter at MAKEUP_GAIN_DB = 12
+    1.0, // 5 bare
+    1.0, // 6 water
+];
+
+/**
  * Loading priority order (indices into BUS_NAMES).
  * Tree and water first (most common), then crop, urban, bare.
  */
@@ -93,7 +115,7 @@ const PRIORITY_SECOND = [1, 2, 3, 4, 5]; // shrub, grass, crop, urban, bare
  * user's volume slider) and pre-limiter, so per-bus mix math stays
  * untouched while the average summed output is pulled toward target.
  */
-const MAKEUP_GAIN_DB = 10;
+const MAKEUP_GAIN_DB = 12;
 
 /**
  * Soft peak limiter settings. -3 dB threshold + 20:1 ratio catches
@@ -833,7 +855,7 @@ function rafLoop() {
         if (gains[i] && buffers[i]) {
             const landValue = (shaped[i] / norm) * landMix;
             const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
-            gains[i].gain.value = value;
+            gains[i].gain.value = value * BUS_PREAMP_GAIN[i];
         }
     }
 

@@ -43,8 +43,16 @@ const BUFFER_CACHE_SIZE = 50;
 /** Population priority exponent. Higher = more weight to big cities. */
 const POP_PRIORITY_EXPONENT = 0.15;
 
-/** TTS gain relative to master volume. */
-const TTS_GAIN_RATIO = 0.3;
+/**
+ * TTS gain relative to master volume. Announcer output is a parallel
+ * path that bypasses audio-engine's ambience chain (masterGain →
+ * duckGain → makeupGain(+12 dB) → limiter → lpFilters), so the TTS
+ * does NOT receive the master loudness-normalization makeup. Running
+ * near unity keeps the voice clearly audible above the ducked
+ * ambience (0.3 × makeup ≈ 1.2× at the DAC); staying below 1.0
+ * leaves headroom since this path has no limiter of its own.
+ */
+const TTS_GAIN_RATIO = 0.8;
 
 /** Fade-in duration for the announcement (seconds). */
 const FADE_IN_S = 0.05;

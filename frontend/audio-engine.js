@@ -93,7 +93,7 @@ const PRIORITY_SECOND = [1, 2, 3, 4, 5]; // shrub, grass, crop, urban, bare
  * user's volume slider) and pre-limiter, so per-bus mix math stays
  * untouched while the average summed output is pulled toward target.
  */
-const MAKEUP_GAIN_DB = 8;
+const MAKEUP_GAIN_DB = 10;
 
 /**
  * Soft peak limiter settings. -3 dB threshold + 20:1 ratio catches

@@ -282,8 +282,10 @@ function playAnnouncement(buffer, pan) {
         gain.disconnect();
         panner.disconnect();
         if (currentSource === source) currentSource = null;
+        engine.unduck();
     };
 
+    engine.duck();
     source.start();
     currentSource = source;
 }

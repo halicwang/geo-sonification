@@ -107,6 +107,19 @@ const LIMITER_ATTACK_SEC = 0.003;
 const LIMITER_RELEASE_SEC = 0.25;
 const LIMITER_KNEE_DB = 0;
 
+/**
+ * Sidechain-style ducking applied to the ambience chain while the
+ * city-announcer speaks. Linear gain (0.3 ≈ -10.5 dB); announcer TTS
+ * plays at masterVolume * TTS_GAIN_RATIO (0.3), so a ~-10 dB duck on
+ * ambience leaves the TTS clearly audible above the environment.
+ * Attack / release time constants chosen for broadcast voice-over
+ * feel: fast enough to get out of the way on the first syllable,
+ * gentle enough on the release that ambience doesn't snap back.
+ */
+const DUCK_DEPTH = 0.3;
+const DUCK_ATTACK_TC = 0.05;
+const DUCK_RELEASE_TC = 0.15;
+
 // ════════════════════════════════════════════════════════════════════
 //  State
 // ════════════════════════════════════════════════════════════════════
@@ -131,6 +144,14 @@ let masterVolume = 1.0;
 let lpFilter1 = null;
 let lpFilter2 = null;
 let lpFilter3 = null;
+
+/**
+ * Static gain node inserted between masterGain and the rest of the
+ * ambience chain; modulated by duck() / unduck() while the
+ * city-announcer speaks so TTS sits clearly above ambience.
+ * @type {GainNode|null}
+ */
+let duckGain = null;
 
 /** @type {AudioBuffer[]} */
 const buffers = new Array(NUM_BUSES).fill(null);
@@ -899,6 +920,11 @@ async function start() {
         lpFilter3.frequency.value = 20000;
         lpFilter3.Q.value = 1.9319;
 
+        // duckGain is driven by duck() / unduck(); unity while idle, pulls
+        // down to DUCK_DEPTH during city-announcer speech.
+        duckGain = audioCtx.createGain();
+        duckGain.gain.value = 1.0;
+
         if (getLoudnessNormEnabled()) {
             // makeupGain offsets the summed-bus output toward the
             // -16 LUFS target; limiter catches transients so the
@@ -915,14 +941,16 @@ async function start() {
             limiter.release.value = LIMITER_RELEASE_SEC;
             limiter.knee.value = LIMITER_KNEE_DB;
 
-            masterGain.connect(makeupGain);
+            masterGain.connect(duckGain);
+            duckGain.connect(makeupGain);
             makeupGain.connect(limiter);
             limiter.connect(lpFilter1);
             console.info(
                 `[audio] Loudness norm ON — makeup ${MAKEUP_GAIN_DB.toFixed(1)} dB, limiter threshold ${LIMITER_THRESHOLD_DB} dB`
             );
         } else {
-            masterGain.connect(lpFilter1);
+            masterGain.connect(duckGain);
+            duckGain.connect(lpFilter1);
             console.info('[audio] Loudness norm OFF — legacy chain');
         }
         lpFilter1.connect(lpFilter2);
@@ -1096,6 +1124,28 @@ function getContext() {
     return audioCtx;
 }
 
+/**
+ * Apply the announcer-triggered sidechain duck. Called by
+ * city-announcer.js immediately before starting a TTS source. Safe
+ * to call before the AudioContext exists (no-op guard).
+ */
+function duck() {
+    if (!duckGain || !audioCtx) return;
+    duckGain.gain.setTargetAtTime(DUCK_DEPTH, audioCtx.currentTime, DUCK_ATTACK_TC);
+}
+
+/**
+ * Release the duck. Called by city-announcer.js in source.onended,
+ * which fires both on natural end and on explicit source.stop().
+ * Consecutive duck()/unduck() calls are safe: setTargetAtTime
+ * cancels any pending automation on the same AudioParam, so
+ * overlapping announcements don't pump.
+ */
+function unduck() {
+    if (!duckGain || !audioCtx) return;
+    duckGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, DUCK_RELEASE_TC);
+}
+
 export const engine = {
     start,
     stop,
@@ -1109,4 +1159,6 @@ export const engine = {
     setVolume,
     getVolume,
     getContext,
+    duck,
+    unduck,
 };

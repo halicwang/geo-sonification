@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-23 | Feature    | [Announcer Sidechain Ducking](devlog/M3/2026-04-23-M3-announcer-sidechain-ducking.md)                                                                                                         |
 | 2026-04-23 | Fix        | [Info Panel Post-Audit Cleanup](devlog/M3/2026-04-23-M3-info-panel-audit-cleanup.md)                                                                                                          |
 | 2026-04-23 | Fix        | [Audio Status Stuck on "Loading…" After Second Start](devlog/M3/2026-04-23-M3-audio-status-stuck-loading-on-restart.md)                                                                       |
 | 2026-04-23 | Refactor   | [Remove "Land Cover — by area" Subheader](devlog/M3/2026-04-23-M3-remove-land-cover-subheader.md)                                                                                             |

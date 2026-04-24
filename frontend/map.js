@@ -30,7 +30,7 @@ let prevMoveTime = 0;
 const GRID_DOT_LAYER = 'grid-dots';
 
 /** Fixed neutral grey for the dot overlay (landcover is surfaced in popups, not colors). */
-const DOT_COLOR = '#b0b0b0';
+const DOT_COLOR = '#707070';
 
 /** Add PMTiles vector source + single circle layer for per-grid dots. */
 async function addGridLayer() {
@@ -64,7 +64,7 @@ async function addGridLayer() {
             'circle-color': DOT_COLOR,
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
             'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
-            'circle-stroke-color': 'rgba(255, 255, 255, 0.32)',
+            'circle-stroke-color': 'rgba(255, 255, 255, 0.18)',
             'circle-stroke-width': [
                 'interpolate',
                 ['linear'],

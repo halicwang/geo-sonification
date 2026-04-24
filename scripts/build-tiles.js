@@ -94,13 +94,13 @@ async function main() {
 
     // 4. Run tippecanoe
     // LOD strategy: explicit base-zoom + drop-rate so low-zoom tiles don't
-    // pack all 259k 0.5° grid points into a 2-pixel-per-degree canvas
-    // (which caused visible moiré + stutter at zoom 2-4). Zoom 8+ keeps
-    // 100% of features; each zoom level below drops ~half again
-    // (-r 2 means "keep 1/2 of the prior zoom's features"). At zoom 2
-    // this yields ~4k features globally instead of 259k — enough to
-    // sketch land outlines, sparse enough that the regular grid no
-    // longer beats with the screen pixel grid.
+    // pack all 67k 0.5° grid points into a 2-pixel-per-degree canvas
+    // (which caused visible moiré + stutter at zoom 2-4). Zoom 10+ keeps
+    // 100% of features; each zoom level below drops by half
+    // (-r 2 means "keep 1/2 of the prior zoom's features"). At zoom 4
+    // this yields ~1k features globally, at zoom 2 ~250 — sparse enough
+    // that the regular grid no longer beats with the screen pixel grid
+    // and the dot overlay reads as a data sketch rather than a wash.
     //
     // --no-tile-size-limit keeps the deterministic drop-rate output even
     // if a tile ends up >500 KB (which won't happen with this feature
@@ -113,7 +113,7 @@ async function main() {
         '--layer=grids',
         '--minimum-zoom=0',
         '--maximum-zoom=12',
-        '--base-zoom=8',
+        '--base-zoom=10',
         '--drop-rate=2',
         '--no-tile-size-limit',
         '--no-tile-compression',

@@ -41,7 +41,6 @@
     --fs-meta: 0.65rem;
     --fs-label: 0.72rem;
     --fs-value: 0.78rem;
-    --fs-section: 0.62rem;
 }
 
 /* ============ Reset & Base ============ */
@@ -204,21 +203,6 @@ body {
     padding-bottom: 14px;
     margin-bottom: 14px;
     border-bottom: 1px solid var(--color-divider);
-}
-
-/* Uppercase mini-header for the Land Cover legend (and any future sub-section). */
-.section-subheader {
-    font-family: var(--font-sans);
-    font-size: var(--fs-section);
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color-text-tier3);
-    margin: 0 0 10px;
-}
-
-.section-subheader-note {
-    font-weight: 400;
 }
 
 /* ============ Audio Controls ============ */

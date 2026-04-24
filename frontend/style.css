@@ -15,7 +15,8 @@
     --color-text-bright: #fff;
     --color-text-muted: #aaa;
     --color-text-dim: #888;
-    --color-accent: #4ecdc4;
+    --color-accent: #5cffc8;
+    --color-accent-rgb: 92 255 200;
     --color-accent-info: #4fc3f7;
     --color-danger: #ff6b6b;
     --color-border: rgba(255, 255, 255, 0.1);
@@ -98,8 +99,8 @@ body {
 }
 
 .floating-btn:hover {
-    background: rgba(78, 205, 196, 0.18);
-    border-color: rgba(78, 205, 196, 0.5);
+    background: rgb(var(--color-accent-rgb) / 0.18);
+    border-color: rgb(var(--color-accent-rgb) / 0.5);
 }
 
 .floating-btn:active {
@@ -108,7 +109,7 @@ body {
 
 .floating-btn:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.25);
+    box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
 }
 
 .audio-btn-floating {
@@ -259,7 +260,8 @@ body {
  * vertically in the input box), and the filled portion is driven by
  * --fill-pct (set by main.js on input + init) via a hard-stop
  * gradient on Webkit and ::-moz-range-progress on Firefox. Thumb is
- * 10 px mint with progressive glow on hover / active / focus-visible.
+ * 10 px accent-colored with progressive glow on hover / active /
+ * focus-visible.
  */
 .volume-slider {
     -webkit-appearance: none;
@@ -277,8 +279,8 @@ body {
     border-radius: 1px;
     background: linear-gradient(
         to right,
-        #5cffc8 0,
-        #5cffc8 var(--fill-pct, 100%),
+        var(--color-accent) 0,
+        var(--color-accent) var(--fill-pct, 100%),
         rgba(255, 255, 255, 0.1) var(--fill-pct, 100%),
         rgba(255, 255, 255, 0.1) 100%
     );
@@ -291,22 +293,22 @@ body {
     height: 10px;
     margin-top: -4px;
     border-radius: 50%;
-    background: #5cffc8;
+    background: var(--color-accent);
     border: none;
     cursor: pointer;
     transition: box-shadow 150ms ease;
 }
 
 .volume-slider:hover::-webkit-slider-thumb {
-    box-shadow: 0 0 10px rgba(92, 255, 200, 0.5);
+    box-shadow: 0 0 10px rgb(var(--color-accent-rgb) / 0.5);
 }
 
 .volume-slider:active::-webkit-slider-thumb {
-    box-shadow: 0 0 14px rgba(92, 255, 200, 0.6);
+    box-shadow: 0 0 14px rgb(var(--color-accent-rgb) / 0.6);
 }
 
 .volume-slider:focus-visible::-webkit-slider-thumb {
-    box-shadow: 0 0 0 3px rgba(92, 255, 200, 0.25);
+    box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
 }
 
 .volume-slider::-moz-range-track {
@@ -319,29 +321,29 @@ body {
 .volume-slider::-moz-range-progress {
     height: 2px;
     border-radius: 1px;
-    background: #5cffc8;
+    background: var(--color-accent);
 }
 
 .volume-slider::-moz-range-thumb {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #5cffc8;
+    background: var(--color-accent);
     border: none;
     cursor: pointer;
     transition: box-shadow 150ms ease;
 }
 
 .volume-slider:hover::-moz-range-thumb {
-    box-shadow: 0 0 10px rgba(92, 255, 200, 0.5);
+    box-shadow: 0 0 10px rgb(var(--color-accent-rgb) / 0.5);
 }
 
 .volume-slider:active::-moz-range-thumb {
-    box-shadow: 0 0 14px rgba(92, 255, 200, 0.6);
+    box-shadow: 0 0 14px rgb(var(--color-accent-rgb) / 0.6);
 }
 
 .volume-slider:focus-visible::-moz-range-thumb {
-    box-shadow: 0 0 0 3px rgba(92, 255, 200, 0.25);
+    box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
 }
 
 .stat-row {

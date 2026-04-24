@@ -120,7 +120,7 @@ const gains = new Array(NUM_BUSES).fill(null);
 /** @type {GainNode|null} */
 let masterGain = null;
 
-/** User-controlled master volume multiplier (0.0–1.2). */
+/** User-controlled master volume multiplier (0.0–1.0). */
 let masterVolume = 1.0;
 
 /**
@@ -1077,16 +1077,16 @@ function seekLoop(progress) {
 
 /**
  * Set master volume. Uses setTargetAtTime for click-free transitions.
- * @param {number} value - 0.0 (mute) to 1.5 (max)
+ * @param {number} value - 0.0 (mute) to 1.0 (max, unity)
  */
 function setVolume(value) {
-    masterVolume = Math.max(0, Math.min(1.5, value));
+    masterVolume = Math.max(0, Math.min(1.0, value));
     if (masterGain && audioCtx) {
         masterGain.gain.setTargetAtTime(masterVolume, audioCtx.currentTime, 0.015);
     }
 }
 
-/** @returns {number} Current master volume setting (0.0–1.5). */
+/** @returns {number} Current master volume setting (0.0–1.0). */
 function getVolume() {
     return masterVolume;
 }

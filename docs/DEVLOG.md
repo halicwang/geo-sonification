@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-23 | Refactor   | [Volume Slider Max 100% + Larger Hit Area](devlog/M3/2026-04-23-M3-volume-slider-max-100-and-hit-area.md)                                                                                     |
 | 2026-04-23 | Feature    | [Master Loudness Normalization (−16 LUFS)](devlog/M3/2026-04-23-M3-loudness-normalization.md)                                                                                                 |
 | 2026-04-23 | Refactor   | [Volume Slider Custom Paint](devlog/M3/2026-04-23-M3-volume-slider-custom-paint.md)                                                                                                           |
 | 2026-04-23 | Refactor   | [Remove Per-Bus Audio Loading List](devlog/M3/2026-04-23-M3-remove-audio-bus-list.md)                                                                                                         |

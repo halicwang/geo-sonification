@@ -266,16 +266,18 @@ body {
 
 /*
  * Volume slider: native <input type="range"> fully repainted.
- * Track is 2px; the filled portion is driven by --fill-pct (set by
- * main.js on input + init) via a hard-stop gradient on Webkit and
- * ::-moz-range-progress on Firefox. Thumb is 10px mint with
- * progressive glow on hover / active / focus-visible.
+ * Input box is 20 px tall for a forgiving hit area; the visible track
+ * is 2 px drawn inside ::-webkit-slider-runnable-track (centered
+ * vertically in the input box), and the filled portion is driven by
+ * --fill-pct (set by main.js on input + init) via a hard-stop
+ * gradient on Webkit and ::-moz-range-progress on Firefox. Thumb is
+ * 10 px mint with progressive glow on hover / active / focus-visible.
  */
 .volume-slider {
     -webkit-appearance: none;
     appearance: none;
     flex: 1;
-    height: 2px;
+    height: 20px;
     padding: 0;
     background: transparent;
     outline: none;
@@ -288,8 +290,8 @@ body {
     background: linear-gradient(
         to right,
         #5cffc8 0,
-        #5cffc8 var(--fill-pct, 67%),
-        rgba(255, 255, 255, 0.1) var(--fill-pct, 67%),
+        #5cffc8 var(--fill-pct, 100%),
+        rgba(255, 255, 255, 0.1) var(--fill-pct, 100%),
         rgba(255, 255, 255, 0.1) 100%
     );
 }

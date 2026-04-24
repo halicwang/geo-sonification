@@ -1,0 +1,53 @@
+# Keep the image lean: only what server/index.js actually loads at
+# runtime ships to Fly.io. Frontend, large binaries, docs, and local
+# dev tooling are excluded — those live on Cloudflare Pages / R2.
+
+# Version control
+.git
+.github
+.gitignore
+.gitattributes
+
+# Dev tooling and editor state
+.claude
+.vscode
+.idea
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# Node modules (reinstalled inside the image via `npm ci`)
+node_modules
+server/node_modules
+
+# Frontend — served by Cloudflare Pages, not Node.js
+frontend
+
+# Large static assets — served from Cloudflare R2
+data/tiles
+data/sources
+data/cache
+
+# Max/MSP artifacts (not used in production)
+sonification
+
+# Documentation & plans
+docs
+README.md
+AGENTS.md
+CLAUDE.md
+
+# Root-level tooling that the server doesn't need at runtime
+commitlint.config.js
+eslint.config.js
+.prettierrc*
+.prettierignore
+.editorconfig
+scripts
+
+# Docker metadata itself
+Dockerfile
+.dockerignore
+fly.toml

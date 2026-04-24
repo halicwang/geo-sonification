@@ -41,7 +41,6 @@ export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
 export const state = {
     /** Server-provided configuration (populated by loadServerConfig). */
     config: {
-        wsPort: 3001,
         gridSize: 0.5,
         apiBase: runtime.apiBase || '',
         mapboxToken: null,
@@ -54,7 +53,6 @@ export const state = {
         debounceTimer: null,
         lastViewportSend: 0,
         clientId: null,
-        wsUrl: null,
         wsReconnectDelay: 1000,
         audioEnabled: false,
     },
@@ -92,55 +90,55 @@ export function getMapboxToken() {
 
 // ============ WebSocket URL ============
 
-/** Parse WS port from ?ws_port= query param (used when /api/config is unavailable). */
-function fallbackWsPort() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const wsPort = Number(urlParams.get('ws_port') || '3001');
-    return Number.isInteger(wsPort) && wsPort >= 1 && wsPort <= 65535 ? wsPort : 3001;
+/** Optional ?ws_port= query override (debug only, e.g. when a dev proxy remaps the port). */
+function wsPortOverride() {
+    const raw = new URLSearchParams(window.location.search).get('ws_port');
+    if (!raw) return null;
+    const port = Number(raw);
+    return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
 /**
- * Build a WebSocket URL from the given port. When a deployment-time
- * wsUrl is configured (production), it wins over the derived localhost URL.
+ * Build the WebSocket URL. Priority:
+ *   1. Deployment-time override (runtime.wsUrl) — full absolute URL.
+ *   2. Same origin + same port as the page — matches the server's
+ *      single-port model where HTTP and WS share the listener.
+ *   3. ?ws_port= query param overrides the port (local debugging only).
  */
-export function buildWsUrl(port) {
+export function buildWsUrl() {
     if (runtime.wsUrl) return runtime.wsUrl;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.hostname}:${port}`;
+    const override = wsPortOverride();
+    const host =
+        override != null ? `${window.location.hostname}:${override}` : window.location.host;
+    return `${protocol}//${host}`;
 }
 
-/** Return the current WebSocket URL (cached after loadServerConfig). */
+/** Return the current WebSocket URL. */
 export function getWebSocketURL() {
-    if (runtime.wsUrl) return runtime.wsUrl;
-    if (state.runtime.wsUrl) return state.runtime.wsUrl;
-    return buildWsUrl(fallbackWsPort());
+    return buildWsUrl();
 }
 
 // ============ Server Config ============
 
-/** Fetch WS port and landcover metadata from server. */
+/** Fetch grid size and landcover metadata from the server. */
 export async function loadServerConfig() {
     try {
         const response = await fetch(`${state.config.apiBase}/api/config`);
-        if (response.ok) {
-            const config = await response.json();
-            state.config.wsPort = config.wsPort || 3001;
-            if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
-                state.config.gridSize = config.gridSize;
-            }
-            if (config.landcoverMeta) {
-                state.config.landcoverMeta = config.landcoverMeta;
-            }
-        } else {
+        if (!response.ok) {
             console.warn(`Server config endpoint returned ${response.status}, using fallback`);
-            state.config.wsPort = fallbackWsPort();
+            return;
+        }
+        const config = await response.json();
+        if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
+            state.config.gridSize = config.gridSize;
+        }
+        if (config.landcoverMeta) {
+            state.config.landcoverMeta = config.landcoverMeta;
         }
     } catch (err) {
         console.warn('Failed to load server config, using defaults:', err);
-        state.config.wsPort = fallbackWsPort();
     }
-
-    state.runtime.wsUrl = buildWsUrl(state.config.wsPort);
 }
 
 // ============ Client ID ============

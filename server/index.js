@@ -22,7 +22,7 @@ const { WebSocketServer } = WebSocket;
 const fs = require('fs');
 const path = require('path');
 
-const { HTTP_PORT, WS_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
+const { HTTP_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
 const { loadGridData } = require('./data-loader');
 const spatial = require('./spatial');
@@ -149,24 +149,14 @@ function startHttpServer(expressApp, port) {
 }
 
 /**
- * Start WebSocket server and resolve only after the port is successfully bound.
- * @param {number} port
- * @returns {Promise<WebSocketServer>}
+ * Attach a WebSocket server to an existing HTTP server so both share a
+ * single port (required by Fly.io and simpler in general — WebSocket
+ * upgrades ride the HTTP server's upgrade channel).
+ * @param {import('http').Server} server
+ * @returns {WebSocketServer}
  */
-function startWsServer(port) {
-    return new Promise((resolve, reject) => {
-        const wss = new WebSocketServer({ port });
-        const onError = (err) => {
-            wss.off('listening', onListening);
-            reject(err);
-        };
-        const onListening = () => {
-            wss.off('error', onError);
-            resolve(wss);
-        };
-        wss.once('error', onError);
-        wss.once('listening', onListening);
-    });
+function attachWsServer(server) {
+    return new WebSocketServer({ server });
 }
 
 // ============ Express Server ============
@@ -214,8 +204,6 @@ app.get('/health', (req, res) => {
 // API: Get server configuration (for frontend)
 app.get('/api/config', (req, res) => {
     res.json({
-        wsPort: WS_PORT,
-        httpPort: HTTP_PORT,
         gridSize: GRID_SIZE,
         landcoverMeta: LANDCOVER_META,
     });
@@ -402,15 +390,14 @@ async function startServer() {
         const { gridData, normalizeParams } = await loadGridData();
         spatial.init(gridData, normalizeParams);
 
-        // Start HTTP + WebSocket servers and only continue once both are bound.
+        // Bind HTTP and attach WebSocket to its upgrade channel — single port.
         httpServer = await startHttpServer(app, HTTP_PORT);
-        wssServer = await startWsServer(WS_PORT);
+        wssServer = attachWsServer(httpServer);
         const wss = wssServer;
 
         dataLoaded = true;
 
-        console.log(`HTTP server running at http://localhost:${HTTP_PORT}`);
-        console.log(`WebSocket server running at ws://localhost:${WS_PORT}`);
+        console.log(`Server listening on port ${HTTP_PORT} (HTTP + WebSocket)`);
         warnIfStaticAssetsMissing();
 
         // Runtime HTTP errors should be logged to avoid unhandled 'error' events.
@@ -430,7 +417,7 @@ async function startServer() {
   Geo-Sonification Server Running
 ======================================
   HTTP API:    http://localhost:${HTTP_PORT}
-  WebSocket:   ws://localhost:${WS_PORT}
+  WebSocket:   ws://localhost:${HTTP_PORT}  (same port)
   Audio:       Web Audio (browser)
 ======================================
 `);
@@ -483,7 +470,7 @@ module.exports = {
     app,
     parseViewportBounds,
     startHttpServer,
-    startWsServer,
+    attachWsServer,
     startServer,
     gracefulShutdown,
     attachWsHandler,

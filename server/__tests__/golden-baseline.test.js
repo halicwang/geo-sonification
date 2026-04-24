@@ -26,7 +26,6 @@ const { LANDCOVER_META } = require('../landcover');
 const {
     GRID_SIZE,
     HTTP_PORT,
-    WS_PORT,
     PROXIMITY_ZOOM_LOW,
     PROXIMITY_ZOOM_HIGH,
     PER_GRID_THRESHOLD_ENTER,
@@ -108,9 +107,8 @@ describe('P0-A Golden Baseline: /api/config', () => {
         expect(GRID_SIZE).toBe(goldenConfig.expected.gridSize);
     });
 
-    test('default ports match golden fixture', () => {
-        expect(HTTP_PORT).toBe(goldenConfig.expected.httpPort);
-        expect(WS_PORT).toBe(goldenConfig.expected.wsPort);
+    test('default port matches golden fixture', () => {
+        expect(HTTP_PORT).toBe(goldenConfig.expected.port);
     });
 });
 

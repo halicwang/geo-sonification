@@ -10,7 +10,7 @@
  * @module frontend/map
  */
 
-import { state, ASSET_BASE, VIEWPORT_DEBOUNCE, getClientId, buildWsUrl } from './config.js';
+import { state, ASSET_BASE, VIEWPORT_DEBOUNCE, getClientId } from './config.js';
 import { escapeHtml, getLandcoverName } from './landcover.js';
 import { updateUI, showToast } from './ui.js';
 import { engine } from './audio-engine.js';
@@ -215,11 +215,6 @@ export async function refreshServerConfig() {
         if (!response.ok) return;
         const config = await response.json();
 
-        if (config.wsPort && Number.isFinite(config.wsPort)) {
-            state.config.wsPort = config.wsPort;
-            // Rebuild cached WS URL so reconnects use the updated port
-            state.runtime.wsUrl = buildWsUrl(config.wsPort);
-        }
         if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
             state.config.gridSize = config.gridSize;
         }

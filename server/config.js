@@ -72,10 +72,19 @@ function parseNonNegativeInt(envVar, defaultValue, name) {
     return parsed;
 }
 
-// ---- Network ports ----
+// ---- Network port ----
+//
+// A single port serves both HTTP and WebSocket — the WebSocket server
+// shares the HTTP server's upgrade channel (see server/index.js). `PORT`
+// is the canonical env var (Fly.io, most PaaS providers set it for you);
+// `HTTP_PORT` is accepted as a legacy alias for existing local dev setups.
 
-const HTTP_PORT = parsePort('HTTP_PORT', 3000, 'HTTP');
-const WS_PORT = parsePort('WS_PORT', 3001, 'WebSocket');
+const HTTP_PORT = (() => {
+    if (process.env.PORT !== undefined && process.env.PORT !== '') {
+        return parsePort('PORT', 3000, 'PORT');
+    }
+    return parsePort('HTTP_PORT', 3000, 'HTTP');
+})();
 
 // ---- Aggregation ----
 // Two modes: "legacy" (simple grid-count average) vs "v2_area_weighted" (land-area weighted).
@@ -246,7 +255,6 @@ const BROADCAST_STATS =
 
 module.exports = {
     HTTP_PORT,
-    WS_PORT,
     USE_LEGACY_AGGREGATION,
     AGGREGATION_VERSION,
     AGGREGATION_CONFIG,

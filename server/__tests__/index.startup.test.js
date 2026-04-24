@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Zixiao Wang
 
 const express = require('express');
-const { startHttpServer, startWsServer } = require('../index');
+const { WebSocketServer } = require('ws');
+const { startHttpServer, attachWsServer } = require('../index');
 
 function closeHttpServer(server) {
     return new Promise((resolve, reject) => {
@@ -45,27 +46,22 @@ describe('index startup helpers', () => {
         }
     });
 
-    test('startWsServer resolves after successful bind', async () => {
-        const wss = await startWsServer(0);
+    test('attachWsServer attaches to the HTTP server (shared single port)', async () => {
+        const app = express();
+        const server = await startHttpServer(app, 0);
         try {
-            const address = wss.address();
-            expect(address).toBeTruthy();
-            expect(typeof address.port).toBe('number');
-            expect(address.port).toBeGreaterThan(0);
+            const wss = attachWsServer(server);
+            try {
+                expect(wss).toBeInstanceOf(WebSocketServer);
+                // A server-mode WebSocketServer has no address() of its own; it
+                // rides the HTTP server's listener. Confirm the HTTP listener
+                // is still bound on the port we expect to share.
+                expect(server.address().port).toBeGreaterThan(0);
+            } finally {
+                await closeWsServer(wss);
+            }
         } finally {
-            await closeWsServer(wss);
-        }
-    });
-
-    test('startWsServer rejects when port is already in use', async () => {
-        const wssA = await startWsServer(0);
-        const busyPort = wssA.address().port;
-        try {
-            await expect(startWsServer(busyPort)).rejects.toMatchObject({
-                code: 'EADDRINUSE',
-            });
-        } finally {
-            await closeWsServer(wssA);
+            await closeHttpServer(server);
         }
     });
 });

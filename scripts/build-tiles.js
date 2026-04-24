@@ -49,11 +49,30 @@ function stripProps(grid) {
     return out;
 }
 
-function gridToFeature(grid, gridSize, minzoom, maxzoom) {
+/**
+ * Pick a per-feature minzoom from the cell's integer grid position so the
+ * overlay thins at low zoom while preserving every surviving dot's
+ * original 0.5° grid coordinate. Two tiers only, both rectangular —
+ * zooming past the breakpoint strictly reveals the "in-between" 0.5°
+ * cells without moving anything on screen.
+ *
+ *   zoom 0-3: 1° sub-grid (every other cell on both axes, ~17k features
+ *             globally, clean square lattice at 1° spacing)
+ *   zoom 4+ : every 0.5° cell (~67k, full-resolution square lattice)
+ */
+function gridMinZoom(i, j) {
+    if (i % 2 === 0 && j % 2 === 0) return 0;
+    return 4;
+}
+
+function gridToFeature(grid, gridSize, maxzoom) {
     const half = gridSize / 2;
+    // Integer cell indices on the global grid.
+    const i = Math.round(grid.lon / gridSize);
+    const j = Math.round(grid.lat / gridSize);
     return {
         type: 'Feature',
-        tippecanoe: { minzoom, maxzoom },
+        tippecanoe: { minzoom: gridMinZoom(i, j), maxzoom },
         properties: stripProps(grid),
         geometry: {
             type: 'Point',
@@ -62,8 +81,8 @@ function gridToFeature(grid, gridSize, minzoom, maxzoom) {
     };
 }
 
-function buildTileFeatures(grids, gridSize = GRID_SIZE, minzoom = 0, maxzoom = 12) {
-    return grids.map((grid) => gridToFeature(grid, gridSize, minzoom, maxzoom));
+function buildTileFeatures(grids, gridSize = GRID_SIZE, maxzoom = 12) {
+    return grids.map((grid) => gridToFeature(grid, gridSize, maxzoom));
 }
 
 async function main() {
@@ -93,32 +112,23 @@ async function main() {
     );
 
     // 4. Run tippecanoe
-    // LOD strategy: --cluster-distance=N clusters point features within N
-    // tile-pixels of each other at each zoom level. For the 0.5°-spaced
-    // grid this produces clean LOD — aggressive at low zoom (cells only
-    // a few pixels apart get merged), no-op at high zoom (0.5° >> N px
-    // at zoom ≥ 10). Without this the dot overlay packed all 67k cells
-    // at zoom 2-4, producing visible moiré against the screen pixel
-    // grid and dragging frame rate during pan.
+    // LOD strategy: each feature carries its own `tippecanoe.minzoom`
+    // computed from its integer grid position (see gridMinZoom above).
+    // Tippecanoe just honors those minzooms — it doesn't need
+    // cluster-distance / drop-rate / drop-densest tricks. The result:
+    //   * Every emitted dot sits at its original 0.5° grid centroid —
+    //     no averaging, no position drift.
+    //   * Zooming in strictly reveals more cells at the same aligned
+    //     positions (nested power-of-2 sub-grids).
+    //   * Tile size stays bounded automatically because the low-zoom
+    //     tiles carry O(1/zoom²) of the full 67k feature set.
     //
-    // Earlier attempts with `--base-zoom=10 --drop-rate=2` by themselves
-    // did NOT actually drop features — those flags only configure the
-    // rate used by `--drop-*-as-needed` siblings, and without one of
-    // those the fixed-fraction "dropping" never kicks in. Verified
-    // empirically via `pmtiles tile` + MVT feature count: early
-    // attempts still had 67k features in the zoom 0 tile.
-    //
-    // N=16 was picked by measuring per-tile feature counts at each zoom
-    // (see devlog). Bumping N reduces density further if needed
-    // (cluster area scales with N²).
-    //
-    // Clustered features lose their original `landcover_class` property
-    // (tippecanoe replaces them with a cluster centroid carrying a
-    // `point_count`), so click popups at low zoom show "Unknown" for
-    // clustered regions — an acceptable tradeoff since clicking a
-    // low-zoom dot that represents multiple cells wasn't meaningful to
-    // begin with. At zoom ≥ 10 each cell is its own feature with full
-    // properties intact.
+    // History: earlier attempts with `--base-zoom=N --drop-rate=R`
+    // alone were no-ops (those flags need a `--drop-*-as-needed`
+    // partner). `--cluster-distance=N` did drop features but merged
+    // them into synthetic cluster centroids, shifting dot positions
+    // off the 0.5° grid — visually read as "scrambled" to the user.
+    // The per-feature minzoom approach avoids both pitfalls.
     const tippecanoeArgs = [
         '-o',
         OUTPUT,
@@ -126,7 +136,7 @@ async function main() {
         '--layer=grids',
         '--minimum-zoom=0',
         '--maximum-zoom=12',
-        '--cluster-distance=16',
+        '--no-tile-size-limit',
         '--no-tile-compression',
         GEOJSON_PATH,
     ];

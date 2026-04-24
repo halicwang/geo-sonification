@@ -42,7 +42,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         audioToggle: document.getElementById('audio-toggle'),
         audioIcon: document.getElementById('audio-icon'),
         audioStatus: document.getElementById('audio-status'),
-        audioLoading: document.getElementById('audio-loading'),
         volumeSlider: document.getElementById('volume-slider'),
         volumeValue: document.getElementById('volume-value'),
         loopProgress: document.getElementById('loop-progress'),
@@ -112,8 +111,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ── Audio toggle button ──
-    const BUS_LABELS = ['Forest', 'Shrub', 'Grass', 'Crop', 'Urban', 'Bare', 'Water'];
-
     let audioAllFailedToastShown = false;
 
     function setAudioToggleState(enabled) {
@@ -128,7 +125,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.runtime.audioEnabled = true;
             setAudioToggleState(true);
             state.els.audioStatus.textContent = 'Loading\u2026';
-            state.els.audioLoading.classList.remove('hidden');
             audioAllFailedToastShown = false;
 
             engine.setOnLoadingUpdate(renderLoadingUI);
@@ -146,7 +142,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.runtime.audioEnabled = false;
             setAudioToggleState(false);
             state.els.audioStatus.textContent = 'Audio off';
-            state.els.audioLoading.classList.add('hidden');
             await engine.stop();
             announcer.setEnabled(false);
             announcer.reset();
@@ -163,42 +158,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     /**
-     * Render per-bus loading progress bars.
+     * Update the audio status text and surface an all-failed toast based on
+     * per-bus loading progress reported by the engine. No per-bus list is
+     * rendered into the info panel.
      * @param {Array<{status: string, progress: number, error: string|null}>} states
      */
     function renderLoadingUI(states) {
-        const el = state.els.audioLoading;
-        el.innerHTML = states
-            .map((s, i) => {
-                const statusClass =
-                    s.status === 'error' ? ' error' : s.status === 'ready' ? ' ready' : '';
-                const pct = Math.round(s.progress * 100);
-                let statusText;
-                if (s.status === 'ready') statusText = '\u2713';
-                else if (s.status === 'error') statusText = '\u2717';
-                else if (s.status === 'pending') statusText = '\u2014';
-                else statusText = pct + '%';
-
-                return (
-                    '<div class="audio-load-item' +
-                    statusClass +
-                    '">' +
-                    '<span class="audio-load-name">' +
-                    BUS_LABELS[i] +
-                    '</span>' +
-                    '<div class="audio-load-bar">' +
-                    '<div class="audio-load-fill" style="width:' +
-                    pct +
-                    '%"></div>' +
-                    '</div>' +
-                    '<span class="audio-load-status">' +
-                    statusText +
-                    '</span>' +
-                    '</div>'
-                );
-            })
-            .join('');
-
         const readyCount = states.filter((s) => s.status === 'ready').length;
         const errorCount = states.filter((s) => s.status === 'error').length;
         const allFailed = errorCount === states.length && states.length > 0;

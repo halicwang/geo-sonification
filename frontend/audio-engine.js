@@ -23,6 +23,8 @@
  * @module frontend/audio-engine
  */
 
+import { getLoudnessNormEnabled } from './config.js';
+
 // ════════════════════════════════════════════════════════════════════
 //  Constants
 // ════════════════════════════════════════════════════════════════════
@@ -84,6 +86,26 @@ const GAIN_CURVE_EXPONENT = 0.6;
  */
 const PRIORITY_FIRST = [0, 6]; // forest, water
 const PRIORITY_SECOND = [1, 2, 3, 4, 5]; // shrub, grass, crop, urban, bare
+
+/**
+ * Master makeup gain in dB, calibrated by scripts/measure-loudness.js
+ * against a -16 LUFS target. Applied post-masterGain (i.e. after the
+ * user's volume slider) and pre-limiter, so per-bus mix math stays
+ * untouched while the average summed output is pulled toward target.
+ */
+const MAKEUP_GAIN_DB = 8;
+
+/**
+ * Soft peak limiter settings. -3 dB threshold + 20:1 ratio catches
+ * transient peaks from the summed bus mix, keeping true peak below
+ * -1 dBTP on ambient content. Web Audio's DynamicsCompressorNode has
+ * ~6 ms lookahead — sufficient for non-percussive sources.
+ */
+const LIMITER_THRESHOLD_DB = -3;
+const LIMITER_RATIO = 20;
+const LIMITER_ATTACK_SEC = 0.003;
+const LIMITER_RELEASE_SEC = 0.25;
+const LIMITER_KNEE_DB = 0;
 
 // ════════════════════════════════════════════════════════════════════
 //  State
@@ -877,7 +899,32 @@ async function start() {
         lpFilter3.frequency.value = 20000;
         lpFilter3.Q.value = 1.9319;
 
-        masterGain.connect(lpFilter1);
+        if (getLoudnessNormEnabled()) {
+            // makeupGain offsets the summed-bus output toward the
+            // -16 LUFS target; limiter catches transients so the
+            // true peak stays below -1 dBTP. Both are created once
+            // per AudioContext lifetime and never revisited, so
+            // neither needs a module-level handle.
+            const makeupGain = audioCtx.createGain();
+            makeupGain.gain.value = Math.pow(10, MAKEUP_GAIN_DB / 20);
+
+            const limiter = audioCtx.createDynamicsCompressor();
+            limiter.threshold.value = LIMITER_THRESHOLD_DB;
+            limiter.ratio.value = LIMITER_RATIO;
+            limiter.attack.value = LIMITER_ATTACK_SEC;
+            limiter.release.value = LIMITER_RELEASE_SEC;
+            limiter.knee.value = LIMITER_KNEE_DB;
+
+            masterGain.connect(makeupGain);
+            makeupGain.connect(limiter);
+            limiter.connect(lpFilter1);
+            console.info(
+                `[audio] Loudness norm ON — makeup ${MAKEUP_GAIN_DB.toFixed(1)} dB, limiter threshold ${LIMITER_THRESHOLD_DB} dB`
+            );
+        } else {
+            masterGain.connect(lpFilter1);
+            console.info('[audio] Loudness norm OFF — legacy chain');
+        }
         lpFilter1.connect(lpFilter2);
         lpFilter2.connect(lpFilter3);
         lpFilter3.connect(audioCtx.destination);

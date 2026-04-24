@@ -81,6 +81,38 @@ restraint, the functional-aesthetic class of NASA Worldview / Windy.com.
   `30325 / 67095 (45%)` now reads `30,325 / 67,095 (45%)`, which is
   substantially easier to eyeball at the size we're rendering it.
 
+### Audio, slider, and footer (`frontend/style.css`)
+
+- Volume slider track trimmed from 4 px to 2 px, thumb from 14 px to
+  10 px, and the hover glow transition slowed from 0.2 s to 0.18 s.
+  Track color nudged from `rgba(255,255,255,0.1)` to `0.12` to stay
+  readable at the smaller height. Firefox's missing
+  `::-moz-range-track` rule added so it matches Webkit.
+- `.audio-status` adopts tier2; `.volume-label` drops to tier3 meta;
+  `.volume-value` renders in `JetBrains Mono` at the meta size in
+  tier2. The audio section now terminates with its own 1px divider,
+  consistent with stats and legend.
+- Connection row uses `--fs-meta` + tier3 and removes the previous
+  `border-top` (the audio section's bottom divider is now what
+  separates them). Status dot shrinks from 8 px to 6 px; the connected
+  glow shrinks to match. Disconnected state drops to opacity 0.6 so it
+  reads as "muted" rather than "red alarm".
+- Attribution links switch to `color: inherit` with a 1px dotted
+  underline that lifts to tier2 on hover — quieter than the previous
+  underline-on-hover pattern, and matches the overall footer tone.
+- Stale state now also dims the land-cover legend (plus existing
+  stats fade), via a 0.3 s opacity transition, so a reconnect or
+  degraded-link moment reads as one coordinated softening rather than
+  half the panel going gray.
+
+### Responsive (`frontend/style.css`)
+
+- Mobile layout (≤600 px) picks up a slightly tighter `16px 18px`
+  padding. The previous `#info-panel h2 { font-size: 1.2em }` override
+  is removed: the new `--fs-title` rem-based scale already renders
+  comfortably on small screens, and the override fought the new
+  letter-spacing.
+
 ## Design Decisions / Tradeoffs
 
 - **Accent color retained at `#4ecdc4`.** An upstream proposal suggested

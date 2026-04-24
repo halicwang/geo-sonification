@@ -23,7 +23,7 @@
  * @module frontend/audio-engine
  */
 
-import { getLoudnessNormEnabled } from './config.js';
+import { ASSET_BASE, getLoudnessNormEnabled } from './config.js';
 
 // ════════════════════════════════════════════════════════════════════
 //  Constants
@@ -608,7 +608,7 @@ async function loadSample(busIndex, generation) {
     notifyLoadingUpdate();
 
     try {
-        const response = await fetch(`/audio/ambience/${name}.wav`);
+        const response = await fetch(`${ASSET_BASE}/audio/ambience/${name}.wav`);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status} for ${name}.wav`);
         }

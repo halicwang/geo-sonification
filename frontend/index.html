@@ -128,6 +128,8 @@
         <!-- Toast: temporary notifications (e.g. connection errors) -->
         <div id="toast" class="toast hidden"></div>
 
+        <!-- Deployment-time runtime config (generated at deploy time; no-op locally). -->
+        <script src="config.runtime.js"></script>
         <!-- config.local.js sets window.MAPBOX_TOKEN; must load before modules -->
         <script src="config.local.js"></script>
         <!-- Entry point module; imports pull in config, landcover, ui, map, websocket -->

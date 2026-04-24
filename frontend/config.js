@@ -10,6 +10,31 @@
  * @module frontend/config
  */
 
+// ============ Runtime Deployment Config ============
+
+/**
+ * Deployment-specific configuration injected via frontend/config.runtime.js.
+ * That file ships as an empty placeholder in the repo and is overwritten at
+ * deploy time with real values; during local dev every field stays empty
+ * and the frontend falls back to same-origin defaults so the existing
+ * Node.js server keeps serving assets and APIs unchanged.
+ *
+ * Recognized keys (see frontend/config.runtime.example.js for the template):
+ *   basePath   — URL prefix the app is mounted under (e.g. '/geo-sonification').
+ *   apiBase    — Absolute URL of the Node backend ('' = same origin).
+ *   wsUrl      — Full WebSocket URL, including scheme and host ('' = derive from hostname+port).
+ *   assetBase  — Absolute URL prefix for large static assets (PMTiles, ambience WAVs).
+ *                Defaults to basePath when omitted.
+ *   mapboxToken — Production Mapbox token; overrides config.local.js when set.
+ */
+const runtime = (typeof window !== 'undefined' && window.GEO_SONIFICATION_CONFIG) || {};
+
+/** URL prefix the app is mounted under; '' means root. No trailing slash. */
+export const BASE_PATH = (runtime.basePath || '').replace(/\/$/, '');
+
+/** Absolute URL prefix for large static assets (PMTiles, ambience WAVs). */
+export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
+
 // ============ Shared State ============
 
 /** @type {{ config: Object, runtime: Object, els: Object }} */
@@ -18,7 +43,7 @@ export const state = {
     config: {
         wsPort: 3001,
         gridSize: 0.5,
-        apiBase: '',
+        apiBase: runtime.apiBase || '',
         mapboxToken: null,
         landcoverMeta: {},
     },
@@ -49,13 +74,17 @@ const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 
 // ============ Mapbox Token ============
 
-/** Read token from config.local.js (not committed to repo). */
+const PLACEHOLDER_TOKENS = new Set(['YOUR_MAPBOX_ACCESS_TOKEN_HERE', 'your-token-here']);
+
+/**
+ * Read Mapbox token, preferring the deployment-time value from
+ * config.runtime.js over the local-dev value from config.local.js.
+ */
 export function getMapboxToken() {
-    if (
-        window.MAPBOX_TOKEN &&
-        window.MAPBOX_TOKEN !== 'YOUR_MAPBOX_ACCESS_TOKEN_HERE' &&
-        window.MAPBOX_TOKEN !== 'your-token-here'
-    ) {
+    if (runtime.mapboxToken && !PLACEHOLDER_TOKENS.has(runtime.mapboxToken)) {
+        return runtime.mapboxToken;
+    }
+    if (window.MAPBOX_TOKEN && !PLACEHOLDER_TOKENS.has(window.MAPBOX_TOKEN)) {
         return window.MAPBOX_TOKEN;
     }
     return null;
@@ -70,14 +99,19 @@ function fallbackWsPort() {
     return Number.isInteger(wsPort) && wsPort >= 1 && wsPort <= 65535 ? wsPort : 3001;
 }
 
-/** Build a WebSocket URL from the given port. */
+/**
+ * Build a WebSocket URL from the given port. When a deployment-time
+ * wsUrl is configured (production), it wins over the derived localhost URL.
+ */
 export function buildWsUrl(port) {
+    if (runtime.wsUrl) return runtime.wsUrl;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.hostname}:${port}`;
 }
 
 /** Return the current WebSocket URL (cached after loadServerConfig). */
 export function getWebSocketURL() {
+    if (runtime.wsUrl) return runtime.wsUrl;
     if (state.runtime.wsUrl) return state.runtime.wsUrl;
     return buildWsUrl(fallbackWsPort());
 }

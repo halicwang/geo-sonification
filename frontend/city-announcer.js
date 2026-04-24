@@ -15,6 +15,7 @@
  * @module frontend/city-announcer
  */
 
+import { BASE_PATH } from './config.js';
 import { engine } from './audio-engine.js';
 
 // ============ Constants ============
@@ -83,7 +84,7 @@ async function loadCities() {
     if (citiesLoaded) return;
     lastLoadAttempt = performance.now();
     try {
-        const res = await fetch('/data/cities.json');
+        const res = await fetch(`${BASE_PATH}/data/cities.json`);
         if (!res.ok) {
             console.warn('[CityAnnouncer] Failed to load cities.json:', res.status);
             return;
@@ -229,7 +230,7 @@ async function loadCityAudio(slug) {
     if (!ctx) return null;
 
     try {
-        const res = await fetch(`/audio/cities/${slug}.m4a`);
+        const res = await fetch(`${BASE_PATH}/audio/cities/${slug}.m4a`);
         if (!res.ok) return null;
         const arrayBuf = await res.arrayBuffer();
         const audioBuffer = await ctx.decodeAudioData(arrayBuf);

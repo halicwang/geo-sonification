@@ -10,7 +10,7 @@
  * @module frontend/map
  */
 
-import { state, VIEWPORT_DEBOUNCE, getClientId, buildWsUrl } from './config.js';
+import { state, ASSET_BASE, VIEWPORT_DEBOUNCE, getClientId, buildWsUrl } from './config.js';
 import { escapeHtml, getLandcoverName } from './landcover.js';
 import { updateUI, showToast } from './ui.js';
 import { engine } from './audio-engine.js';
@@ -34,7 +34,9 @@ const DOT_COLOR = '#606060';
 
 /** Add PMTiles vector source + single circle layer for per-grid dots. */
 async function addGridLayer() {
-    const PMTILES_URL = `${window.location.origin}/tiles/grids.pmtiles`;
+    const PMTILES_URL = ASSET_BASE
+        ? `${ASSET_BASE}/tiles/grids.pmtiles`
+        : `${window.location.origin}/tiles/grids.pmtiles`;
 
     // Register the custom PMTiles source type (idempotent)
     mapboxgl.Style.setSourceType(

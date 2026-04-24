@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-24 | Refactor   | [Frontend Deployment Runtime Config](devlog/M3/2026-04-24-M3-frontend-deployment-runtime-config.md)                                                                                           |
 | 2026-04-24 | Design     | [Raise Commit Header Max Length to 100](devlog/M3/2026-04-24-M3-commit-header-max-100.md)                                                                                                     |
 | 2026-04-24 | Refactor   | [Nudge Dot Fill One More Step to #606060](devlog/M3/2026-04-24-M3-dot-color-grey-tighter.md)                                                                                                  |
 | 2026-04-24 | Refactor   | [Push Dot Overlay Further Into Mid-Grey](devlog/M3/2026-04-24-M3-dot-color-darker-grey.md)                                                                                                    |

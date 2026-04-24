@@ -49,14 +49,6 @@ function stripProps(grid) {
     return out;
 }
 
-/**
- * Emit every cell at every zoom level. The dot overlay relies on the
- * frontend's circle-radius paint curve to handle low-zoom density by
- * shrinking dots to sub-pixel size, which lets Mapbox's antialiasing
- * dissolve the regular 0.5° grid into a smooth gray wash instead of
- * beating against the screen pixel grid. No feature is dropped or
- * moved — every emitted dot sits at its exact original centroid.
- */
 function gridToFeature(grid, gridSize, minzoom, maxzoom) {
     const half = gridSize / 2;
     return {
@@ -101,23 +93,6 @@ async function main() {
     );
 
     // 4. Run tippecanoe
-    // LOD strategy: each feature carries its own `tippecanoe.minzoom`
-    // computed from its integer grid position (see gridMinZoom above).
-    // Tippecanoe just honors those minzooms — it doesn't need
-    // cluster-distance / drop-rate / drop-densest tricks. The result:
-    //   * Every emitted dot sits at its original 0.5° grid centroid —
-    //     no averaging, no position drift.
-    //   * Zooming in strictly reveals more cells at the same aligned
-    //     positions (nested power-of-2 sub-grids).
-    //   * Tile size stays bounded automatically because the low-zoom
-    //     tiles carry O(1/zoom²) of the full 67k feature set.
-    //
-    // History: earlier attempts with `--base-zoom=N --drop-rate=R`
-    // alone were no-ops (those flags need a `--drop-*-as-needed`
-    // partner). `--cluster-distance=N` did drop features but merged
-    // them into synthetic cluster centroids, shifting dot positions
-    // off the 0.5° grid — visually read as "scrambled" to the user.
-    // The per-feature minzoom approach avoids both pitfalls.
     const tippecanoeArgs = [
         '-o',
         OUTPUT,
@@ -125,6 +100,7 @@ async function main() {
         '--layer=grids',
         '--minimum-zoom=0',
         '--maximum-zoom=12',
+        '--no-feature-limit',
         '--no-tile-size-limit',
         '--no-tile-compression',
         GEOJSON_PATH,

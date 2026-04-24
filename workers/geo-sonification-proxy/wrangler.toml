@@ -1,0 +1,17 @@
+# Cloudflare Worker that mounts the geo-sonification Pages app under
+# placeecho.com/geo-sonification/*. See worker.js for the proxy logic.
+
+name = "placeecho-geo-sonification-proxy"
+main = "worker.js"
+compatibility_date = "2025-04-01"
+
+# Two routes so both /geo-sonification (no slash) and /geo-sonification/*
+# hit this Worker. The apex path is needed so the canonical 308 redirect
+# fires instead of falling through to the zone's default 404 behavior.
+[[routes]]
+pattern = "placeecho.com/geo-sonification"
+zone_name = "placeecho.com"
+
+[[routes]]
+pattern = "placeecho.com/geo-sonification/*"
+zone_name = "placeecho.com"

@@ -30,3 +30,7 @@ frontend/audio/ambience/*.wav
 .claude/
 AGENTS.md
 CLAUDE.md
+
+# Deploy-time secrets + build output
+.env.deploy
+dist/

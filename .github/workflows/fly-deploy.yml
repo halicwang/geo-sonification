@@ -1,0 +1,65 @@
+name: Fly Deploy
+
+# Auto-deploy the Node.js backend to Fly.io on every push to main that
+# touches a backend-relevant path. Frontend-only and docs-only commits
+# skip this workflow entirely (path filter below).
+#
+# Required GitHub secret:
+#   FLY_API_TOKEN  — created via `fly tokens create deploy -x 999999h`.
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - 'server/**'
+            - 'data/raw/**'
+            - 'Dockerfile'
+            - '.dockerignore'
+            - 'fly.toml'
+            - '.github/workflows/fly-deploy.yml'
+    # Manual trigger for emergency rollbacks or re-runs after a fixed secret.
+    workflow_dispatch:
+
+# Serialize deploys; never cancel an in-flight deploy mid-rollout, but a
+# new push waits for the previous one to finish and only the latest in
+# the queue eventually runs.
+concurrency:
+    group: fly-deploy
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: Deploy to Fly.io
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: superfly/flyctl-actions/setup-flyctl@master
+
+            - name: Deploy
+              run: flyctl deploy --remote-only
+              env:
+                  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+            # Belt-and-braces: Fly's own health check (60 s grace) gates
+            # the rolling cutover, but a public /health probe from a
+            # different network confirms the public route works too.
+            # Retries cover the case where the auto-suspend machine is
+            # mid-resume on the first probe.
+            - name: Smoke test /health
+              run: |
+                  for attempt in 1 2 3 4 5 6; do
+                    body="$(curl -fsS https://placeecho-geo-sonification.fly.dev/health || true)"
+                    case "$body" in
+                      *'"dataLoaded":true'*)
+                        echo "OK on attempt $attempt: $body"
+                        exit 0
+                        ;;
+                    esac
+                    echo "Attempt $attempt: not ready (got: ${body:-no body}); waiting 10 s..."
+                    sleep 10
+                  done
+                  echo "FAIL: /health never reported dataLoaded:true after 6 attempts"
+                  exit 1

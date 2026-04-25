@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-25 | Feature    | [Fly.io Auto-Deploy via GitHub Action](devlog/M3/2026-04-25-M3-fly-deploy-github-action.md)                                                                                                   |
 | 2026-04-25 | Design     | [README Refresh for Grid Perf Stack](devlog/M3/2026-04-25-M3-readme-grid-perf-stack.md)                                                                                                       |
 | 2026-04-25 | Refactor   | [Suppress Grid Stroke During Map Motion](devlog/M3/2026-04-25-M3-suppress-stroke-during-drag.md)                                                                                              |
 | 2026-04-25 | Refactor   | [Tighten Viewport Debounce 200 → 120 ms](devlog/M3/2026-04-25-M3-tighter-viewport-debounce.md)                                                                                                |

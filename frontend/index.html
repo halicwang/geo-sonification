@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Geo-Sonification | Interactive Sound Map</title>
+        <title>PlaceEcho | Geo-Sonification Sound Map</title>
 
         <!-- Mapbox GL JS -->
         <script src="https://api.mapbox.com/mapbox-gl-js/v3.11.0/mapbox-gl.js"></script>
@@ -55,7 +55,8 @@
         </div>
 
         <!-- Floating info panel: stats updated in real time by updateUI() -->
-        <div id="info-panel" class="hidden">
+        <div id="info-panel">
+            <p class="brand-mark">PlaceEcho</p>
             <h2>Geo-Sonification</h2>
             <p class="subtitle">Interactive Sound Map</p>
             <p class="vintage">Data vintage: 2020–2021</p>
@@ -123,6 +124,9 @@
                     >VIIRS Nighttime Lights</a
                 >
             </div>
+
+            <!-- Copyright footer for trademark specimen -->
+            <div id="copyright-footer">&copy; 2026 PlaceEcho. All rights reserved.</div>
         </div>
 
         <!-- Toast: temporary notifications (e.g. connection errors) -->

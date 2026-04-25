@@ -62,8 +62,19 @@ export const state = {
 
 // ============ Constants ============
 
-/** Debounce delay for viewport updates (ms). */
-export const VIEWPORT_DEBOUNCE = 200;
+/**
+ * Debounce delay for viewport updates (ms). The throttle in
+ * `frontend/map.js` `onViewportChange` is hybrid leading+trailing — the
+ * value here also caps the leading-fire frequency, so dropping it cuts
+ * drag-stop latency by the same amount it raises the message rate.
+ *
+ * 120 ms is paired with the server's measured ~1–2 ms / viewport compute
+ * cost (`server/index.js` `_statsCounter`); the resulting ~8 Hz upper
+ * bound stays well below the `WS_MAX_BUFFERED = 64 KB` backpressure
+ * threshold. Values below ~80 ms start to risk buffer accumulation under
+ * concurrent clients.
+ */
+export const VIEWPORT_DEBOUNCE = 120;
 
 /** Maximum WebSocket reconnect backoff (ms). */
 export const WS_RECONNECT_MAX = 30000;

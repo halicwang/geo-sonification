@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-25 | Refactor   | [Tighten Viewport Debounce 200 → 120 ms](devlog/M3/2026-04-25-M3-tighter-viewport-debounce.md)                                                                                                |
 | 2026-04-25 | Refactor   | [Static Asset Cache Headers](devlog/M3/2026-04-25-M3-static-asset-cache-headers.md)                                                                                                           |
 | 2026-04-25 | Refactor   | [Server Response Compression (gzip + WS perMessageDeflate)](devlog/M3/2026-04-25-M3-server-response-compression.md)                                                                           |
 | 2026-04-24 | Refactor   | [Encode Ambience as Opus 128k (20× Smaller)](devlog/M3/2026-04-24-M3-ambience-opus-encoding.md)                                                                                               |

@@ -79,6 +79,14 @@ export const VIEWPORT_DEBOUNCE = 120;
 /** Maximum WebSocket reconnect backoff (ms). */
 export const WS_RECONNECT_MAX = 30000;
 
+/**
+ * Grace period (ms) before marking panel data as stale after a disconnect.
+ * Tuned to absorb transient reconnect cycles (single onclose → onopen
+ * round-trip is typically <2 s in healthy networks). Real outages persist
+ * past this window and surface the warning.
+ */
+export const STALE_GRACE_MS = 5000;
+
 const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 
 // ============ Mapbox Token ============

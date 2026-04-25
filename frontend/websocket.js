@@ -73,7 +73,6 @@ export function connectWebSocket(callbacks) {
     };
 
     state.runtime.ws.onclose = () => {
-        // Bump delay before status check so stale indicator triggers sooner
         state.runtime.wsReconnectDelay = Math.min(
             state.runtime.wsReconnectDelay * 2,
             WS_RECONNECT_MAX

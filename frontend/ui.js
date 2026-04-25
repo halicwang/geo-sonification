@@ -10,10 +10,11 @@
  * @module frontend/ui
  */
 
-import { state } from './config.js';
+import { state, STALE_GRACE_MS } from './config.js';
 import { escapeHtml, getLandcoverName, getLandcoverColor } from './landcover.js';
 
 let _toastTimerId = null;
+let _staleTimerId = null;
 
 /**
  * Render viewport stats into the info panel.
@@ -98,19 +99,30 @@ export function updateUI(stats) {
 /** Update the status dot + text at the bottom of the info panel. */
 export function updateConnectionStatus(connected) {
     const els = state.els;
+    const panel = els.landcoverList.closest('#info-panel');
 
     if (connected) {
         els.wsStatus.classList.remove('disconnected');
         els.wsStatus.classList.add('connected');
-        els.landcoverList.closest('#info-panel')?.classList.remove('stale');
+        panel?.classList.remove('stale');
         els.wsText.textContent = 'Connected to server';
+        if (_staleTimerId !== null) {
+            clearTimeout(_staleTimerId);
+            _staleTimerId = null;
+        }
     } else {
         els.wsStatus.classList.remove('connected');
         els.wsStatus.classList.add('disconnected');
         els.wsText.textContent = 'Reconnecting...';
-        // After 2+ failed reconnects, mark panel data as potentially stale
-        if (state.runtime.wsReconnectDelay >= 4000) {
-            els.landcoverList.closest('#info-panel')?.classList.add('stale');
+        // Mark stale only if the disconnect persists past the grace window;
+        // transient reconnect flaps (sub-grace) stay quiet.
+        if (_staleTimerId === null) {
+            _staleTimerId = setTimeout(() => {
+                _staleTimerId = null;
+                if (state.runtime.ws?.readyState !== WebSocket.OPEN) {
+                    panel?.classList.add('stale');
+                }
+            }, STALE_GRACE_MS);
         }
     }
 }

@@ -32,6 +32,25 @@ const GRID_DOT_LAYER = 'grid-dots';
 /** Fixed neutral grey for the dot overlay (landcover is surfaced in popups, not colors). */
 const DOT_COLOR = '#606060';
 
+/**
+ * Per-zoom stroke width for the dot layer. Pulled out as a module-level
+ * constant so the drag-suppression handlers below can restore the exact
+ * same expression after `movestart` zeros it out (see `initMap`).
+ */
+const STROKE_WIDTH_BY_ZOOM = [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    2,
+    0.15,
+    5,
+    0.35,
+    8,
+    0.6,
+    12,
+    0.9,
+];
+
 /** Add PMTiles vector source + single circle layer for per-grid dots. */
 async function addGridLayer() {
     const PMTILES_URL = ASSET_BASE
@@ -67,19 +86,7 @@ async function addGridLayer() {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
             'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
             'circle-stroke-color': 'rgba(255, 255, 255, 0.18)',
-            'circle-stroke-width': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                2,
-                0.15,
-                5,
-                0.35,
-                8,
-                0.6,
-                12,
-                0.9,
-            ],
+            'circle-stroke-width': STROKE_WIDTH_BY_ZOOM,
             'circle-stroke-opacity': 0.8,
             'circle-blur': 0,
         },
@@ -293,6 +300,29 @@ export function initMap() {
                 state.els.zoomLevel.textContent = state.runtime.map.getZoom().toFixed(2);
             }
             onViewportChange();
+        });
+
+        // Drag-suppress the per-dot stroke. Stroke is per-fragment work on
+        // 67k features every frame; zeroing it out during motion roughly
+        // halves the fragment shader cost at low zoom. The dots' fill,
+        // size, and color are unchanged, and `moveend` restores the stroke
+        // within one frame so the resting visual is identical. Distinct
+        // from the rolled-back LOD experiments — those changed which
+        // features render at rest; this only changes a paint property
+        // during motion.
+        state.runtime.map.on('movestart', () => {
+            if (state.runtime.map.getLayer(GRID_DOT_LAYER)) {
+                state.runtime.map.setPaintProperty(GRID_DOT_LAYER, 'circle-stroke-width', 0);
+            }
+        });
+        state.runtime.map.on('moveend', () => {
+            if (state.runtime.map.getLayer(GRID_DOT_LAYER)) {
+                state.runtime.map.setPaintProperty(
+                    GRID_DOT_LAYER,
+                    'circle-stroke-width',
+                    STROKE_WIDTH_BY_ZOOM
+                );
+            }
         });
 
         if (state.els.zoomLevel) {

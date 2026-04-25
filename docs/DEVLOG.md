@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-25 | Refactor   | [Suppress Grid Stroke During Map Motion](devlog/M3/2026-04-25-M3-suppress-stroke-during-drag.md)                                                                                              |
 | 2026-04-25 | Refactor   | [Tighten Viewport Debounce 200 → 120 ms](devlog/M3/2026-04-25-M3-tighter-viewport-debounce.md)                                                                                                |
 | 2026-04-25 | Refactor   | [Static Asset Cache Headers](devlog/M3/2026-04-25-M3-static-asset-cache-headers.md)                                                                                                           |
 | 2026-04-25 | Refactor   | [Server Response Compression (gzip + WS perMessageDeflate)](devlog/M3/2026-04-25-M3-server-response-compression.md)                                                                           |

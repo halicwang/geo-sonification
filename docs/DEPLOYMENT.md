@@ -80,13 +80,26 @@ dist/                  ← gitignored build output (Pages deploy root)
 
 ## How to re-deploy each layer
 
-All four steps run independently — redeploy only the layer you
-changed.
+Pages and Fly auto-deploy on push to `main`. R2 and Worker stay
+manual because they change too rarely to justify automation. The
+manual `wrangler` / `fly deploy` paths below remain valid for
+emergency rollbacks and out-of-band testing.
 
-### Pages (frontend)
+### Pages (frontend) — **auto-deploys on push to `main`**
 
-Needed when `frontend/*`, `data/cities.json`, or any
-`.env.deploy` value changes.
+Cloudflare Pages is connected to `halicwang/geo-sonification` via the
+Pages dashboard (Settings → Builds & deployments → Connect to Git).
+Every push to `main` triggers `node scripts/build-pages.js` followed
+by an atomic Pages deployment; pull requests get preview URLs.
+
+The five build env vars (`MAPBOX_TOKEN` encrypted, `BASE_PATH`,
+`API_BASE`, `WS_URL`, `ASSET_BASE`) live on the Pages project under
+Settings → Environment variables (Production). Updating any of them
+requires a CF dashboard edit followed by a re-deploy from the
+"Deployments" tab.
+
+**Manual / emergency deploy** (e.g. to test a build locally without
+committing, or to re-deploy after a CF outage):
 
 ```bash
 node scripts/build-pages.js                                         # produces dist/
@@ -94,23 +107,43 @@ wrangler pages deploy dist/ --project-name=placeecho-geo-sonification \
   --branch=main --commit-dirty=true
 ```
 
-Takes ~15 seconds. No downtime — Pages serves atomic deployments.
+Auto-build takes ~30 s end-to-end. No downtime — Pages serves atomic
+deployments.
 
-### Fly.io (backend)
+### Fly.io (backend) — **auto-deploys on push to `main`**
 
-Needed when `server/*`, `data/raw/*`, or `Dockerfile` changes.
+`.github/workflows/fly-deploy.yml` runs `flyctl deploy --remote-only`
+on every push that touches `server/**`, `data/raw/**`, the Docker
+recipe, or `fly.toml`. Frontend-only and docs-only commits skip the
+workflow via the path filter. Concurrency group `fly-deploy`
+serializes deploys without cancelling an in-flight rollout.
+Post-deploy, the workflow polls `/health` until it returns
+`"dataLoaded":true` (or fails after 60 s).
+
+The required `FLY_API_TOKEN` GitHub secret is created with
+`fly tokens create deploy -x 999999h` and pasted into repo Settings
+→ Secrets and variables → Actions.
+
+**Manual / emergency deploy** (e.g. to roll back to an earlier
+image, or to redeploy after a token rotation while waiting on the
+Action to pick up the new secret):
 
 ```bash
 fly deploy                                                          # from project root
 ```
 
-Takes 3-5 minutes. Builds the Docker image remotely (pre-warming the
-spatial cache during build), pushes to Fly's registry, rolls the
-running machine. Health-check (`/health`) gates the new machine.
+Or trigger the same Action manually from GitHub: Actions → "Fly
+Deploy" → Run workflow.
 
-### R2 (large assets)
+Auto-deploy takes 3-5 minutes. Health-check (`/health`) gates the
+new machine.
 
-Needed only when PMTiles rebuilt or ambience WAVs change.
+### R2 (large assets) — **manual**
+
+Needed only when PMTiles rebuilt or ambience files change. Updates
+happen at most a handful of times per project lifetime; the
+185 MB PMTiles upload is heavy enough that automating it via a
+GitHub Action would burn runner minutes for negligible benefit.
 
 ```bash
 # PMTiles (tippecanoe-built; regenerate with: npm --prefix server run build:tiles)
@@ -120,20 +153,21 @@ wrangler r2 object put placeecho-assets/tiles/grids.pmtiles \
   --cache-control="public, max-age=31536000, immutable" \
   --remote
 
-# Ambience WAVs (7 files)
-for wav in bare crop forest grass shrub urban water; do
-  wrangler r2 object put placeecho-assets/audio/ambience/${wav}.wav \
-    --file=frontend/audio/ambience/${wav}.wav \
-    --content-type="audio/wav" \
+# Ambience Opus files (7 files; encoded by scripts/encode-ambience-opus.sh)
+for clip in bare crop forest grass shrub urban water; do
+  wrangler r2 object put placeecho-assets/audio/ambience/${clip}.opus \
+    --file=frontend/audio/ambience/${clip}.opus \
+    --content-type="audio/ogg" \
     --cache-control="public, max-age=31536000, immutable" \
     --remote
 done
 ```
 
-### Worker (reverse proxy)
+### Worker (reverse proxy) — **manual**
 
 Needed only when `workers/geo-sonification-proxy/worker.js` or
-`wrangler.toml` changes (rare).
+`wrangler.toml` changes (rare — the proxy is 30 lines and has changed
+once since launch).
 
 ```bash
 cd workers/geo-sonification-proxy && wrangler deploy
@@ -166,8 +200,14 @@ to know exist:
       `ExposeHeaders = Content-Length, Content-Range, ETag, Accept-Ranges`.
 - **Pages project `placeecho-geo-sonification`**
     - Production branch: `main`.
-    - **Not yet connected to GitHub** — deploys are manual via
-      `wrangler pages deploy`. See TODO.
+    - **Connected to `halicwang/geo-sonification`** — every push to
+      `main` triggers `node scripts/build-pages.js` and an atomic
+      deploy. PRs get preview URLs.
+    - Build env vars (Production): `MAPBOX_TOKEN` (Encrypted),
+      `BASE_PATH=/geo-sonification`,
+      `API_BASE=https://placeecho-geo-sonification.fly.dev`,
+      `WS_URL=wss://placeecho-geo-sonification.fly.dev`,
+      `ASSET_BASE=https://assets.placeecho.com`.
 - **Worker `placeecho-geo-sonification-proxy`**
     - Source and route bindings live in
       `workers/geo-sonification-proxy/wrangler.toml` and deploy from there.
@@ -227,15 +267,14 @@ starts_with(path, "/audio/")`. PMTiles then bypass cache and Range
 ## TODO (not yet done)
 
 - [ ] **Narrow the Cache Rule filter** to `/audio/*` (known issue #1 above).
-- [ ] **CF Pages ↔ GitHub integration** — connect the Pages project
-      to `halicwang/geo-sonification`, inject the five `.env.deploy`
-      variables as build-time env vars (MAPBOX_TOKEN as secret), so every
-      push to `main` triggers an automatic `node scripts/build-pages.js
-&& publish dist/`.
-- [ ] **GitHub Actions → Fly.io** — add `.github/workflows/fly-deploy.yml`
-      that runs `fly deploy` on push to `main`. Needs `FLY_API_TOKEN`
-      GitHub secret from `fly tokens create deploy`.
-- [ ] **Opus-encode ambience WAVs** (known issue #2 above).
+- [x] ~~**CF Pages ↔ GitHub integration**~~ — done 2026-04-25; Pages
+      project is connected to `halicwang/geo-sonification` with the
+      five build env vars wired up.
+- [x] ~~**GitHub Actions → Fly.io**~~ — done 2026-04-25;
+      `.github/workflows/fly-deploy.yml` runs `flyctl deploy
+--remote-only` on push to `main` for backend-relevant paths.
+- [x] ~~**Opus-encode ambience WAVs**~~ — done 2026-04-24, see
+      `docs/devlog/M3/2026-04-24-M3-ambience-opus-encoding.md`.
 - [ ] **PMTiles Worker proxy** for per-Range caching (known issue #3 above).
 
 ---

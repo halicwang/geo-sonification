@@ -202,14 +202,31 @@ app.use(compression({ threshold: 1024 }));
 
 app.use(express.json());
 
-// Serve static frontend files
+// Mount cache-friendly routes BEFORE the catch-all `frontend` static so
+// the Cache-Control headers actually apply (the frontend dir contains
+// `audio/ambience/` too, so the catch-all would otherwise win the route
+// match first and serve those files with the default max-age=0).
+
+// Serve pre-built vector tiles (PMTiles). The 7-day maxAge tells browsers
+// to skip the network entirely on cache hits; we deliberately omit
+// `immutable` so `npm run build:tiles` (which overwrites in-place) is
+// still picked up by ETag/If-Modified-Since on hard reload. In production
+// the file is served from R2 + Cloudflare which has its own cache layer;
+// this header only takes effect on local-dev or non-CDN deployments.
+app.use('/tiles', express.static(path.join(__dirname, '../data/tiles'), { maxAge: '7d' }));
+
+// Serve ambience audio samples for Web Audio frontend. 30-day maxAge —
+// the Opus-encoded WAVs are content-addressed effectively (no in-place
+// re-encoding workflow), so browsers can cache them aggressively.
+app.use(
+    '/audio/ambience',
+    express.static(path.join(__dirname, '../frontend/audio/ambience'), { maxAge: '30d' })
+);
+
+// Serve static frontend files (index.html, JS, CSS). Default maxAge=0
+// keeps the dev iteration loop tight; production puts these behind
+// Cloudflare Pages which has its own cache strategy.
 app.use(express.static(path.join(__dirname, '../frontend')));
-
-// Serve pre-built vector tiles (PMTiles)
-app.use('/tiles', express.static(path.join(__dirname, '../data/tiles')));
-
-// Serve ambience audio samples for Web Audio frontend.
-app.use('/audio/ambience', express.static(path.join(__dirname, '../frontend/audio/ambience')));
 
 // Serve city data (JSON database for city announcer)
 app.use('/data', express.static(path.join(__dirname, '../data'), { extensions: ['json'] }));

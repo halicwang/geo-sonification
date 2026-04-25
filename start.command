@@ -35,7 +35,6 @@ if [[ -f ".env" ]]; then
 fi
 
 HTTP_PORT=${HTTP_PORT:-3000}
-WS_PORT=${WS_PORT:-3001}
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "ERROR: $1 not found. $2"; exit 1; }
@@ -78,8 +77,7 @@ kill_port() {
   echo "  OK: Port $port freed"
 }
 
-kill_port "$HTTP_PORT" "HTTP" || exit 1
-kill_port "$WS_PORT" "WebSocket" || exit 1
+kill_port "$HTTP_PORT" "HTTP + WebSocket" || exit 1
 
 # 3. Start Node.js server in background
 echo "[1/2] Starting Node.js server..."
@@ -107,8 +105,9 @@ echo "  OK: Server is ready"
 
 # 4. Open browser
 echo "[2/2] Opening browser..."
-# Include ws_port parameter so frontend knows the correct WebSocket port
-open "http://localhost:${HTTP_PORT}?ws_port=${WS_PORT}"
+# Server runs HTTP + WebSocket on the same port (single-port model);
+# the frontend derives the WS URL from window.location.host.
+open "http://localhost:${HTTP_PORT}"
 
 echo ""
 echo "========================================"

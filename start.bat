@@ -20,7 +20,6 @@ if exist ".env" (
 )
 
 if not defined HTTP_PORT set HTTP_PORT=3000
-if not defined WS_PORT set WS_PORT=3001
 
 :: ---- Phase 2: Enable delayed expansion (inherits .env variables) ----
 setlocal enabledelayedexpansion
@@ -59,10 +58,6 @@ for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr /R ":%HTTP_PORT%[^0-9]
     echo Port %HTTP_PORT% in use ^(pid: %%P^) -- stopping...
     taskkill /PID %%P /T /F >nul 2>&1
 )
-for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr /R ":%WS_PORT%[^0-9]" ^| findstr "LISTENING"') do (
-    echo Port %WS_PORT% in use ^(pid: %%P^) -- stopping...
-    taskkill /PID %%P /T /F >nul 2>&1
-)
 
 :: Start server in background
 echo [1/2] Starting Node.js server...
@@ -96,7 +91,9 @@ for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr /R ":%HTTP_PORT%[^0-9]
 
 :: Open browser
 echo [2/2] Opening browser...
-start "" "http://localhost:%HTTP_PORT%?ws_port=%WS_PORT%"
+:: Server runs HTTP + WebSocket on the same port (single-port model);
+:: the frontend derives the WS URL from window.location.host.
+start "" "http://localhost:%HTTP_PORT%"
 
 echo.
 echo ========================================

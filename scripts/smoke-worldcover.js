@@ -19,8 +19,7 @@
  *
  * Environment variables:
  *   SMOKE_TIMEOUT_MS - Global timeout in ms (default: 30000)
- *   HTTP_PORT        - HTTP server port (default: 3000)
- *   WS_PORT          - WebSocket server port (default: 3001)
+ *   HTTP_PORT        - HTTP + WebSocket port (default: 3000, single-port server)
  *
  * Evidence: EVID-P0-003 — Manual smoke walkthrough on WorldCover demo
  * Trace: REQ-COMPAT-001 + P0 + Implementation Guide §10.1 P0-B
@@ -31,9 +30,8 @@ const WebSocket = require(path.resolve(__dirname, '..', 'server', 'node_modules'
 
 const TIMEOUT_MS = parseInt(process.env.SMOKE_TIMEOUT_MS, 10) || 30000;
 const HTTP_PORT = parseInt(process.env.HTTP_PORT, 10) || 3000;
-const WS_PORT = parseInt(process.env.WS_PORT, 10) || 3001;
 const BASE_URL = `http://localhost:${HTTP_PORT}`;
-const WS_URL = `ws://localhost:${WS_PORT}`;
+const WS_URL = `ws://localhost:${HTTP_PORT}`;
 
 const LAND_HEAVY_BOUNDS = [-65, -5, -62, -4.5];
 const LAND_HEAVY_ZOOM = 8;

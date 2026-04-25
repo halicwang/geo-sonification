@@ -214,6 +214,14 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 - Modern browser with Web Audio API (Chrome 66+, Firefox 76+, Safari 14.1+)
 - Sufficient bandwidth for initial WAV download
 
+## Performance
+
+Drag-stop feedback latency on the grid overlay is dominated by `VIEWPORT_DEBOUNCE` (`frontend/config.js`, default 120 ms) plus the WebSocket round-trip; spatial-index queries themselves average 1–2 ms (visible in the server's `[Stats]` log every 30 s). Several layers reduce that loop without changing user-visible behavior:
+
+- **Server response compression** — `compression` middleware (gzip on HTTP) and `ws perMessageDeflate` (zlib level 1, threshold 256 B, no context takeover). Drops the ~1.5 KB stats frame to ~0.5 KB. Verify with `curl -sI --compressed http://localhost:3000/audio-engine.js`.
+- **Static-asset cache headers** — PMTiles 7 days, ambience 30 days. Repeat reloads skip the network entirely; in production, R2 + Cloudflare carries its own cache layer.
+- **Drag-state stroke suppression** — the per-grid dot stroke is set to width 0 during `movestart` and restored on `moveend`. Halves fragment-shader cost at low zoom on the 67k-feature dot layer; the resting visual is unchanged.
+
 ## Troubleshooting
 
 ### Server won't start / CSV schema mismatch
@@ -255,7 +263,7 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 
 ### WebSocket
 
-Connect to `ws://localhost:3001` (default port, configurable via `WS_PORT`).
+Connect to `ws://localhost:3000` — HTTP and WebSocket share a single port (configurable via `PORT` or `HTTP_PORT`). The server enables `permessage-deflate` so viewport stats frames are gzip-compressed on the wire.
 
 **Client → Server:**
 

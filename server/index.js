@@ -17,6 +17,7 @@
 
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const WebSocket = require('ws');
 const { WebSocketServer } = WebSocket;
 const fs = require('fs');
@@ -152,11 +153,25 @@ function startHttpServer(expressApp, port) {
  * Attach a WebSocket server to an existing HTTP server so both share a
  * single port (required by Fly.io and simpler in general — WebSocket
  * upgrades ride the HTTP server's upgrade channel).
+ *
+ * `perMessageDeflate` is enabled with conservative defaults: zlib level 1
+ * (CPU-cheap), 256-byte threshold (skip the per-frame allocation for tiny
+ * pings), and `noContextTakeover` on both directions to keep memory bounded
+ * under many concurrent clients. Stats payloads (~1.5 KB JSON) compress to
+ * ~0.5 KB on the wire.
  * @param {import('http').Server} server
  * @returns {WebSocketServer}
  */
 function attachWsServer(server) {
-    return new WebSocketServer({ server });
+    return new WebSocketServer({
+        server,
+        perMessageDeflate: {
+            zlibDeflateOptions: { level: 1 },
+            threshold: 256,
+            serverNoContextTakeover: true,
+            clientNoContextTakeover: true,
+        },
+    });
 }
 
 // ============ Express Server ============
@@ -178,6 +193,12 @@ app.use(
         credentials: false,
     })
 );
+
+// gzip everything > 1 KB. PMTiles archives are octet-stream and already
+// gzip-compressed internally (Tippecanoe's per-tile gzip), so the
+// middleware's default filter skips them; verify with
+// `curl -I --compressed /tiles/grids.pmtiles` after any upgrade.
+app.use(compression({ threshold: 1024 }));
 
 app.use(express.json());
 

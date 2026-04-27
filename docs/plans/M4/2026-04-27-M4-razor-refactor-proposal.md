@@ -264,37 +264,30 @@ frontend/audio/
 
 The concrete rule-2.A inventory. Server changes during M4 may **only add fields**; the names / types / paths below are frozen.
 
-> ⚠️ **This table is a draft.** Some rows come from the audit, others from plan-time inference. **P0-1 must verify every row against `server/index.js` + `server/viewport-processor.js` and amend this table** before opening P1. (Already-known correction: the original "/state" route was a planning artifact and does not exist; the actual dynamic routes are exactly `/health`, `/api/config`, `/api/viewport`.)
+> ✅ **Verified 2026-04-27 by P0-1** against `server/index.js` (HEAD `899f4bd`) and `server/spatial.js` `buildStatsResult` + `server/viewport-processor.js`. The runtime expression of this contract is `scripts/wire-format-baseline.json` + `scripts/smoke-wire-format.js`. The original "/state" route was a planning artifact and does not exist — actual dynamic routes are exactly `/health`, `/api/config`, `/api/viewport`.
 
-### HTTP routes & response fields (real routes verified)
+### HTTP routes & response fields (verified)
 
-| Path | Method | Response fields (P0-1 to verify field-by-field) | Note |
+| Path | Method | Response fields | Note |
 |---|---|---|---|
-| `/health` | GET | Includes `dataLoaded` (CI smoke depends on `dataLoaded:true`) | M4: field names frozen |
-| `/api/config` | GET | (P0-1 verify) | M4: field names frozen |
-| `/api/viewport` | POST | (P0-1 verify request + response fields) | M4: field names frozen |
+| `/health` | GET | `ok`, `dataLoaded` | smoke gate; CI relies on `dataLoaded: true` |
+| `/api/config` | GET | `gridSize`, `landcoverMeta` | M4: field names frozen |
+| `/api/viewport` | POST | 17-field stats payload (see baseline JSON) + `error` on 400/503 | M4: field names frozen |
 | `/data/cities.json` | GET | static file | path frozen |
 | `/tiles/*` | GET | PMTiles static | path frozen |
 | `/data/*` other static | GET | static, contents from `data/` | paths frozen |
 
-### WebSocket messages (P0-1 to verify; below is a draft)
+`/api/viewport` 200 response keys (frozen): `dominantLandcover`, `nightlightNorm`, `populationNorm`, `forestNorm`, `avgForestPct`, `avgPopulationDensity`, `avgNightlightMean`, `avgNightlightP90`, `gridCount`, `landcoverDistribution`, `landcoverBreakdown`, `theoreticalGridCount`, `landCoverageRatio`, `mode`, `perGridThresholdEnter`, `perGridThresholdExit`, `audioParams` (object: `busTargets`, `busNames`, `proximity`, `coverage`).
 
-| Type | Fields (inferred) | Note |
-|---|---|---|
-| upstream `viewport` | `bounds`, `zoom`, `clientId`, `mode` | P0-1 verify after `grep "ws.on('message'"` |
-| upstream `ping` | `t` | P0-1 verify |
-| upstream `audio:start` / `audio:stop` | (no payload) | P0-1 verify |
-| downstream `audio` | `proximityNorm`, `velocityNorm`, `lcFractions`, `mode`, etc. | P0-1: grep `ws.send` + `JSON.stringify` to reconcile the field set |
-| downstream `pong` | `t` | P0-1 verify |
+### WebSocket messages (verified)
 
-**P0-1 verification tasks (must complete before P1 opens):**
+| Direction | `type` | Fields | Note |
+|---|---|---|---|
+| inbound | `viewport` | `bounds` (4-element array), `zoom` (optional) | only inbound type the server recognizes |
+| outbound | `stats` | unicast: same 17 keys as `/api/viewport` 200 response; broadcast: same minus `mode` plus `broadcast: true`; loading: `loading: true`, `message` | `mode` is per-sender — stripped from broadcast |
+| outbound | `error` | `error` (string) | invalid bounds, validation errors, JSON parse errors |
 
-1. `grep -nE "app\.(get|post)|app\.use" server/index.js` to enumerate routes
-2. `grep -nE "ws\.send|JSON\.stringify" server/index.js server/ws-*.js 2>/dev/null` to enumerate downstream fields
-3. `grep -nE "data\.(type|action)" server/index.js` to find upstream message dispatch
-4. Reconcile this table against the grep output — only then is the contract usable.
-
-The schema-diff helper script (rule 2.A) is the runtime expression of this contract.
+The schema-diff helper script (rule 2.A) — `npm run smoke:wire-format` — verifies every row above by static grep over `server/**/*.js`. The baseline is at `scripts/wire-format-baseline.json`; rerun with `--update` to refresh after a deliberate wire-format change.
 
 ---
 

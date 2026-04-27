@@ -40,7 +40,7 @@ module.exports = [
     // frontend/**/*.js — Browser ES modules
     {
         files: ['frontend/**/*.js'],
-        ignores: ['frontend/config.local.js'],
+        ignores: ['frontend/config.local.js', 'frontend/__tests__/**'],
         languageOptions: {
             ecmaVersion: 2020,
             sourceType: 'module',
@@ -48,6 +48,31 @@ module.exports = [
                 ...globals.browser,
                 mapboxgl: 'readonly',
                 mapboxPmTiles: 'readonly',
+            },
+        },
+        rules: {
+            ...js.configs.recommended.rules,
+            'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+        },
+    },
+
+    // frontend/__tests__/**/*.js — Vitest (P0-4 will collapse this back into ≤5 blocks)
+    {
+        files: ['frontend/__tests__/**/*.js'],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: 'module',
+            globals: {
+                ...globals.browser,
+                describe: 'readonly',
+                it: 'readonly',
+                test: 'readonly',
+                expect: 'readonly',
+                vi: 'readonly',
+                beforeEach: 'readonly',
+                afterEach: 'readonly',
+                beforeAll: 'readonly',
+                afterAll: 'readonly',
             },
         },
         rules: {

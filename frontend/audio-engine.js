@@ -26,6 +26,7 @@
 import { ASSET_BASE, getLoudnessNormEnabled } from './config.js';
 import { clamp01, equalPowerCurves } from './audio/utils.js';
 import { createMasterChain } from './audio/context.js';
+import { createBufferCache } from './audio/buffer-cache.js';
 import {
     SMOOTHING_TIME_MS,
     PROXIMITY_SMOOTHING_MS,
@@ -52,7 +53,6 @@ import {
 // ════════════════════════════════════════════════════════════════════
 
 const NUM_BUSES = 7;
-const BUS_NAMES = Object.freeze(['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water']);
 const WATER_BUS_INDEX = 6;
 const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
 
@@ -65,13 +65,6 @@ const XF_CURVE_POINTS = 128;
 
 /** Exponent for gain power-curve shaping. Values < 1.0 stretch mid-high range differences. */
 const GAIN_CURVE_EXPONENT = 0.6;
-
-/**
- * Loading priority order (indices into BUS_NAMES).
- * Tree and water first (most common), then crop, urban, bare.
- */
-const PRIORITY_FIRST = [0, 6]; // forest, water
-const PRIORITY_SECOND = [1, 2, 3, 4, 5]; // shrub, grass, crop, urban, bare
 
 /**
  * Master makeup gain in dB, calibrated by scripts/measure-loudness.js
@@ -126,9 +119,6 @@ let lpFilter3 = null;
  * @type {GainNode|null}
  */
 let duckGain = null;
-
-/** @type {AudioBuffer[]} */
-const buffers = new Array(NUM_BUSES).fill(null);
 
 /**
  * @typedef {Object} LoopSlot
@@ -195,32 +185,18 @@ let suspended = false;
  */
 let pendingParams = null;
 
-// ── Loading ──
-
-/**
- * @typedef {Object} BusLoadingState
- * @property {'pending'|'loading'|'ready'|'error'} status
- * @property {number} progress - 0.0 to 1.0
- * @property {string|null} error
- */
-
-/** @type {BusLoadingState[]} */
-const loadingStates = BUS_NAMES.map(() => ({ status: 'pending', progress: 0, error: null }));
-
-/** Tracks which generation currently owns each bus loading state. */
-const loadingGenerations = new Array(NUM_BUSES).fill(0);
-
-let loadingStarted = false;
-
-/**
- * Monotonically increasing generation counter.
- * Incremented on every start(); in-flight loadSample() calls check this
- * to abort gracefully when stop() has been called since their start.
- */
-let loadGeneration = 0;
-
-/** @type {function(BusLoadingState[]): void} */
-let onLoadingUpdate = null;
+// ── Buffer cache ──
+//
+// Tree and water first (most common biomes), then crop / urban / bare /
+// the two grasslands as a parallel second wave. Same priority order as
+// the pre-P3-2 PRIORITY_FIRST / PRIORITY_SECOND constants.
+const bufferCache = createBufferCache({
+    busNames: ['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water'],
+    assetBase: ASSET_BASE,
+    priorityFirst: [0, 6],
+    prioritySecond: [1, 2, 3, 4, 5],
+    onAllLoaded: () => startAllSources(),
+});
 
 // Equal-power crossfade curves reduce perceived loudness dip at midpoint.
 const { fadeIn: FADE_IN_CURVE, fadeOut: FADE_OUT_CURVE } = equalPowerCurves(XF_CURVE_POINTS);
@@ -228,43 +204,6 @@ const { fadeIn: FADE_IN_CURVE, fadeOut: FADE_OUT_CURVE } = equalPowerCurves(XF_C
 // ════════════════════════════════════════════════════════════════════
 //  Helpers
 // ════════════════════════════════════════════════════════════════════
-
-function notifyLoadingUpdate() {
-    if (typeof onLoadingUpdate === 'function') {
-        onLoadingUpdate(loadingStates.map((s) => ({ ...s })));
-    }
-}
-
-/**
- * Reset a loading bus back to pending only if this generation owns it.
- * Prevents stale async loads from clobbering a newer generation.
- * @param {number} busIndex
- * @param {number} generation
- */
-function resetLoadingIfOwned(busIndex, generation) {
-    if (
-        loadingStates[busIndex].status === 'loading' &&
-        loadingGenerations[busIndex] === generation
-    ) {
-        loadingStates[busIndex] = { status: 'pending', progress: 0, error: null };
-        loadingGenerations[busIndex] = 0;
-        notifyLoadingUpdate();
-    }
-}
-
-/**
- * Returns true when the async load belongs to a stale generation.
- * @param {number} busIndex
- * @param {number} generation
- * @returns {boolean}
- */
-function isStaleGeneration(busIndex, generation) {
-    if (generation !== loadGeneration) {
-        resetLoadingIfOwned(busIndex, generation);
-        return true;
-    }
-    return false;
-}
 
 /** @param {AudioBufferSourceNode|null} source @param {GainNode|null} gain */
 function disconnectVoice(source, gain) {
@@ -343,12 +282,13 @@ function resetAllBusLoops() {
  * @returns {LoopSlot|null}
  */
 function createVoice(busIndex, startTime, offsetSeconds = 0) {
-    if (!audioCtx || !buffers[busIndex] || !gains[busIndex]) return null;
+    const buffer = bufferCache.get(busIndex);
+    if (!audioCtx || !buffer || !gains[busIndex]) return null;
 
     const source = audioCtx.createBufferSource();
     const gain = audioCtx.createGain();
 
-    source.buffer = buffers[busIndex];
+    source.buffer = buffer;
     source.connect(gain);
     gain.connect(gains[busIndex]);
 
@@ -369,7 +309,8 @@ function createVoice(busIndex, startTime, offsetSeconds = 0) {
 function computeLoopCycleSeconds() {
     const durations = [];
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (buffers[i]) durations.push(buffers[i].duration);
+        const buffer = bufferCache.get(i);
+        if (buffer) durations.push(buffer.duration);
     }
     if (durations.length === 0) return 0;
 
@@ -491,7 +432,7 @@ function performGlobalSwap() {
     }
 
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (buffers[i] && gains[i]) {
+        if (bufferCache.has(i) && gains[i]) {
             swapBusVoice(i, swapTime, phaseDelaySeconds, incomingOffsetSeconds);
         }
     }
@@ -514,123 +455,6 @@ function stopAllSources() {
     resetAllBusLoops();
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  WAV Loading
-// ════════════════════════════════════════════════════════════════════
-
-/**
- * Load and decode a single ambience WAV file with progress tracking.
- * On error, sets status to 'error' — other buses continue normally.
- * Checks loadGeneration to abort if stop() was called mid-load.
- *
- * Note: this only fetches and decodes; voices are NOT created here.
- * All bus voices are started together in startAllSources() after every
- * buffer is ready, so buses never "pop in" one by one.
- * @param {number} busIndex
- * @param {number} generation - loadGeneration at call time
- * @returns {Promise<void>}
- */
-async function loadSample(busIndex, generation) {
-    // Skip buses that already loaded or are currently loading (prevents
-    // duplicate parallel fetches when stop/start is called mid-load)
-    if (loadingStates[busIndex].status === 'loading') {
-        if (loadingGenerations[busIndex] === generation) return;
-        loadingStates[busIndex] = { status: 'pending', progress: 0, error: null };
-        loadingGenerations[busIndex] = 0;
-        notifyLoadingUpdate();
-    }
-    if (loadingStates[busIndex].status === 'ready' && buffers[busIndex]) return;
-
-    const name = BUS_NAMES[busIndex];
-    loadingStates[busIndex] = { status: 'loading', progress: 0, error: null };
-    loadingGenerations[busIndex] = generation;
-    notifyLoadingUpdate();
-
-    try {
-        const response = await fetch(`${ASSET_BASE}/audio/ambience/${name}.opus`);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status} for ${name}.opus`);
-        }
-
-        // Abort if stop() was called while fetching
-        if (isStaleGeneration(busIndex, generation)) return;
-
-        const contentLength = response.headers.get('Content-Length');
-        const total = contentLength ? parseInt(contentLength, 10) : 0;
-        const reader = response.body.getReader();
-        const chunks = [];
-        let loaded = 0;
-
-        for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            loaded += value.length;
-            if (total > 0) {
-                loadingStates[busIndex].progress = loaded / total;
-                notifyLoadingUpdate();
-            }
-        }
-
-        // Abort if stop() was called while reading
-        if (isStaleGeneration(busIndex, generation)) return;
-
-        const combined = new Uint8Array(loaded);
-        let offset = 0;
-        for (const chunk of chunks) {
-            combined.set(chunk, offset);
-            offset += chunk.length;
-        }
-
-        // Guard against AudioContext being closed or suspended after stop()
-        if (isStaleGeneration(busIndex, generation)) return;
-        if (!audioCtx || audioCtx.state === 'closed') return;
-
-        buffers[busIndex] = await audioCtx.decodeAudioData(combined.buffer);
-
-        // Final generation check after async decode
-        if (isStaleGeneration(busIndex, generation)) return;
-
-        loadingStates[busIndex] = { status: 'ready', progress: 1, error: null };
-        loadingGenerations[busIndex] = 0;
-        notifyLoadingUpdate();
-    } catch (err) {
-        // Silently ignore errors from stale generations
-        if (isStaleGeneration(busIndex, generation)) return;
-        console.error(`[audio-engine] Failed to load ${name}.wav:`, err);
-        loadingStates[busIndex] = {
-            status: 'error',
-            progress: 0,
-            error: err.message || 'Load failed',
-        };
-        loadingGenerations[busIndex] = 0;
-        notifyLoadingUpdate();
-    }
-}
-
-/**
- * Load all samples with priority ordering, then start all sources together.
- * Tree + water first (parallel), then crop + urban + bare (parallel).
- * Voices are created only after ALL buffers are decoded so every bus begins
- * playback at the exact same AudioContext time — no staggered entry.
- * @param {number} generation - loadGeneration at call time
- */
-async function loadAllSamples(generation) {
-    if (loadingStarted) return;
-    loadingStarted = true;
-
-    try {
-        await Promise.all(PRIORITY_FIRST.map((i) => loadSample(i, generation)));
-        if (generation !== loadGeneration) return;
-        await Promise.all(PRIORITY_SECOND.map((i) => loadSample(i, generation)));
-        if (generation !== loadGeneration) return;
-
-        startAllSources();
-    } finally {
-        loadingStarted = false;
-    }
-}
-
 /**
  * Start one voice per decoded bus in lockstep, then run a global swap clock
  * that performs 1.875s overlap crossfades at each cycle boundary.
@@ -647,7 +471,7 @@ function startAllSources() {
     let startedCount = 0;
 
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (!buffers[i] || !gains[i]) continue;
+        if (!bufferCache.has(i) || !gains[i]) continue;
 
         const first = createVoice(i, when);
         if (!first || !first.gain) continue;
@@ -791,7 +615,7 @@ function rafLoop() {
     const norm = Math.max(shapedSum, 1.0);
 
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (gains[i] && buffers[i]) {
+        if (gains[i] && bufferCache.has(i)) {
             const landValue = (shaped[i] / norm) * landMix;
             const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
             gains[i].gain.value = value * BUS_PREAMP_GAIN[i];
@@ -937,8 +761,7 @@ async function start() {
     lastEmaTime = performance.now();
     startRaf();
 
-    loadGeneration++;
-    await loadAllSamples(loadGeneration);
+    await bufferCache.loadAll(audioCtx);
 }
 
 /**
@@ -949,19 +772,7 @@ async function stop() {
     cancelRaf();
     stopAllSources();
     document.removeEventListener('visibilitychange', handleVisibilityChange);
-    loadingStarted = false; // allow retry of failed samples on next start()
-    let loadingStateChanged = false;
-    for (let i = 0; i < NUM_BUSES; i++) {
-        if (loadingStates[i].status === 'loading' || loadingStates[i].status === 'error') {
-            loadingStates[i] = { status: 'pending', progress: 0, error: null };
-            loadingGenerations[i] = 0;
-            loadingStateChanged = true;
-        }
-    }
-    if (loadingStateChanged) {
-        notifyLoadingUpdate();
-    }
-    loadGeneration++; // invalidate any in-flight loadSample() calls
+    bufferCache.cancelAndReset();
 
     if (audioCtx && audioCtx.state === 'running') {
         await audioCtx.suspend();
@@ -970,18 +781,18 @@ async function stop() {
 
 /**
  * Get current loading state for all buses.
- * @returns {BusLoadingState[]}
+ * @returns {import('./audio/buffer-cache.js').BusLoadingState[]}
  */
 function getLoadingStates() {
-    return loadingStates.map((s) => ({ ...s }));
+    return bufferCache.getStates();
 }
 
 /**
  * Register a callback for loading progress updates.
- * @param {function(BusLoadingState[]): void} callback
+ * @param {((states: import('./audio/buffer-cache.js').BusLoadingState[]) => void) | null} callback
  */
 function setOnLoadingUpdate(callback) {
-    onLoadingUpdate = callback;
+    bufferCache.setOnUpdate(callback);
 }
 
 /** @returns {boolean} Whether the audio context is currently running. */
@@ -1020,7 +831,7 @@ function seekLoop(progress) {
 
     let startedCount = 0;
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (!buffers[i] || !gains[i]) continue;
+        if (!bufferCache.has(i) || !gains[i]) continue;
 
         const voice = createVoice(i, startTime, targetOffset);
         if (!voice || !voice.gain) continue;

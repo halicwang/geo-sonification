@@ -843,6 +843,96 @@ function handleVisibilityChange() {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Context Initialization
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Idempotently create the AudioContext + master chain. Safe to call
+ * multiple times — second and later calls return the existing context
+ * without rebuilding the graph. Must be invoked from a user gesture
+ * on first call (browser autoplay policy).
+ *
+ * Sibling modules under `frontend/audio/` (added in P3-1..P3-4) call
+ * this helper to obtain the singleton AudioContext, which is what makes
+ * the graph-build a single point of truth across the package.
+ *
+ * @returns {AudioContext}
+ */
+function ensureCtx() {
+    if (audioCtx) return audioCtx;
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: 48000,
+    });
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = masterVolume;
+
+    // 36 dB/oct low-pass: three cascaded 12 dB/oct biquads.
+    // Q values for 6th-order Butterworth (maximally flat, no resonance).
+    // Cutoff driven by proximity in rafLoop().
+    lpFilter1 = audioCtx.createBiquadFilter();
+    lpFilter1.type = 'lowpass';
+    lpFilter1.frequency.value = 20000;
+    lpFilter1.Q.value = 0.5176;
+
+    lpFilter2 = audioCtx.createBiquadFilter();
+    lpFilter2.type = 'lowpass';
+    lpFilter2.frequency.value = 20000;
+    lpFilter2.Q.value = 0.7071;
+
+    lpFilter3 = audioCtx.createBiquadFilter();
+    lpFilter3.type = 'lowpass';
+    lpFilter3.frequency.value = 20000;
+    lpFilter3.Q.value = 1.9319;
+
+    // duckGain is driven by duck() / unduck(); unity while idle, pulls
+    // down to DUCK_DEPTH during city-announcer speech.
+    duckGain = audioCtx.createGain();
+    duckGain.gain.value = 1.0;
+
+    if (getLoudnessNormEnabled()) {
+        // makeupGain offsets the summed-bus output toward the
+        // -16 LUFS target; limiter catches transients so the
+        // true peak stays below -1 dBTP. Both are created once
+        // per AudioContext lifetime and never revisited, so
+        // neither needs a module-level handle.
+        const makeupGain = audioCtx.createGain();
+        makeupGain.gain.value = dbToLinear(MAKEUP_GAIN_DB);
+
+        const limiter = audioCtx.createDynamicsCompressor();
+        limiter.threshold.value = LIMITER_THRESHOLD_DB;
+        limiter.ratio.value = LIMITER_RATIO;
+        limiter.attack.value = LIMITER_ATTACK_SEC;
+        limiter.release.value = LIMITER_RELEASE_SEC;
+        limiter.knee.value = LIMITER_KNEE_DB;
+
+        masterGain.connect(duckGain);
+        duckGain.connect(makeupGain);
+        makeupGain.connect(limiter);
+        limiter.connect(lpFilter1);
+        console.info(
+            `[audio] Loudness norm ON — makeup ${MAKEUP_GAIN_DB.toFixed(1)} dB, limiter threshold ${LIMITER_THRESHOLD_DB} dB`
+        );
+    } else {
+        masterGain.connect(duckGain);
+        duckGain.connect(lpFilter1);
+        console.info('[audio] Loudness norm OFF — legacy chain');
+    }
+    lpFilter1.connect(lpFilter2);
+    lpFilter2.connect(lpFilter3);
+    lpFilter3.connect(audioCtx.destination);
+
+    for (let i = 0; i < NUM_BUSES; i++) {
+        gains[i] = audioCtx.createGain();
+        gains[i].gain.value = 0;
+        gains[i].connect(masterGain);
+    }
+
+    return audioCtx;
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Public API
 // ════════════════════════════════════════════════════════════════════
 
@@ -854,75 +944,7 @@ function handleVisibilityChange() {
 async function start() {
     if (audioCtx && !suspended) return;
 
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: 48000,
-        });
-
-        masterGain = audioCtx.createGain();
-        masterGain.gain.value = masterVolume;
-
-        // 36 dB/oct low-pass: three cascaded 12 dB/oct biquads.
-        // Q values for 6th-order Butterworth (maximally flat, no resonance).
-        // Cutoff driven by proximity in rafLoop().
-        lpFilter1 = audioCtx.createBiquadFilter();
-        lpFilter1.type = 'lowpass';
-        lpFilter1.frequency.value = 20000;
-        lpFilter1.Q.value = 0.5176;
-
-        lpFilter2 = audioCtx.createBiquadFilter();
-        lpFilter2.type = 'lowpass';
-        lpFilter2.frequency.value = 20000;
-        lpFilter2.Q.value = 0.7071;
-
-        lpFilter3 = audioCtx.createBiquadFilter();
-        lpFilter3.type = 'lowpass';
-        lpFilter3.frequency.value = 20000;
-        lpFilter3.Q.value = 1.9319;
-
-        // duckGain is driven by duck() / unduck(); unity while idle, pulls
-        // down to DUCK_DEPTH during city-announcer speech.
-        duckGain = audioCtx.createGain();
-        duckGain.gain.value = 1.0;
-
-        if (getLoudnessNormEnabled()) {
-            // makeupGain offsets the summed-bus output toward the
-            // -16 LUFS target; limiter catches transients so the
-            // true peak stays below -1 dBTP. Both are created once
-            // per AudioContext lifetime and never revisited, so
-            // neither needs a module-level handle.
-            const makeupGain = audioCtx.createGain();
-            makeupGain.gain.value = dbToLinear(MAKEUP_GAIN_DB);
-
-            const limiter = audioCtx.createDynamicsCompressor();
-            limiter.threshold.value = LIMITER_THRESHOLD_DB;
-            limiter.ratio.value = LIMITER_RATIO;
-            limiter.attack.value = LIMITER_ATTACK_SEC;
-            limiter.release.value = LIMITER_RELEASE_SEC;
-            limiter.knee.value = LIMITER_KNEE_DB;
-
-            masterGain.connect(duckGain);
-            duckGain.connect(makeupGain);
-            makeupGain.connect(limiter);
-            limiter.connect(lpFilter1);
-            console.info(
-                `[audio] Loudness norm ON — makeup ${MAKEUP_GAIN_DB.toFixed(1)} dB, limiter threshold ${LIMITER_THRESHOLD_DB} dB`
-            );
-        } else {
-            masterGain.connect(duckGain);
-            duckGain.connect(lpFilter1);
-            console.info('[audio] Loudness norm OFF — legacy chain');
-        }
-        lpFilter1.connect(lpFilter2);
-        lpFilter2.connect(lpFilter3);
-        lpFilter3.connect(audioCtx.destination);
-
-        for (let i = 0; i < NUM_BUSES; i++) {
-            gains[i] = audioCtx.createGain();
-            gains[i].gain.value = 0;
-            gains[i].connect(masterGain);
-        }
-    }
+    ensureCtx();
 
     // Re-attach on every explicit start(). stop() removes the listener so
     // hidden-tab suspend/resume keeps working across multiple sessions.

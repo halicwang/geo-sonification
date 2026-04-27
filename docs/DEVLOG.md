@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-27 | Refactor   | [Make `audio-engine.js` Context Init Lazy via `ensureCtx()`](devlog/M4/2026-04-27-M4-audio-engine-lazy-init.md)                                                                               |
 | 2026-04-27 | Refactor   | [Extract Loop-Progress Bar from `main.js` into `frontend/progress.js`](devlog/M4/2026-04-27-M4-extract-progress-from-main.md)                                                                 |
 | 2026-04-27 | Refactor   | [Extract Popup Logic from `map.js` into `frontend/popup.js`](devlog/M4/2026-04-27-M4-extract-popup-from-map.md)                                                                               |
 | 2026-04-27 | Refactor   | [Bounds-Keyed Single-Entry Cache in `viewport-processor.js`](devlog/M4/2026-04-27-M4-viewport-bounds-cache.md)                                                                                |

@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-27 | Design     | [Raise commitlint Body / Footer Max Line Length 72 → 100](devlog/M4/2026-04-27-M4-commitlint-body-max-100.md)                                                                                 |
 | 2026-04-27 | Refactor   | [vitest + happy-dom Scaffold and Wire-Format Smoke](devlog/M4/2026-04-27-M4-vitest-and-wire-format-smoke.md)                                                                                  |
 | 2026-04-27 | Design     | [M4 Plan Skeleton + Build-Tag Injection](devlog/M4/2026-04-27-M4-plan-skeleton-and-build-hash.md)                                                                                             |
 | 2026-04-25 | Fix        | [Launcher Scripts Drop Stale WS_PORT After Single-Port Migration](devlog/M3/2026-04-25-M3-launcher-drop-stale-ws-port.md)                                                                     |

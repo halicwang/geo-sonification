@@ -27,6 +27,7 @@ import { ASSET_BASE, getLoudnessNormEnabled } from './config.js';
 import { clamp01, equalPowerCurves } from './audio/utils.js';
 import { createMasterChain } from './audio/context.js';
 import { createBufferCache } from './audio/buffer-cache.js';
+import { createEmaState, tickEma, snapEmaToTargets, resetEma } from './audio/raf-loop.js';
 import {
     SMOOTHING_TIME_MS,
     PROXIMITY_SMOOTHING_MS,
@@ -159,16 +160,17 @@ let loopCycleCount = 0;
 let globalSwapTimerId = null;
 
 // ── EMA state ──
-const busTargets = new Float64Array(NUM_BUSES);
-const busSmoothed = new Float64Array(NUM_BUSES);
-let coverageTarget = 1;
-let coverageSmoothed = 1;
-let proximityTarget = 0;
-let proximitySmoothed = 0;
-
-// ── Motion state (client-side drag velocity) ──
-let velocityTarget = 0;
-let velocitySmoothed = 0;
+// Targets / smoothed values for buses, coverage, proximity, velocity.
+// Mutated directly by update() / updateMotion() (target writes) and by
+// tickEma() inside rafLoop() (smoothed advances).
+const ema = createEmaState({ numBuses: NUM_BUSES });
+const EMA_TICK_OPTS = Object.freeze({
+    smoothingTimeMs: SMOOTHING_TIME_MS,
+    proximitySmoothingMs: PROXIMITY_SMOOTHING_MS,
+    snapThresholdMs: SNAP_THRESHOLD_MS,
+    velocityAttackMs: VELOCITY_ATTACK_MS,
+    velocityDecayMs: VELOCITY_DECAY_MS,
+});
 
 // ── Timing ──
 let lastEmaTime = 0;
@@ -528,14 +530,14 @@ function update(audioParams) {
 
     if (Array.isArray(audioParams.busTargets)) {
         for (let i = 0; i < NUM_BUSES; i++) {
-            busTargets[i] = clamp01(audioParams.busTargets[i] ?? 0);
+            ema.busTargets[i] = clamp01(audioParams.busTargets[i] ?? 0);
         }
     }
     if (typeof audioParams.coverage === 'number') {
-        coverageTarget = clamp01(audioParams.coverage);
+        ema.coverageTarget = clamp01(audioParams.coverage);
     }
     if (typeof audioParams.proximity === 'number') {
-        proximityTarget = clamp01(audioParams.proximity);
+        ema.proximityTarget = clamp01(audioParams.proximity);
     }
 }
 
@@ -547,7 +549,7 @@ function update(audioParams) {
  * @param {number} [_latitude] - reserved for future motion mapping
  */
 function updateMotion(velocity, _latitude) {
-    velocityTarget = clamp01(velocity);
+    ema.velocityTarget = clamp01(velocity);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -557,43 +559,22 @@ function updateMotion(velocity, _latitude) {
 function rafLoop() {
     if (!audioCtx || suspended) return;
 
-    // Advance EMA every frame for smooth gain transitions
     const now = performance.now();
     const dt = lastEmaTime > 0 ? now - lastEmaTime : 0;
     lastEmaTime = now;
 
-    let alpha;
-    if (dt <= 0 || dt > SNAP_THRESHOLD_MS) {
-        alpha = 1.0;
-    } else {
-        alpha = 1 - Math.exp(-dt / SMOOTHING_TIME_MS);
-    }
-
-    for (let i = 0; i < NUM_BUSES; i++) {
-        busSmoothed[i] += alpha * (busTargets[i] - busSmoothed[i]);
-    }
-    coverageSmoothed += alpha * (coverageTarget - coverageSmoothed);
-
-    // Proximity uses a faster EMA for snappier filter response
-    const proxAlpha =
-        dt <= 0 || dt > SNAP_THRESHOLD_MS ? 1.0 : 1 - Math.exp(-dt / PROXIMITY_SMOOTHING_MS);
-    proximitySmoothed += proxAlpha * (proximityTarget - proximitySmoothed);
-
-    // Velocity: asymmetric EMA (fast attack, slow decay)
-    const velTau = velocityTarget > velocitySmoothed ? VELOCITY_ATTACK_MS : VELOCITY_DECAY_MS;
-    const velAlpha = dt <= 0 || dt > SNAP_THRESHOLD_MS ? 1.0 : 1 - Math.exp(-dt / velTau);
-    velocitySmoothed += velAlpha * (velocityTarget - velocitySmoothed);
+    tickEma(ema, dt, EMA_TICK_OPTS);
 
     // Low-pass cutoff: exponential map proximity 0→500 Hz, 1→20 kHz
     // Logarithmic spacing matches human pitch perception, so zoom-in and
     // zoom-out feel equally gradual.
-    const cutoff = 500 * Math.pow(40, proximitySmoothed);
+    const cutoff = 500 * Math.pow(40, ema.proximitySmoothed);
     if (lpFilter1) lpFilter1.frequency.value = cutoff;
     if (lpFilter2) lpFilter2.frequency.value = cutoff;
     if (lpFilter3) lpFilter3.frequency.value = cutoff;
 
     // Q modulation on lpFilter1 only: velocity drives resonance peak
-    if (lpFilter1) lpFilter1.Q.value = BASE_Q1 + velocitySmoothed * (MAX_Q1 - BASE_Q1);
+    if (lpFilter1) lpFilter1.Q.value = BASE_Q1 + ema.velocitySmoothed * (MAX_Q1 - BASE_Q1);
     // Keep playbackRate fixed at 1.0. Rate-shifting voices changes the
     // real loop boundary and makes scheduled retriggers sound late.
 
@@ -601,7 +582,7 @@ function rafLoop() {
     // - coverage 0%  => land:ocean = 0:100
     // - coverage 40% => land:ocean = 100:0
     // - linear interpolation between, clamped outside [0, 40%]
-    const cov = clamp01(coverageSmoothed);
+    const cov = clamp01(ema.coverageSmoothed);
     const landMix = clamp01(cov / LAND_FULL_COVERAGE_THRESHOLD);
     const oceanMix = 1.0 - landMix;
 
@@ -609,7 +590,7 @@ function rafLoop() {
     const shaped = new Float64Array(NUM_BUSES);
     let shapedSum = 0;
     for (let i = 0; i < NUM_BUSES; i++) {
-        shaped[i] = Math.pow(busSmoothed[i], GAIN_CURVE_EXPONENT);
+        shaped[i] = Math.pow(ema.busSmoothed[i], GAIN_CURVE_EXPONENT);
         shapedSum += shaped[i];
     }
     const norm = Math.max(shapedSum, 1.0);
@@ -654,12 +635,7 @@ function handleVisibilityChange() {
         if (!suspended) {
             audioCtx.resume();
             // Snap to current targets — avoid jarring transition from stale values
-            for (let i = 0; i < NUM_BUSES; i++) {
-                busSmoothed[i] = busTargets[i];
-            }
-            coverageSmoothed = coverageTarget;
-            proximitySmoothed = proximityTarget;
-            velocitySmoothed = 0;
+            snapEmaToTargets(ema);
             lastEmaTime = performance.now();
             startRaf();
             scheduleGlobalSwap();
@@ -739,14 +715,7 @@ async function start() {
 
     // Zero EMA state so stale values from a previous session don't cause
     // an audible pop (e.g. water bus loud → stop → navigate to desert → start)
-    busTargets.fill(0);
-    busSmoothed.fill(0);
-    coverageTarget = 1;
-    coverageSmoothed = 1;
-    proximityTarget = 0;
-    proximitySmoothed = 0;
-    velocityTarget = 0;
-    velocitySmoothed = 0;
+    resetEma(ema);
 
     // Replay the last audioParams that arrived before AudioContext existed.
     // This sets busTargets to the correct values for the current viewport so

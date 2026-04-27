@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-27 | Refactor   | [Extract `frontend/audio/raf-loop.js` (Pure EMA Driver)](devlog/M4/2026-04-27-M4-extract-raf-loop.md)                                                                                         |
 | 2026-04-27 | Refactor   | [Extract `frontend/audio/buffer-cache.js`](devlog/M4/2026-04-27-M4-extract-buffer-cache.md)                                                                                                   |
 | 2026-04-27 | Refactor   | [Extract `frontend/audio/context.js` (Master Chain Factory)](devlog/M4/2026-04-27-M4-extract-audio-context.md)                                                                                |
 | 2026-04-27 | Refactor   | [Make `audio-engine.js` Context Init Lazy via `ensureCtx()`](devlog/M4/2026-04-27-M4-audio-engine-lazy-init.md)                                                                               |

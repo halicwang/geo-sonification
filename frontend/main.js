@@ -27,6 +27,18 @@ import { connectWebSocket } from './websocket.js';
 import { engine } from './audio-engine.js';
 import { announcer } from './city-announcer.js';
 
+// Build-tag banner (M4 P0-2, rule 2.F): identifies which commit served
+// the current page so an open DevTools session attributes regressions
+// to a specific deploy. Build identity is injected by
+// scripts/build-pages.js into config.runtime.js at deploy time; in local
+// development the fields are empty and the banner is suppressed.
+{
+    const cfg = window.GEO_SONIFICATION_CONFIG || {};
+    if (cfg.buildHash) {
+        console.info(`[PlaceEcho] build ${cfg.buildHash} deployed ${cfg.buildTime || 'unknown'}`);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Cache fixed DOM element references once
     state.els = {

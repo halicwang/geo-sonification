@@ -28,4 +28,12 @@ window.GEO_SONIFICATION_CONFIG = {
     // value loaded from config.local.js. Must be URL-restricted to the
     // production domain and localhost ports used for smoke testing.
     mapboxToken: 'pk.REPLACE_ME',
+
+    // Build identity injected by scripts/build-pages.js at deploy time.
+    // The frontend logs `[PlaceEcho] build <buildHash> deployed <buildTime>`
+    // on boot so an open DevTools session shows which commit served the page.
+    // Leave blank in local development; the production deploy pipeline fills
+    // these in from `git rev-parse --short HEAD` and `new Date().toISOString()`.
+    buildHash: '',
+    buildTime: '',
 };

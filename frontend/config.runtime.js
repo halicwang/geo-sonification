@@ -8,9 +8,10 @@
  * back to same-origin defaults (HTTP 3000 / WS 3001 / PMTiles + audio
  * served by the Node server).
  *
- * For production, the deploy pipeline (scripts/generate-runtime-config.js)
- * overwrites this file with real values derived from environment vars
- * such as MAPBOX_TOKEN, BASE_PATH, API_BASE, WS_URL, ASSET_BASE.
+ * For production, the deploy pipeline (scripts/build-pages.js) generates
+ * dist/config.runtime.js with real values derived from environment vars
+ * such as MAPBOX_TOKEN, BASE_PATH, API_BASE, WS_URL, ASSET_BASE, plus
+ * buildHash/buildTime build-tag fields injected at build time.
  *
  * Do NOT hand-edit in the repository; generated output should never be
  * committed back. See config.runtime.example.js for the full shape.

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Zixiao Wang
 
 import { describe, it, expect } from 'vitest';
-import { clamp01, lerp, dbToLinear, equalPowerCurves } from '../../audio/utils.js';
+import { clamp01, dbToLinear, equalPowerCurves } from '../../audio/utils.js';
 
 describe('clamp01', () => {
     it('passes through values inside [0, 1]', () => {
@@ -21,24 +21,6 @@ describe('clamp01', () => {
     it('returns 0 for NaN and non-finite values', () => {
         expect(clamp01(NaN)).toBe(0);
         expect(clamp01(undefined)).toBe(0);
-    });
-});
-
-describe('lerp', () => {
-    it('interpolates linearly between a and b', () => {
-        expect(lerp(0, 10, 0)).toBe(0);
-        expect(lerp(0, 10, 1)).toBe(10);
-        expect(lerp(0, 10, 0.5)).toBe(5);
-        expect(lerp(2, 6, 0.25)).toBe(3);
-    });
-
-    it('does not clamp t (extrapolates outside [0, 1])', () => {
-        expect(lerp(0, 10, -0.5)).toBe(-5);
-        expect(lerp(0, 10, 1.5)).toBe(15);
-    });
-
-    it('handles a == b', () => {
-        expect(lerp(7, 7, 0.5)).toBe(7);
     });
 });
 

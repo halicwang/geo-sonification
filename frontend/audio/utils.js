@@ -5,8 +5,7 @@
  * Pure utility functions used inside the audio subsystem.
  *
  * `clamp01` is the [0, 1] specialization used everywhere in the audio
- * path (gain values, normalized parameters). The generic `clamp(min,
- * max, x)` lives in frontend/utils.js (P2-1) for non-audio code.
+ * path (gain values, normalized parameters).
  *
  * `equalPowerCurves` builds the sin/cos crossfade curves used by
  * Web Audio's setValueCurveAtTime. Equal-power curves keep the
@@ -16,9 +15,6 @@
  * `dbToLinear` is the standard 20·log10 inverse used to convert
  * decibels (the unit humans reason about) into the linear gain
  * multiplier that GainNodes consume.
- *
- * `lerp` is a plain linear interpolation, used by the EMA driver
- * landing in P3-3.
  *
  * @module frontend/audio/utils
  */
@@ -31,18 +27,6 @@
 export function clamp01(v) {
     if (!Number.isFinite(v)) return 0;
     return Math.max(0, Math.min(1, v));
-}
-
-/**
- * Linear interpolation between `a` and `b` by fraction `t`.
- * `t` is not clamped — the caller is responsible.
- * @param {number} a
- * @param {number} b
- * @param {number} t
- * @returns {number}
- */
-export function lerp(a, b, t) {
-    return a + (b - a) * t;
 }
 
 /**

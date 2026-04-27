@@ -26,6 +26,7 @@ import { initMap, onViewportChange, refreshServerConfig } from './map.js';
 import { connectWebSocket } from './websocket.js';
 import { engine } from './audio-engine.js';
 import { announcer } from './city-announcer.js';
+import { attachProgressBar } from './progress.js';
 
 // Build-tag banner (M4 P0-2, rule 2.F): identifies which commit served
 // the current page so an open DevTools session attributes regressions
@@ -132,6 +133,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.els.audioToggle.setAttribute('aria-label', enabled ? 'Stop audio' : 'Start audio');
     }
 
+    const progressBar = attachProgressBar({
+        progressEl: state.els.loopProgress,
+        fillEl: state.els.loopProgressFill,
+        handleEl: state.els.loopProgressHandle,
+        engine,
+    });
+
     state.els.audioToggle.addEventListener('click', async () => {
         if (!state.runtime.audioEnabled) {
             state.runtime.audioEnabled = true;
@@ -149,7 +157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderLoadingUI(engine.getLoadingStates());
             await engine.start();
             announcer.setEnabled(true);
-            startProgressLoop();
+            progressBar.start();
 
             // Re-send current viewport so the server returns fresh
             // audioParams.  Previous params arrived before AudioContext
@@ -164,7 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await engine.stop();
             announcer.setEnabled(false);
             announcer.reset();
-            stopProgressLoop();
+            progressBar.stop();
         }
     });
 
@@ -221,84 +229,4 @@ document.addEventListener('DOMContentLoaded', async () => {
                 'Loading (' + readyCount + '/' + states.length + ')';
         }
     }
-
-    // ── Loop progress bar ──
-    let progressRafId = null;
-    let isDragging = false;
-
-    function updateProgressBar() {
-        const info = engine.getLoopProgress();
-        if (!info) {
-            if (!state.els.loopProgress.classList.contains('hidden')) {
-                state.els.loopProgress.classList.add('hidden');
-            }
-            // Keep polling — samples may still be loading; the loop will
-            // yield a valid progress once startAllSources() has fired.
-            progressRafId = requestAnimationFrame(updateProgressBar);
-            return;
-        }
-
-        state.els.loopProgress.classList.remove('hidden');
-
-        if (!isDragging) {
-            const pct = (info.progress * 100).toFixed(2) + '%';
-            state.els.loopProgressFill.style.width = pct;
-            state.els.loopProgressHandle.style.left = pct;
-        }
-
-        progressRafId = requestAnimationFrame(updateProgressBar);
-    }
-
-    function startProgressLoop() {
-        if (progressRafId !== null) return;
-        progressRafId = requestAnimationFrame(updateProgressBar);
-    }
-
-    function stopProgressLoop() {
-        if (progressRafId !== null) {
-            cancelAnimationFrame(progressRafId);
-            progressRafId = null;
-        }
-        state.els.loopProgress.classList.add('hidden');
-    }
-
-    /** @param {PointerEvent} e */
-    function progressFromPointerEvent(e) {
-        const rect = state.els.loopProgress.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        return Math.max(0, Math.min(1, x / rect.width));
-    }
-
-    /** @param {number} progress */
-    function setVisualProgress(progress) {
-        const pct = (progress * 100).toFixed(2) + '%';
-        state.els.loopProgressFill.style.width = pct;
-        state.els.loopProgressHandle.style.left = pct;
-    }
-
-    state.els.loopProgress.addEventListener('pointerdown', (e) => {
-        if (!engine.isRunning()) return;
-        isDragging = true;
-        state.els.loopProgress.classList.add('dragging');
-        state.els.loopProgress.setPointerCapture(e.pointerId);
-        setVisualProgress(progressFromPointerEvent(e));
-    });
-
-    state.els.loopProgress.addEventListener('pointermove', (e) => {
-        if (!isDragging) return;
-        setVisualProgress(progressFromPointerEvent(e));
-    });
-
-    state.els.loopProgress.addEventListener('pointerup', (e) => {
-        if (!isDragging) return;
-        isDragging = false;
-        state.els.loopProgress.classList.remove('dragging');
-        engine.seekLoop(progressFromPointerEvent(e));
-    });
-
-    state.els.loopProgress.addEventListener('pointercancel', () => {
-        if (!isDragging) return;
-        isDragging = false;
-        state.els.loopProgress.classList.remove('dragging');
-    });
 });

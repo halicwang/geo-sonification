@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 Zixiao Wang
 
-const { defineConfig } = require('vitest/config');
+import { defineConfig } from 'vitest/config';
 
 // vitest is locked at 3.x: vitest 4 requires Node >= 20.19, which conflicts
-// with the existing CI matrix (Node 18 + 22). See M4 P0-1 devlog.
-module.exports = defineConfig({
+// with the existing CI matrix (Node 18 + 22). The config file uses .mjs so
+// it loads as ESM regardless of the root package.json type — Node 18 cannot
+// require() vite (ESM-only). See M4 P0-1 devlog.
+export default defineConfig({
     test: {
         environment: 'happy-dom',
         globals: true,

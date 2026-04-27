@@ -182,6 +182,27 @@ up.
 Revert the single P0-1 commit on `feat/M4`. No production code is
 touched; no other stage depends on this commit landing.
 
+## Follow-up — Node 18 ESM config loading
+
+The first push (commit `316f3f1`) failed CI on the Node 18 leg with
+`Error [ERR_REQUIRE_ESM]: require() of ES Module .../vite/...`. Cause:
+`vitest.config.js` used `require('vitest/config')`, but `vite` is now
+ESM-only and Node 18's `require()` cannot load ESM packages. Node 22
+in the same matrix succeeded because it supports `require(esm)` for
+compatible modules.
+
+Fix: rename `vitest.config.js` → `vitest.config.mjs` and switch to
+`import { defineConfig } from 'vitest/config'` / `export default
+defineConfig(...)`. The `.mjs` extension forces the file to load as
+native ESM regardless of the root `package.json` type, so the rest of
+the repo (server CommonJS) is unaffected. This is precisely the
+mitigation noted in proposal §12 risk row "vitest ↔ existing frontend
+ES-module compatibility": the import shape needed to be ESM, not CJS.
+
+`scripts/smoke-wire-format.js` and the audio-context mock helper stay
+in their original module formats — only the vitest config file
+crosses the ESM boundary.
+
 ## Files changed
 
 - **Added**: `vitest.config.js` — vitest 3.x config with happy-dom

@@ -2,6 +2,16 @@ const js = require('@eslint/js');
 const globals = require('globals');
 const prettierConfig = require('eslint-config-prettier');
 
+// Five functional blocks (M4 P0-4 consolidation):
+//   1. Node CJS source — server/**/*.js + scripts/**/*.js
+//   2. server/__tests__/**/*.js — Node CJS + Jest globals
+//   3. frontend/**/*.js — browser ES modules
+//   4. frontend/__tests__/**/*.js — browser ES modules + Vitest globals
+//   5. frontend/config.local.js — classic script (browser globals only)
+//
+// Plus the global ignores entry and the Prettier compatibility entry,
+// neither of which counts as a functional block.
+
 module.exports = [
     // Global ignores
     {
@@ -15,9 +25,9 @@ module.exports = [
         ],
     },
 
-    // server/**/*.js — Node.js ES2020
+    // 1. Node CJS source: server src + scripts
     {
-        files: ['server/**/*.js'],
+        files: ['server/**/*.js', 'scripts/**/*.js'],
         ignores: ['server/__tests__/**'],
         languageOptions: {
             ecmaVersion: 2020,
@@ -30,7 +40,7 @@ module.exports = [
         },
     },
 
-    // server/__tests__/**/*.js — Jest
+    // 2. Server tests — Jest
     {
         files: ['server/__tests__/**/*.js'],
         languageOptions: {
@@ -44,7 +54,7 @@ module.exports = [
         },
     },
 
-    // frontend/**/*.js — Browser ES modules
+    // 3. Frontend source — browser ES modules
     {
         files: ['frontend/**/*.js'],
         ignores: ['frontend/config.local.js', 'frontend/__tests__/**'],
@@ -63,7 +73,7 @@ module.exports = [
         },
     },
 
-    // frontend/__tests__/**/*.js — Vitest (P0-4 will collapse this back into ≤5 blocks)
+    // 4. Frontend tests — Vitest
     {
         files: ['frontend/__tests__/**/*.js'],
         languageOptions: {
@@ -88,26 +98,13 @@ module.exports = [
         },
     },
 
-    // frontend/config.local.js — classic script (sets window.MAPBOX_TOKEN)
+    // 5. frontend/config.local.js — classic script (sets window.MAPBOX_TOKEN)
     {
         files: ['frontend/config.local.js'],
         languageOptions: {
             ecmaVersion: 2020,
             sourceType: 'script',
             globals: { ...globals.browser },
-        },
-        rules: {
-            ...js.configs.recommended.rules,
-        },
-    },
-
-    // scripts/ — Node.js
-    {
-        files: ['scripts/**/*.js'],
-        languageOptions: {
-            ecmaVersion: 2020,
-            sourceType: 'commonjs',
-            globals: { ...globals.node },
         },
         rules: {
             ...js.configs.recommended.rules,

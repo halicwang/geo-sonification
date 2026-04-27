@@ -164,7 +164,6 @@ geo-sonification/
 │   ├── clean-cache.js                     # Cross-platform cache cleaner
 │   ├── generate-city-audio.js             # City TTS audio generator (macOS `say`)
 │   ├── setup-git-hooks.js                 # Cross-platform git hooks installer
-│   ├── setup-git-hooks.sh                 # Git hooks installer (Unix)
 │   └── test_bounds_validation.sh          # Bounds regression test (Unix, requires curl)
 └── .gitattributes                         # Line ending rules (CRLF for .bat)
 ```

@@ -10,7 +10,7 @@ jest.mock('../normalize', () => ({
     normalizeValues: () => ({ nightlightNorm: 0, populationNorm: 0, forestNorm: 0 }),
 }));
 
-const { init, calculateViewportStats, queryGridsInBounds } = require('../spatial');
+const { init, calculateViewportStats } = require('../spatial');
 const { makeCell } = require('./helpers/make-cell');
 
 describe('land coverage ratio', () => {
@@ -49,22 +49,17 @@ describe('land coverage ratio', () => {
         expect(stats.landCoverageRatio).toBeCloseTo(0.5);
     });
 
-    test('empty init (no data at all): ratio = 0', () => {
+    test('empty init (no data at all): ratio = 0; gridsInView empty; theoretical > 0', () => {
+        // Covers the M4 P1-1 single-pass refactor's empty-index path —
+        // theoreticalGridCount is computed index-independently while
+        // gridsInView correctly returns []. Verified end-to-end via
+        // calculateViewportStats (which exercises queryGridsInBounds).
         init([], null);
         const stats = calculateViewportStats([-10, -10, 10, 10]);
         expect(stats.theoreticalGridCount).toBeGreaterThan(0);
         expect(stats.gridCount).toBe(0);
+        expect(stats.gridsInView).toEqual([]);
         expect(stats.landCoverageRatio).toBe(0);
-    });
-
-    test('queryGridsInBounds with empty index: gridsInView=[] but theoreticalGridCount > 0', () => {
-        // After init([], null), spatialIndex is an empty Map. The single-pass
-        // refactor (M4 P1-1) computes theoreticalGridCount index-independently
-        // and skips per-bucket cell collection when the index is empty.
-        init([], null);
-        const result = queryGridsInBounds([0, 0, 10, 10]);
-        expect(result.gridsInView).toEqual([]);
-        expect(result.theoreticalGridCount).toBeGreaterThan(0);
     });
 
     test('antimeridian crossing counts from both ranges', () => {

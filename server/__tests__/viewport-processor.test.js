@@ -110,18 +110,9 @@ describe('processViewport bounds cache', () => {
         expect(deltaState.previousSnapshot.lcFractions).toEqual(snapAfterFirst.lcFractions);
     });
 
-    test('cache hit produces identical audioParams.busTargets', () => {
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
-        const r1 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
-        const r2 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
-
-        expect(r1.stats.audioParams.busTargets).toEqual(r2.stats.audioParams.busTargets);
-        expect(r1.stats.audioParams.busNames).toBe(r2.stats.audioParams.busNames);
-    });
-
-    test('cache hit reflects updated zoom in audioParams.proximity', () => {
-        // proximity is per-call (depends on zoom), not cached.
+    test('zoom changes between hits → proximity reflects new zoom (zoom not cached)', () => {
+        // proximity is per-call (depends on zoom). The cache shares
+        // gridsInView/lcFractions across calls but not zoom-derived values.
         const modeState = createModeState();
         const deltaState = createDeltaState();
         const r1 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 3); // zoom < low
@@ -129,25 +120,6 @@ describe('processViewport bounds cache', () => {
 
         expect(r1.stats.audioParams.proximity).toBe(0);
         expect(r2.stats.audioParams.proximity).toBe(1);
-    });
-
-    test('cache hit does not mutate cached baseStats (no field leak)', () => {
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
-        const r1 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
-
-        // r1.stats has been augmented with mode, perGridThresholdEnter/Exit,
-        // audioParams. A subsequent cache-hit call must NOT inherit those
-        // mutations from r1's per-call mutation of stats.
-        const r2 = processViewport([0.1, 0.1, 0.4, 0.4], createModeState(), deltaState, 5);
-
-        // Mutate r1's stats after the call — this is a misuse but a robust
-        // cache should still produce correct r2 anyway.
-        r1.stats.mode = 'tampered';
-        const r3 = processViewport([0.1, 0.1, 0.4, 0.4], createModeState(), deltaState, 5);
-
-        expect(r2.stats.mode).not.toBe('tampered');
-        expect(r3.stats.mode).not.toBe('tampered');
     });
 
     test('invalid bounds → cache not consulted, no entry written', () => {

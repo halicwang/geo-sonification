@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-27 | Refactor   | [Extract `frontend/audio/utils.js` and `frontend/audio/constants.js`](devlog/M4/2026-04-27-M4-extract-audio-utils-and-constants.md)                                                           |
 | 2026-04-27 | Design     | [Raise commitlint Body / Footer Max Line Length 72 → 100](devlog/M4/2026-04-27-M4-commitlint-body-max-100.md)                                                                                 |
 | 2026-04-27 | Refactor   | [vitest + happy-dom Scaffold and Wire-Format Smoke](devlog/M4/2026-04-27-M4-vitest-and-wire-format-smoke.md)                                                                                  |
 | 2026-04-27 | Design     | [M4 Plan Skeleton + Build-Tag Injection](devlog/M4/2026-04-27-M4-plan-skeleton-and-build-hash.md)                                                                                             |

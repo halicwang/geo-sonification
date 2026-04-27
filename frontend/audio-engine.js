@@ -24,9 +24,30 @@
  */
 
 import { ASSET_BASE, getLoudnessNormEnabled } from './config.js';
+import { clamp01, dbToLinear, equalPowerCurves } from './audio/utils.js';
+import {
+    SMOOTHING_TIME_MS,
+    PROXIMITY_SMOOTHING_MS,
+    SNAP_THRESHOLD_MS,
+    VELOCITY_ATTACK_MS,
+    VELOCITY_DECAY_MS,
+    LOOP_OVERLAP_SECONDS,
+    LOOP_START_LOOKAHEAD_SECONDS,
+    LOOP_TIMER_LOOKAHEAD_SECONDS,
+    VOICE_STOP_GRACE_SECONDS,
+    LATE_SWAP_LOOKAHEAD_SECONDS,
+    RECOVERY_FADE_SECONDS,
+    SWAP_LATE_WARN_SECONDS,
+    BUS_PREAMP_GAIN,
+    LIMITER_THRESHOLD_DB,
+    LIMITER_RATIO,
+    LIMITER_ATTACK_SEC,
+    LIMITER_RELEASE_SEC,
+    LIMITER_KNEE_DB,
+} from './audio/constants.js';
 
 // ════════════════════════════════════════════════════════════════════
-//  Constants
+//  Constants (remaining; the rest moved to ./audio/constants.js)
 // ════════════════════════════════════════════════════════════════════
 
 const NUM_BUSES = 7;
@@ -34,73 +55,15 @@ const BUS_NAMES = Object.freeze(['forest', 'shrub', 'grass', 'crop', 'urban', 'b
 const WATER_BUS_INDEX = 6;
 const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
 
-/** EMA time constant in ms (bus gains and coverage). */
-const SMOOTHING_TIME_MS = 500;
-
-/** Faster EMA time constant for the low-pass filter proximity signal. */
-const PROXIMITY_SMOOTHING_MS = 120;
-
-/** If dt exceeds this, snap to target instead of smoothing. */
-const SNAP_THRESHOLD_MS = 2000;
-
-/** Velocity EMA attack (fast rise when dragging starts). */
-const VELOCITY_ATTACK_MS = 50;
-
-/** Velocity EMA decay (slow fade when dragging stops). */
-const VELOCITY_DECAY_MS = 600;
-
 /** lpFilter1 Q range: Butterworth base → resonant peak at max velocity. */
 const BASE_Q1 = 0.5176;
 const MAX_Q1 = 4.0;
-
-/** Crossfade overlap between outgoing and incoming loop voices. */
-const LOOP_OVERLAP_SECONDS = 1.875;
-
-/** Initial source scheduling lookahead. */
-const LOOP_START_LOOKAHEAD_SECONDS = 0.05;
-
-/** How early to wake JS before the next swap boundary. */
-const LOOP_TIMER_LOOKAHEAD_SECONDS = 0.1;
-
-/** Small buffer to avoid stop()/ramp edge clicks at swap boundary. */
-const VOICE_STOP_GRACE_SECONDS = 0.01;
-
-/** Tiny lookahead used only when a swap callback wakes up late. */
-const LATE_SWAP_LOOKAHEAD_SECONDS = 0.005;
-
-/** Fade duration used by the recovery path when overlap window was missed. */
-const RECOVERY_FADE_SECONDS = 0.02;
-
-/** Warn when swap callback lateness exceeds this threshold. */
-const SWAP_LATE_WARN_SECONDS = 0.025;
 
 /** Resolution of equal-power fade curves. */
 const XF_CURVE_POINTS = 128;
 
 /** Exponent for gain power-curve shaping. Values < 1.0 stretch mid-high range differences. */
 const GAIN_CURVE_EXPONENT = 0.6;
-
-/**
- * Per-bus preamp (linear gain), multiplied into the rafLoop's per-bus
- * gain assignment before it reaches the corresponding GainNode. Used
- * to correct source-level loudness imbalance without re-authoring the
- * WAVs. Values come from scripts/measure-loudness.js — most files
- * cluster around -31 to -33 LUFS integrated, but urban.wav runs ~6 LU
- * hotter and peaks ~15 dB above the others (-6.6 dBTP vs -21 dBTP).
- * At MAKEUP_GAIN_DB = 12, an un-attenuated urban would peak at
- * ~+5.4 dBTP and pin the limiter. Scaling urban by ~-10 dB keeps
- * its post-makeup peak below the limiter threshold. Bus order
- * matches BUS_NAMES.
- */
-const BUS_PREAMP_GAIN = [
-    1.0, // 0 forest
-    1.0, // 1 shrub
-    1.0, // 2 grass
-    1.0, // 3 crop
-    0.316, // 4 urban — -10 dB to avoid limiter at MAKEUP_GAIN_DB = 12
-    1.0, // 5 bare
-    1.0, // 6 water
-];
 
 /**
  * Loading priority order (indices into BUS_NAMES).
@@ -116,18 +79,6 @@ const PRIORITY_SECOND = [1, 2, 3, 4, 5]; // shrub, grass, crop, urban, bare
  * untouched while the average summed output is pulled toward target.
  */
 const MAKEUP_GAIN_DB = 12;
-
-/**
- * Soft peak limiter settings. -3 dB threshold + 20:1 ratio catches
- * transient peaks from the summed bus mix, keeping true peak below
- * -1 dBTP on ambient content. Web Audio's DynamicsCompressorNode has
- * ~6 ms lookahead — sufficient for non-percussive sources.
- */
-const LIMITER_THRESHOLD_DB = -3;
-const LIMITER_RATIO = 20;
-const LIMITER_ATTACK_SEC = 0.003;
-const LIMITER_RELEASE_SEC = 0.25;
-const LIMITER_KNEE_DB = 0;
 
 /**
  * Sidechain-style ducking applied to the ambience chain while the
@@ -271,24 +222,11 @@ let loadGeneration = 0;
 let onLoadingUpdate = null;
 
 // Equal-power crossfade curves reduce perceived loudness dip at midpoint.
-const FADE_IN_CURVE = new Float32Array(XF_CURVE_POINTS);
-const FADE_OUT_CURVE = new Float32Array(XF_CURVE_POINTS);
-for (let i = 0; i < XF_CURVE_POINTS; i++) {
-    const t = i / (XF_CURVE_POINTS - 1);
-    const theta = t * (Math.PI / 2);
-    FADE_IN_CURVE[i] = Math.sin(theta);
-    FADE_OUT_CURVE[i] = Math.cos(theta);
-}
+const { fadeIn: FADE_IN_CURVE, fadeOut: FADE_OUT_CURVE } = equalPowerCurves(XF_CURVE_POINTS);
 
 // ════════════════════════════════════════════════════════════════════
 //  Helpers
 // ════════════════════════════════════════════════════════════════════
-
-/** @param {number} v @returns {number} */
-function clamp01(v) {
-    if (!Number.isFinite(v)) return 0;
-    return Math.max(0, Math.min(1, v));
-}
 
 function notifyLoadingUpdate() {
     if (typeof onLoadingUpdate === 'function') {
@@ -954,7 +892,7 @@ async function start() {
             // per AudioContext lifetime and never revisited, so
             // neither needs a module-level handle.
             const makeupGain = audioCtx.createGain();
-            makeupGain.gain.value = Math.pow(10, MAKEUP_GAIN_DB / 20);
+            makeupGain.gain.value = dbToLinear(MAKEUP_GAIN_DB);
 
             const limiter = audioCtx.createDynamicsCompressor();
             limiter.threshold.value = LIMITER_THRESHOLD_DB;

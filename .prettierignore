@@ -9,3 +9,4 @@ docs/plans/
 docs/devlog/
 package-lock.json
 server/package-lock.json
+coverage/

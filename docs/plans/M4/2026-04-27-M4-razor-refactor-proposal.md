@@ -20,7 +20,7 @@
 
 M4 is not maintenance. It is a deliberate **decomposition** pass driven by Occam's razor — pull `audio-engine` apart into testable subsystems, end the dual-subscription event web on the frontend, merge the parallel server state layer, and stand up the test infrastructure that any further refactor will depend on. By the close of M4, the largest single file drops from 1186 lines to ≤ 200, and the critical frontend subsystems carry ≥ 80% unit-test coverage (up from 0%).
 
-**Cadence rule.** Every Phase ships as one independent PR. After merge to `main`, prod must remain stable for ≥ 24 h before the next Phase opens; the gates flanking the audio core (P2 → P3 and P3 → P4) are ≥ 48 h. We never ship frontend-wide and audio-core changes in the same release window.
+**Cadence rule (revised 2026-04-27).** M4 ships as a **single long-lived branch** (`feat/M4`). All 29 stages commit to that branch in order; nothing merges to `main` until P5-4. `placeecho.com` runs the M3 `main` codebase throughout the ~5-7 week M4 execution window; only at M4 close does the entire refactor reach prod as one big-bang merge. This trades the per-phase prod-soak safety net for branch-management simplicity — every stage's risk is deferred to the final merge, but `main` never carries half-finished refactor work and there are no frontend-vs-server version skews to manage during execution.
 
 ---
 
@@ -28,38 +28,18 @@ M4 is not maintenance. It is a deliberate **decomposition** pass driven by Occam
 
 The 29 stages of M4 are governed by the following rules. They take precedence over "is the feature correct?" because their job is to keep `placeecho.com` from regressing while the engine room is open.
 
-### 2.A. Wire-format compatibility — the most important rule
+### 2.A. Wire-format compatibility — relaxed under single-branch cadence
 
-**Why it matters.** Server-side PRs (P1, P4) ship to prod ahead of the matching frontend changes (P2, P3). During the gap, the live `placeecho.com` frontend talks to a newer server. Any silent rename of a route, WS message type, or response field will break the existing session in users' tabs.
+**Why it changed (2026-04-27).** Originally this rule existed because per-phase PRs would put a newer server on prod while the older frontend kept running in users' tabs — a recipe for silent field renames to break live sessions. With the single-branch cadence (all of M4 merges atomically at P5-4), frontend and server always reach prod together. The "legacy frontend + new server" middle ground does not exist during M4 execution.
 
-**Rule.** During M4, server changes may **only add fields**. They may not rename, delete, or reroute. The Wire-format Contract (§ 8) is the canonical list. If a change must break compatibility (e.g. P4-4 merging the response shape), it can only land in the same release window as the matching frontend PR.
+**Rule (revised).** Wire-format changes during M4 are **not blocked** during execution — but P5-4 must still verify that the version of `placeecho.com` after M4 merge is internally consistent. P0-1 still creates `scripts/smoke-wire-format.js`; it now serves as a **regression check** rather than a per-stage gate:
 
-**Self-check before any server PR merge:**
+- run during P0..P5 stages whenever server routes / WS message types / response fields change, to catch unintentional field renames within a single stage's diff
+- run as part of P5-4 closing audit against `main` to catch any field churn that accumulated across all of M4 vs the M3 baseline (this is the only place the legacy frontend matters: a user with the page open on `placeecho.com` at the moment of M4 merge will trigger a WS reconnect; if message field names changed, the open session breaks until reload)
 
-```sh
-git checkout main -- frontend/      # legacy frontend
-git checkout HEAD  -- server/       # new server
-npm run dev                          # legacy frontend talks to new server in dev
-npm run smoke:wire-format            # P0-1 introduces this script
-```
+The smoke is therefore still useful at the **M4 close boundary** (M3 → M4 transition for any active session) even though it is not gating during execution.
 
-Note: the existing `npm run smoke` runs `scripts/smoke-worldcover.js` — a data-pipeline smoke. It does **not** verify the WS protocol. P0-1 introduces `scripts/smoke-wire-format.js` + the `smoke:wire-format` npm script that:
-
-- diffs `/health`, `/api/config`, `/api/viewport` field names
-- opens a WS, sends `viewport` + `ping`, validates the `audio` + `pong` field set
-- runs the legacy frontend by checking it out from `main` (CI uses `git worktree`)
-
-A schema-diff helper (`git pre-push` hook candidate):
-
-```sh
-diff <(git show main:server/routes.js | grep -E "app\.(get|post)\(") \
-     <(grep -E "app\.(get|post)\(" server/routes.js)
-
-diff <(git show main:server/ws-handler.js | grep -E "ws\.send\(|JSON\.stringify\(") \
-     <(grep -E "ws\.send\(|JSON\.stringify\(" server/ws-handler.js)
-```
-
-Any non-empty diff is a breaking change and demands frontend co-deployment.
+**Note on `npm run smoke`** (existing): runs `scripts/smoke-worldcover.js`, a data-pipeline smoke. It does **not** verify the WS protocol. P0-1 still introduces the wire-format smoke as a separate `npm run smoke:wire-format` script.
 
 ### 2.B. Every stage gets a devlog entry
 
@@ -87,7 +67,7 @@ A `DEVLOG-REVIEWED: YYYY-MM-DD` footer signals the matching devlog entry exists.
 
 ### 2.D. Hotfix priority
 
-The 7-9 week window will see incidental hotfixes. Hotfixes branch from `hotfix/<short-title>`, merge directly to `main`, and never queue behind M4 PRs. After a hotfix lands, the active M4 phase branch must `git rebase main`. A 24 h post-hotfix soak period must pass before the next M4 PR can merge.
+The 5-7 week window will see incidental hotfixes. Hotfixes branch from `hotfix/<short-title>` and merge directly to `main` — they ship to `placeecho.com` independently of M4. After a hotfix lands, **`feat/M4` must `git rebase main`** to absorb the hotfix; the rebase resolves any conflicts before the next M4 stage commit. There is no longer a "post-hotfix soak before the next M4 PR can merge" rule, because no M4 PR merges until P5-4 anyway.
 
 ### 2.E. Audio reference recording + performance baseline
 
@@ -111,31 +91,36 @@ P0-2 (this stage) extends `scripts/build-pages.js` so that `dist/config.runtime.
 
 Once P0-2 lands, the local Chinese plan at `~/.claude/plans/m-milestone-linked-pine.md` is **superseded**. All further plan iteration happens in this file. Each adjustment commits as `docs(M4): adjust <which> plan after <reason>`.
 
-### 2.H. Wait windows + meaning of stage hours
+### 2.H. Meaning of stage hours
 
-**During the 24 / 48 h post-PR soak windows:**
-- Allowed: working on the next phase's branch (writing code, running tests, drafting devlogs)
-- Disallowed: merging the next phase's PR until the soak completes and no regression report has surfaced
+**The `Hours` column in stage tables includes:** code + unit tests + manual smoke / preview verification + 90 s audio regression (where applicable) + devlog entry + commit/push to the `feat/M4` branch.
+**The `Hours` column excludes:** CI runtime per push (a few minutes each), the eventual P5-4 final review.
 
-**The `Hours` column in stage tables includes:** code + unit tests + manual smoke / preview verification + 90 s audio regression (where applicable) + devlog entry + commit/push/PR creation.
-**The `Hours` column excludes:** PR review wait time, CI runtime, the post-merge soak window.
+**No per-stage soak window** under the single-branch cadence — the next stage commits to `feat/M4` as soon as the current stage's hours are spent and verification passes locally. Wall-clock estimate is now ~5-7 weeks (down from the original 7-9 week per-phase estimate, since prod-soak windows no longer apply).
 
-These exclusions are baked into the 7-9 week wall-clock estimate.
+### 2.H.bis. Single-branch workflow (revised 2026-04-27)
+
+- All M4 work goes onto **`feat/M4`** — one branch from P0-1 through P5-4.
+- Every stage is one or more commits with `<type>(M4/P<n>): <subject>` headers (rule 2.C).
+- Pushes happen frequently to keep `origin/feat/M4` reflecting current state and so a draft PR can render the running diff for review.
+- A single **draft PR** (`feat(M4): razor refactor (in progress)`) tracks `feat/M4` against `main`. P5-4 marks it ready and merges it.
+- Hotfixes still target `main` directly; `feat/M4` rebases `main` after each hotfix lands (rule 2.D).
+- `placeecho.com` runs the M3 `main` codebase throughout. The first time M4 reaches prod is the P5-4 merge.
 
 ---
 
 ## 3. Phases overview
 
-| Phase | Theme | Stages | Hours | Key risks | Touches prod |
+| Phase | Theme | Stages | Hours | Key risks | Reaches prod |
 |---|---|---|---|---|---|
-| **P0** | Test scaffolding + plan skeleton + baseline capture | 5 | 12h | Dual `AudioContext` (mitigated by P3-0); `vitest@^3` lock for Node 18 compat; `smoke:wire-format` design | No |
-| **P1** | Server-side low-hanging fruit | 4 | 11h | Wire-format must not break (rule 2.A) | Yes (jest 154 tests + smoke guard) |
-| **P2** | Frontend skeleton + lifecycle rewrite | 5 | 11–13h | Mapbox/Web Audio not testable in happy-dom; `map.js` dual-subscription cleanup | Yes (manual + preview) |
-| **P3** | Filling out the `audio/` subsystem | 7 | 15–18h | Dual `AudioContext`; pure-function boundary for the rAF loop; swap-timer drift; audio-reference comparison | Yes (audio core; P0-5 baseline mandatory) |
-| **P4** | `server/index.js` decomposition + state-layer merge | 4 | 8–10h | Wire-format self-check (rule 2.A) | Yes (HTTP + WS) |
-| **P5** | Performance tuning + closing docs + carryover audit + milestone closing | 4 | 7–9h | Correctness of rAF idle detection | Yes (P5-1 only) |
+| **P0** | Test scaffolding + plan skeleton + baseline capture | 5 | 12h | Dual `AudioContext` (mitigated by P3-0); `vitest@^3` lock for Node 18 compat; `smoke:wire-format` design | Not until P5-4 |
+| **P1** | Server-side low-hanging fruit | 4 | 11h | jest 154 tests must stay green; `npm run benchmark` regressions | Not until P5-4 |
+| **P2** | Frontend skeleton + lifecycle rewrite | 5 | 11–13h | Mapbox/Web Audio not testable in happy-dom; `map.js` dual-subscription cleanup | Not until P5-4 |
+| **P3** | Filling out the `audio/` subsystem | 7 | 15–18h | Dual `AudioContext`; pure-function boundary for the rAF loop; swap-timer drift; audio-reference comparison | Not until P5-4 |
+| **P4** | `server/index.js` decomposition + state-layer merge | 4 | 8–10h | Wire-format regression vs M3 (caught by `smoke:wire-format`) | Not until P5-4 |
+| **P5** | Performance tuning + closing docs + carryover audit + milestone closing + first prod merge | 4 | 7–9h | Correctness of rAF idle detection; **P5-4 is the first time M4 hits prod — every M4 stage's risk surfaces here at once** | **Yes (P5-4 = first prod deploy of M4)** |
 
-**Total:** 29 stages / 64–73h / 7-9 weeks at ~10h/week, accounting for soak windows and hotfix interleaving.
+**Total:** 29 stages / 64–73h / 5-7 weeks at ~10h/week (no per-phase soak windows under single-branch cadence; only hotfix rebases interleave).
 
 ---
 
@@ -149,7 +134,7 @@ These exclusions are baked into the 7-9 week wall-clock estimate.
 | **P0-4** | Tooling cleanup: delete `scripts/setup-git-hooks.sh` (the `.js` version stays). Consolidate `eslint.config.js` from 6 blocks down to ≤ 5: server + scripts merged into one Node CJS block, frontend src block, frontend tests block (vitest globals), `frontend/config.local.js` block. Original 6 → 5 (not 4 — frontend tests need their own globals). | Delete `scripts/setup-git-hooks.sh`, modify `eslint.config.js`, update `README.md` references | 1.5h | `npm run lint` green; `npm run setup:hooks` still works; root file count drops by one; `eslint.config.js` block count ≤ 5. |
 | **P0-5** | Capture audio + performance baseline (rule 2.E). Build `scripts/record-audio-baseline.html` (one button per city, MediaRecorder + auto-download). Record the 5 × 30 s WAV files (Beijing / Los Angeles / London / Sydney / Cairo — five megacities so every clip captures announcer activity). Capture a 5-minute idle Chrome DevTools Performance JSON. Write the configuration into `docs/plans/M4/baseline/baseline-notes.md` (macOS version, Chrome version, CPU model, Mapbox zoom, timestamps). | New `scripts/record-audio-baseline.html`, new `docs/plans/M4/baseline/baseline-notes.md` (text-only into git; WAV + JSON archived externally to `~/Documents/M4-baseline/`) | 2h | Five WAVs + one Performance JSON archived externally; spectrograms confirm announcer voice formants at the 18-22 s mark on every clip (sanity check); `baseline-notes.md` documents reproducible recording configuration. |
 
-**Phase Gate.** `npm test && npm run test:frontend && npm run lint` all green; `audio-engine.js` shrinks 1186 → ~1040 lines; baseline number table complete; **5 devlog entries**; the local Chinese plan carries a "superseded" notice and this proposal takes over.
+**Phase Gate (local — no prod merge).** `npm test && npm run test:frontend && npm run lint` all green; `audio-engine.js` shrinks 1186 → ~1040 lines; baseline number table complete; **5 devlog entries** committed to `feat/M4`; the local Chinese plan carries a "superseded" notice and this proposal takes over. P0 work continues toward P1 on the same `feat/M4` branch with no prod soak.
 
 ---
 
@@ -162,7 +147,7 @@ These exclusions are baked into the 7-9 week wall-clock estimate.
 | **P1-3** | Delete `server/types.js` (104-line empty file). Convert `_statsCounter` from a 30 s polling logger to a SIGTERM/SIGINT-flushed dump. Replace the IIFE-heavy `config.js` constant initializer with plain helper functions. | Delete `server/types.js`; modify `server/index.js:80-90`, `server/config.js:204-218` | 2.5h | `grep -r "require\\('\\./types'\\)" server/` returns nothing; `[Stats]` log lines no longer appear after 30 s of idle uptime; server -50 lines; new test asserts SIGTERM triggers the stats flush. |
 | **P1-4** | Add `lcFractions` hash memoization in `server/viewport-processor.js` (M3 tech-debt audit D.2). **Strategy:** cache key = `lcFractions.map(n => n.toFixed(4)).join(',')` (8 floats joined; precise enough to discriminate, cheap enough not to blow up). **Single-entry cache** (last input + last output); on miss, recompute and replace. Single-entry behavior fits the viewport-tick stream where consecutive identical `lcFractions` are common, with zero memory growth. Promote to multi-entry only if real workload demands it. | `server/viewport-processor.js`, `server/__tests__/viewport-processor.test.js` | 2.5h | `npm run benchmark` average processing time drops 1-2 ms → 0.5-1 ms; new tests cover hit (second call's `elapsedMs` ≈ 0) and miss (different input → recompute). |
 
-**Phase Gate.** `npm test` green; server LOC 3279 → ~3070; local manual smoke (drag 5 s + audio toggle + info-panel update); **wire-format self-check (rule 2.A) passes** — legacy frontend + new server in dev runs e2e smoke clean; **4 devlog entries**. Merge to `main`, deploy, soak 24 h, then enter P2.
+**Phase Gate (local — no prod merge).** `npm test` green; server LOC 3279 → ~3070; local manual smoke (drag 5 s + audio toggle + info-panel update); `npm run smoke:wire-format` passes against `main` (catches accidental field renames during P1's diff); **4 devlog entries** committed to `feat/M4`. P2 starts on the same branch.
 
 ---
 
@@ -176,7 +161,7 @@ These exclusions are baked into the 7-9 week wall-clock estimate.
 | **P2-4** | Move `map.js:341-395` (popup `click` / `mouseenter` / `mouseleave` + popup DOM) into `frontend/popup.js`. | New `frontend/popup.js`; modify `frontend/map.js` | 2h | `map.js` shrinks 395 → ~340; popup behavior visually identical (preview screenshot diff). |
 | **P2-5** | Apply `lifecycle` in `main.js`: `bootstrap` (DOM cache + `getClientId` + Mapbox token) → `ready` (`await loadServerConfig + await initMap`) → `interactive` (attach handlers + `connectWebSocket` + announcer subscribes via event-bus). Extract the progress-bar wiring into `frontend/progress.js` (preserve polling for now; the event-driven rewrite lands in P3-3). **Migration table** (§ 6.2) is normative; **verify each line range against the actual `main.js` HEAD before editing** (M4 hotfixes may have shifted them). | `frontend/main.js`, `frontend/map.js` (`initMap` → async, viewport events go through event-bus), `frontend/city-announcer.js` (subscribe via event-bus), new `frontend/progress.js`, new `frontend/__tests__/dom/progress.test.js` | 3.5h | `main.js` 292 → ≤ 150 (every entry in the migration table reconciled); `map.js` emits the move event exactly once; `progress.js` coverage ≥ 70% (pointer events are simulatable in happy-dom); cold-start FCP within ±5% of P0-5 baseline; preview smoke checklist passes. |
 
-**Phase Gate.** `npm run test:frontend` green (utils + event-bus + lifecycle + progress all meet their coverage targets); preview smoke clean; UI visually unchanged; merge to `main`; **soak ≥ 48 h** (extra cushion since P3 changes audio core); **5 devlog entries**.
+**Phase Gate (local — no prod merge).** `npm run test:frontend` green (utils + event-bus + lifecycle + progress all meet their coverage targets); preview smoke clean; UI visually unchanged in local dev; **5 devlog entries** committed to `feat/M4`. P3 starts on the same branch.
 
 ### 6.1. Event roster (P2-2 deliverable)
 
@@ -232,7 +217,7 @@ frontend/audio/
 
 - **`city-announcer.js` does not move into `audio/`.** It owns "when to play which city" — business logic, not audio routing. P3-5 only relocates the `audioCtx.createBufferSource() + panner + gain` snippet into `audio/announcer-bus.js`. The `cities.json` loader, `findNearestCity`, and the dwell timer remain in `city-announcer.js`.
 - **`raf-loop.js` is genuinely pure.** It returns a `smoothedSnapshot` object (`{ proximity, velocity, coverage[8] }`); it does **not** call `setValueAtTime`. `engine.js` invokes `raf-loop` from its rAF callback and is responsible for picking which audio params receive the smoothed values. This is the boundary that makes the rAF loop testable.
-- **`swap-timer.js` does not depend on `AudioContext.currentTime`.** It receives `now` as a parameter; tests inject a fake clock to assert state transitions. Drift testing is **not** automated (under a fake clock drift = 0 by construction). Drift validation comes from a 30-minute live playback session on the PR preview URL plus spectrogram comparison.
+- **`swap-timer.js` does not depend on `AudioContext.currentTime`.** It receives `now` as a parameter; tests inject a fake clock to assert state transitions. Drift testing is **not** automated (under a fake clock drift = 0 by construction). Drift validation comes from a 30-minute local `npm run dev` session plus spectrogram comparison.
 - **P3-0 makes audio-engine internally lazy.** Inside `audio-engine.js` the module-top-level `const audioCtx = new AudioContext()` becomes `let audioCtx = null; function ensureCtx() { if (!audioCtx) audioCtx = new AudioContext(); return audioCtx; }`. All internal helpers route through `ensureCtx()`. **Caller-side imports and signatures are unchanged** — `main.js`, `city-announcer.js`, etc. need no edits. This is what protects against double `AudioContext` instantiation while the new modules are being filled in.
 
 | Stage | Task | Critical files | Hours | DoD |
@@ -242,10 +227,10 @@ frontend/audio/
 | **P3-2** | Create `audio/buffer-cache.js` — `loadSample` + `Promise.all` priority loading + generation guard. | New `frontend/audio/buffer-cache.js`, new `frontend/__tests__/audio/buffer-cache.test.js` | 2.5h | Coverage ≥ 80% (including the generation-aborts-fetch path); `audio-engine.js` consumes the new module. |
 | **P3-3** | Create `audio/raf-loop.js` — pure EMA driver returning a snapshot, **never calling `setValueAtTime`**. Engine emits `audio:loop:progress` on event-bus; `progress.js` switches from polling to subscribing (closes the polling debt left by P2-5). | New `frontend/audio/raf-loop.js`, new `frontend/__tests__/audio/raf-loop.test.js`; modify `frontend/progress.js` (subscribe), `frontend/audio-engine.js` (emit) | 2.5h | Test: dt = 16 ms × 1000 ticks converges within ±0.1% of target; engine.js calls `raf-loop` from its rAF tick and explicitly applies `setValueAtTime`; coverage ≥ 95%; **`grep "requestAnimationFrame" frontend/progress.js`** returns no results (raf-loop.js still uses rAF; progress.js no longer does). |
 | **P3-4** | Create `audio/swap-timer.js` — `loopClock` + `scheduleGlobalSwap` + `performGlobalSwap` state machine accepting `now` as a parameter. **Feature flag implementation:** add `USE_LEGACY_SWAP_TIMER` field to `frontend/config.runtime.js` (default `false`); audio-engine reads the flag at boot to pick new vs legacy path. Console toggle: `window.runtimeConfig.USE_LEGACY_SWAP_TIMER = true; location.reload()` switches back for debugging. Cleanup happens in P5-4. | New `frontend/audio/swap-timer.js`, new `frontend/__tests__/audio/swap-timer.test.js`; modify `frontend/config.runtime.example.js` to document the flag | 3h | Coverage ≥ 85% (lookahead trigger logic, cycle hand-off, `performSwap` admission); `audio-engine.js` consumes the new module; **with flag = false (default) the new path runs; with flag = true the legacy path runs and `console.warn` notes the override**. |
-| **P3-5** | Create `audio/bus.js` (`BusVoice` / `LoopSlot` / `swapBusVoice` / `resetBusLoop`) and `audio/announcer-bus.js` (panner + gain routing). Update `city-announcer.js` to call `announcer-bus` instead of touching `audioCtx` directly. | New `frontend/audio/bus.js`, new `frontend/audio/announcer-bus.js`, integration tests; modify `frontend/city-announcer.js` | 5h | Integration test: post-swap two voices do not overlap; **30-minute continuous-playback stress test on the PR preview URL** with no clicks/pops; P0-5 5-segment audio comparison ΔLUFS ≤ 0.5 LU + spectrogram visually similar + RMS Δ ≤ 1% (ffmpeg loudnorm + visual diff is included in this stage's hours). |
-| **P3-6** | Create `audio/engine.js` — composes everything, exposes `start`/`stop`/`update`/`duck`. Reduce `frontend/audio-engine.js` to a one-line `export * from './audio/engine.js'` re-export shim (**final deletion happens in P5-4**, leaving 1 week of buffer for any straggling import paths to be caught). | New `frontend/audio/engine.js`, modify `frontend/audio-engine.js` to a re-export shim | 2h | `grep -E "from .*audio-engine" frontend/` shows only the new path; the P3 PR's preview URL passes 30 minutes of stress; in prod, audio idle main-thread CPU vs P0-5 baseline **does not regress** (P5-1 is where we ask for a drop). |
+| **P3-5** | Create `audio/bus.js` (`BusVoice` / `LoopSlot` / `swapBusVoice` / `resetBusLoop`) and `audio/announcer-bus.js` (panner + gain routing). Update `city-announcer.js` to call `announcer-bus` instead of touching `audioCtx` directly. | New `frontend/audio/bus.js`, new `frontend/audio/announcer-bus.js`, integration tests; modify `frontend/city-announcer.js` | 5h | Integration test: post-swap two voices do not overlap; **30-minute continuous-playback stress test on local `npm run dev`** with no clicks/pops; P0-5 5-segment audio comparison ΔLUFS ≤ 0.5 LU + spectrogram visually similar + RMS Δ ≤ 1% (ffmpeg loudnorm + visual diff is included in this stage's hours). |
+| **P3-6** | Create `audio/engine.js` — composes everything, exposes `start`/`stop`/`update`/`duck`. Reduce `frontend/audio-engine.js` to a one-line `export * from './audio/engine.js'` re-export shim (**final deletion happens in P5-4**, leaving the shim on `feat/M4` until then so any missed import path can be caught and fixed before the big-bang merge). | New `frontend/audio/engine.js`, modify `frontend/audio-engine.js` to a re-export shim | 2h | `grep -E "from .*audio-engine" frontend/` shows only the new path; local 30-minute stress test passes; local audio idle main-thread CPU vs P0-5 baseline **does not regress** (P5-1 is where we ask for a drop). |
 
-**Phase Gate.** `npm run test:frontend --coverage` shows `frontend/audio/` coverage ≥ 80%; PR preview URL stress test clean; **P0-5 5-segment audio comparison passes (ΔLUFS ≤ 0.5 LU + spectrogram similar + RMS Δ ≤ 1%)** (rule 2.E hard requirement); the swap-timer feature flag and the `audio-engine.js` re-export shim both stay in prod ≥ 1 week (cleanup in P5-4); **7 devlog entries**; **soak ≥ 48 h** before P4 opens.
+**Phase Gate (local — no prod merge).** `npm run test:frontend --coverage` shows `frontend/audio/` coverage ≥ 80%; **30-minute continuous-playback stress test on local `npm run dev`** clean (no clicks/pops); **P0-5 5-segment audio comparison passes (ΔLUFS ≤ 0.5 LU + spectrogram similar + RMS Δ ≤ 1%)** (rule 2.E hard requirement); the swap-timer feature flag and the `audio-engine.js` re-export shim are kept on `feat/M4` until P5-4 cleanup; **7 devlog entries** committed to `feat/M4`. P4 starts on the same branch.
 
 ---
 
@@ -256,9 +241,9 @@ frontend/audio/
 | **P4-1** | Extract `server/bootstrap.js` — `startHttpServer` + `attachWsServer` + `warnIfStaticAssetsMissing` + `startServer` orchestration. | New `server/bootstrap.js`, modify `server/index.js` | 2h | `server.startup.test.js` green; `index.js` -100 lines; **wire-format self-check is vacuously true** (no routes/WS handlers touched in this stage) — still run `npm run smoke:wire-format` to confirm. |
 | **P4-2** | Extract `server/routes.js` — gather every `app.get` / `app.post` handler (the actual routes are `/health`, `/api/config`, `/api/viewport`). | New `server/routes.js`, modify `server/index.js` | 1.5h | HTTP smoke green; `/health` + `/api/config` + `/api/viewport` response field shape unchanged (`npm run smoke:wire-format` diff vs prior responses); `index.js` -80 lines. |
 | **P4-3** | Extract `server/ws-handler.js` — `attachWsHandler` + upstream message routing + broadcast. | New `server/ws-handler.js`, modify `server/index.js` | 2h | WS integration tests green; WS message-type strings unchanged (rule 2.A schema-diff script passes); `index.js` -130 lines. |
-| **P4-4** | The genuine `mode-manager` + `delta-state` merger. Combine `{currentMode}` and `{snapshot}` into a single `clientState` with one cleanup timer. **Caller list (verified by grep):** `server/index.js` (require + route handler usage), `server/viewport-processor.js` (require + mode application), plus the four test files: `server/__tests__/mode-manager.test.js`, `delta-state.test.js`, `benchmark-gate.test.js`, `golden-baseline.test.js`. | Promote `server/http-client-state.js`; delete `server/mode-manager.js` + `server/delta-state.js`; modify `server/index.js` + `server/viewport-processor.js`; adapt the four test files (mode-manager / delta-state tests rewritten to verify equivalent behavior on the merged module) | 2.5h | All 14 jest suites green; server -130 lines; one 5-minute TTL cleanup timer (down from two); **WS schema diff (rule 2.A): `/api/viewport` response fields (including `mode`, `snapshot`) and downstream WS message field names unchanged**; legacy frontend talks to new server via e2e smoke. |
+| **P4-4** | The genuine `mode-manager` + `delta-state` merger. Combine `{currentMode}` and `{snapshot}` into a single `clientState` with one cleanup timer. **Caller list (verified by grep):** `server/index.js` (require + route handler usage), `server/viewport-processor.js` (require + mode application), plus the four test files: `server/__tests__/mode-manager.test.js`, `delta-state.test.js`, `benchmark-gate.test.js`, `golden-baseline.test.js`. | Promote `server/http-client-state.js`; delete `server/mode-manager.js` + `server/delta-state.js`; modify `server/index.js` + `server/viewport-processor.js`; adapt the four test files (mode-manager / delta-state tests rewritten to verify equivalent behavior on the merged module) | 2.5h | All 14 jest suites green; server -130 lines; one 5-minute TTL cleanup timer (down from two); `npm run smoke:wire-format` passes against `main` (the `/api/viewport` response shape — including `mode`, `snapshot` — and WS message field names are byte-identical to M3 main, so the P5-4 merge will not break any open user session). |
 
-**Phase Gate.** `npm test` green; `server/index.js` 516 → ≤ 100 lines; server total LOC 3279 → ~2900; **4 devlog entries**; soak 24 h after deploy.
+**Phase Gate (local — no prod merge).** `npm test` green; `server/index.js` 516 → ≤ 100 lines; server total LOC 3279 → ~2900; `npm run smoke:wire-format` passes against `main` (catches accidental field renames across P1+P4 server diff); **4 devlog entries** committed to `feat/M4`. P5 starts on the same branch.
 
 ---
 
@@ -271,7 +256,7 @@ frontend/audio/
 | **P5-3** | Write the M4 summary at `docs/plans/M4/2026-XX-XX-M4-summary.md` (English). The **M3 tech-debt-audit carryover table** (§ Appendix A) is included as an appendix. Add the closing devlog entry. | New `docs/plans/M4/2026-XX-XX-M4-summary.md`, new `docs/devlog/M4/<date>-M4-summary.md`, `docs/DEVLOG.md` index | 2h | This proposal moves to `Status: Completed`; DEVLOG.md index complete; the summary records actual vs planned hours by stage. |
 | **P5-4** | **Closing audit + cleanup + milestone close.** Grep-verify that every quantitative target landed; **delete the swap-timer feature flag** (1-week window has passed); **delete `frontend/audio-engine.js` re-export shim** (grep confirms no callers); list any unmet targets in `docs/devlog/M4/<date>-M4-residual-debt.md` as M5 candidates; **the final commit message is `chore(M4): close milestone 4 — razor refactor complete`**. | `frontend/audio/swap-timer.js` (drop the legacy path), delete `frontend/audio-engine.js`, new `docs/devlog/M4/<date>-M4-residual-debt.md` | 1h | Each target row in § 10 is marked ✅ (achieved) or ⏭️ (deferred to M5); DEVLOG.md index updated; `audio-engine.js` no longer exists; `swap-timer.js` has one path; the M4 closing commit is on `main`. |
 
-**Phase Gate (M4 milestone close).** Every quantitative target either achieved or explicitly deferred to M5; `ARCHITECTURE.md` + `DEPLOYMENT.md` match the code; `frontend/audio-engine.js` does not exist; `grep -r 'audio-engine' frontend/` returns no hits; the M4 closing commit is on `main` and prod is stable for ≥ 24 h post-merge; **4 devlog entries** (including the closing entry); the M4 ledger comprises **29 stage devlog entries + 1 closing entry = 30 entries** in DEVLOG.md.
+**Phase Gate (M4 milestone close — first prod merge).** Every quantitative target either achieved or explicitly deferred to M5; `ARCHITECTURE.md` + `DEPLOYMENT.md` match the code; `frontend/audio-engine.js` does not exist; `grep -r 'audio-engine' frontend/` returns no hits; **the draft `feat(M4): razor refactor` PR is marked ready and merged to `main`** — this is the first time M4 reaches `placeecho.com`; post-merge prod soak ≥ 24 h with no regression report (this soak now matters because every M4 stage's risk surfaces simultaneously); **4 devlog entries** (including the closing entry); the M4 ledger comprises **29 stage devlog entries + 1 closing entry = 30 entries** in DEVLOG.md.
 
 ---
 
@@ -339,22 +324,23 @@ The schema-diff helper script (rule 2.A) is the runtime expression of this contr
 
 | Risk | Severity | Mitigation | Rollback |
 |---|---|---|---|
-| P3-4/P3-5 swap-timer / bus split causes crossfade-timing glitches (clicks / pops) | **Critical** | P0 test scaffold + 30-min preview-URL stress + P0-5 spectrogram comparison + 1-week feature flag (cleanup P5-4) | Toggle the flag for instant fallback; worst case revert the entire P3 PR |
-| P3-6 deletion of legacy `audio-engine.js` exposes a missed import path | High | Land as a re-export shim first, hold for 1 week (cleanup P5-4); grep every `audio-engine` reference | Restore the shim |
-| Double `AudioContext` instantiation during P3-0..P3-6 | High | P3-0 enforces lazy-init internally (callers untouched) | DevTools detects double-instantiation → revert the offending stage |
-| `vitest` ↔ existing frontend ES-module compatibility | Medium | P0-1 verifies the import shape (audit confirms ES module); enable vitest's `transformMode: 'web'` | Revert P0-1; fall back to jsdom or pure-node module mode |
+| **P5-4 big-bang merge surfaces multiple latent regressions at once (single-branch cadence trade-off)** | **Critical** | Every prior stage's local Phase Gate stays strict; `feat/M4` keeps `npm test && npm run test:frontend && npm run lint` green at every commit; P0-5 audio reference is rerun at P5-4 against `feat/M4` HEAD; preview-URL stress tested before marking PR ready | The draft PR can sit in "ready for review" indefinitely; if smoke uncovers a bug, fix on `feat/M4` and re-validate before merge. Worst case: tag the fail point, revert the merge, and bisect on `feat/M4` |
+| P3-4/P3-5 swap-timer / bus split causes crossfade-timing glitches (clicks / pops) | **Critical** | P0 test scaffold + 30-min local stress + P0-5 spectrogram comparison + feature flag kept on `feat/M4` until P5-4 cleanup | Toggle the flag for instant fallback on `feat/M4`; worst case revert the P3 commits before merge to `main` |
+| P3-6 deletion of legacy `audio-engine.js` exposes a missed import path | High | Land as a re-export shim first; keep the shim on `feat/M4` until P5-4 cleanup; grep every `audio-engine` reference before P5-4 deletion | Restore the shim on `feat/M4` |
+| Double `AudioContext` instantiation during P3-0..P3-6 | High | P3-0 enforces lazy-init internally (callers untouched) | DevTools detects double-instantiation → revert the offending stage commit |
+| `vitest` ↔ existing frontend ES-module compatibility | Medium | P0-1 verifies the import shape (audit confirms ES module); enable vitest's `transformMode: 'web'` | Revert P0-1 commits on `feat/M4`; fall back to jsdom or pure-node module mode |
 | happy-dom missing Web Audio API + Mapbox WebGL | Medium | P0-1 hand-rolled mock for audio; `map.js` / `popup.js` / `websocket.js` excluded from coverage targets | None (a design constraint) |
 | PMTiles fetch under vitest | Low | P3 does not test PMTiles loading; if needed, use vitest's built-in fetch mock | N/A |
-| P0-1 test scaffold complicates CI and breaks the server jest job | Medium | A new `npm run test:frontend` (kept separate from `npm test`); CI matrix 18+22 still runs both; dev dep only | Revert P0-1 |
-| Server M4 PR ships before frontend, breaking legacy clients (rule 2.A failure) | High | Pre-merge dry-run (legacy frontend + new server) e2e smoke; wire-format contract grep-checked field-by-field | Revert the offending server PR |
-| P4-4 mode/delta merger violates a previously assumed independence | Medium | P1-2 already factored out the helpers; if jest regresses at P4-4, revert immediately | Revert P4-4 alone |
-| P2-5 lifecycle rewrite introduces a startup-order regression | Medium | Preview-URL FCP diff against P0-5 baseline; P2-3's dry-run comment vetoes designs that don't match `main.js` reality | Revert P2-5 |
-| Cascading rollback (P3 fails 49 h after merge while P4 is in flight) | Medium | The 48 h soak gate; if P3 is reverted, P4 holds until P3 is fixed; P4 branch can rebase | Revert the P3 PR; rebase P4 once P3 resolves |
-| Audio-engine ends up half-extracted, half-tested mid-phase | Medium | Each stage diff against the P0-5 audio reference before commit | Stage-level revert |
-| Hotfix collides with M4 PR | Medium | Rule 2.D: hotfix wins, M4 rebases | Hotfix takes priority always |
-| `placeecho.com` users mid-session during a deploy | Low | Pages atomic switchover = 0 downtime; the build-tag banner makes the active version self-evident in DevTools | None (post-hoc forensics) |
-| ESLint config shape changes for the new frontend tests block | Low | P0-4 settles on ≤ 5 blocks (not 4); frontend tests get their own block with vitest globals | Revert P0-4 |
-| `progress.js` keeps polling after P2-5 and degrades interaction | Low | P3-3 retires the polling in the same stage as the rAF-loop extraction (subscribes to `audio:loop:progress`) | Revert P3-3 progress.js change; polling resumes |
+| P0-1 test scaffold complicates CI and breaks the server jest job | Medium | A new `npm run test:frontend` (kept separate from `npm test`); CI matrix 18+22 still runs both; dev dep only | Revert P0-1 commits on `feat/M4` |
+| Wire-format regression in P5-4 merge surprises an open user session | Medium | `npm run smoke:wire-format` run against `main` at P5-4 close; if any field renamed across full M4 diff, document it in P5-4 closing devlog so users know to refresh | If a rename slips, hotfix on `main` re-aliases the old name |
+| P4-4 mode/delta merger violates a previously assumed independence | Medium | P1-2 already factored out the helpers; if jest regresses at P4-4, revert immediately | Revert P4-4 commits alone on `feat/M4` |
+| P2-5 lifecycle rewrite introduces a startup-order regression | Medium | Local FCP diff against P0-5 baseline; P2-3's dry-run comment vetoes designs that don't match `main.js` reality | Revert P2-5 commits on `feat/M4` |
+| Audio-engine ends up half-extracted, half-tested mid-phase | Medium | Each stage diff against the P0-5 audio reference before commit | Stage-level revert on `feat/M4` |
+| Hotfix collides with `feat/M4` | Medium | Rule 2.D: hotfix → `main` directly; `feat/M4` rebases `main` after each hotfix lands | Hotfix takes priority always; M4 rebase resolves conflicts |
+| `feat/M4` and `main` diverge for ~5-7 weeks; rebase friction grows | Medium | Rebase `feat/M4` onto `main` after each hotfix; before P5-4 merge, do one final clean rebase | If a rebase becomes too painful, fall back to a merge commit at P5-4 instead of rebase |
+| `placeecho.com` users mid-session during the P5-4 deploy | Low | Pages atomic switchover = 0 downtime; the build-tag banner makes the active version self-evident in DevTools after reload | None (post-hoc forensics) |
+| ESLint config shape changes for the new frontend tests block | Low | P0-4 settles on ≤ 5 blocks (not 4); frontend tests get their own block with vitest globals | Revert P0-4 commits on `feat/M4` |
+| `progress.js` keeps polling after P2-5 and degrades interaction | Low | P3-3 retires the polling in the same stage as the rAF-loop extraction (subscribes to `audio:loop:progress`) | Revert P3-3 `progress.js` change on `feat/M4`; polling resumes |
 
 ---
 
@@ -371,17 +357,19 @@ The schema-diff helper script (rule 2.A) is the runtime expression of this contr
 
 ## 14. Phase-gate dependency matrix
 
+Under the single-branch cadence (revised 2026-04-27), Phase order is preserved but no per-phase prod soak applies. The dependencies below are between stages on `feat/M4`, not between deploy windows.
+
 | Phase | Depends on | Parallelizable with |
 |---|---|---|
-| P0 | — | P0-3 / P0-4 / P0-5 are mutually independent and run in parallel once P0-1 + P0-2 land. |
-| P1 | P0-1 (vitest) + P0-2 (M4 directory + Chinese plan superseded) | P0-3 / P0-4 / P0-5 (interleave the late P0 stages with early P1 work). |
-| P2 | P0-1 + P0-2 + P0-3 (utils file structure) + P1 prod soak 24h | Not parallel with P1. |
-| P3 | P2 prod soak ≥ 48 h + audio/ subsystem coverage ≥ 70% (P3 raises this stage by stage) + P0-5 baseline captured | Nothing in parallel (audio core ownership). |
-| P4 | P3 prod soak ≥ 48 h (any P3 regression must be resolved first) | Nothing in parallel (server-side ownership). |
-| P5 | P4 prod soak ≥ 24 h | P5-2 / P5-3 / P5-4 (docs + audit) parallel with P5-1. |
-| **Hotfix (any time)** | — | Always wins; the active M4 phase rebases; 24 h soak after a hotfix lands. |
+| P0 | — | P0-3 / P0-4 / P0-5 are mutually independent and can be interleaved once P0-1 + P0-2 land. |
+| P1 | P0-1 (vitest) + P0-2 (M4 directory + Chinese plan superseded) | P0-3 / P0-4 / P0-5 (interleave late P0 stages with early P1 work). |
+| P2 | P0-1 + P0-2 + P0-3 (utils file structure) + P1 stage commits passing locally | Not parallel with P1 (each phase commits in order on `feat/M4`). |
+| P3 | P2 commits passing locally + audio/ subsystem coverage ≥ 70% (P3 raises this stage by stage) + P0-5 baseline captured | Nothing in parallel (audio core ownership). |
+| P4 | P3 commits passing locally (any P3 issue resolved on `feat/M4`) | Nothing in parallel (server-side ownership). |
+| P5 | P4 commits passing locally | P5-2 / P5-3 (docs + audit) parallel with P5-1. P5-4 is the **only** stage that touches `main`. |
+| **Hotfix (any time)** | — | Always wins. Hotfix → `main` directly; `feat/M4` rebases `main` afterward. No prod soak gating M4 progress (M4 doesn't reach prod until P5-4 anyway). |
 
-The two non-negotiable serialization points are the 48 h soak gates flanking P3.
+There are no longer hard serialization gates between phases — under single-branch cadence, P3 and P4 both reach prod simultaneously at P5-4. The original 48 h soaks flanking P3 are folded into a single post-P5-4 soak that monitors the whole M4 in production.
 
 ---
 

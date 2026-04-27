@@ -10,19 +10,23 @@
 
 ---
 
-## 0. Revision history (2026-04-27 Occam pivot)
+## 0. Revision history
 
-The original proposal authored on 2026-04-27 listed **29 stages** across 6 phases. After P0-1 / P0-2 / P0-3 / P0-4 / P0-5 landed on `feat/M4`, an internal Occam-razor audit identified that the original plan was itself violating its stated principle in several places — adding new abstractions and files for hypothetical future need rather than addressing the actual stated problem (audio-engine.js too large; server/index.js mixing responsibilities). The plan was re-cut to 22 stages (5 already complete) by:
+**2026-04-27 (initial)** — 29 stages across 6 phases.
+
+**2026-04-27 (Occam pivot, after P0 complete)** — re-cut to 22 stages by:
 
 - **Dropping P0-5** entirely. The audio recorder file, baseline-notes, and proposal §2.E softening were rolled back. No audio reference is captured during M4.
 - **Dropping `lerp` from P0-3** (`audio/utils.js`). It had zero callers; CLAUDE.md "no design for hypothetical future requirements" applies.
 - **Dropping P1-2** (`server/http-client-state.js` extraction). It existed only to feed P4-4; the merger should happen directly.
-- **Dropping P2-1 / P2-2 / P2-3** (`frontend/utils.js`, `event-bus.js`, `lifecycle.js`). All three add abstractions for assumed future need; the current code's direct calls / sequential init are not painful enough to justify a state machine, a pub/sub bus, or a generic helper module.
-- **Collapsing P3 from 7 stages / 9 files to 5 stages / 4 new files**. The pure-function boundary (raf-loop) is the testability win that justifies a separate module; swap-timer / bus / announcer-bus stay inside `audio/engine.js` as named exports, testable via the P0-1 mock.
+- **Dropping P2-1 / P2-2 / P2-3** (`frontend/utils.js`, `event-bus.js`, `lifecycle.js`). All three add abstractions for assumed future need.
+- **Collapsing P3 from 7 stages / 9 files to 5 stages / 4 new files**. Swap-timer / bus / announcer-bus stay inside `audio/engine.js` as named exports.
 - **Collapsing P4 from 4 stages to 3**. Drop the `bootstrap.js` extraction — the startup block in `server/index.js` is naturally cohesive.
-- **Softening the per-stage devlog rule** to "per-significant-stage" (any new module, any deletion > 50 lines, any architectural change). Trivial code moves can share a phase-close devlog.
+- **Softening the per-stage devlog rule** to "per-significant-stage."
 
-This proposal is the post-pivot plan. The pre-pivot version's stage counts and DoD lines are preserved in git history (`git log --follow docs/plans/M4/2026-04-27-M4-razor-refactor-proposal.md`).
+**2026-04-27 (post-P1-1 small revision)** — re-cut to **21 stages**. Dropped the post-pivot P1-2 ("Delete `server/types.js` (104-line empty file)"). The original audit's "empty file" framing was wrong: `types.js` carries zero runtime code but is referenced by **45 JSDoc `import('./types').<TypeName>` annotations** across `server/normalize.js`, `data-loader.js`, `spatial.js`, `viewport-processor.js`, etc. — it's the type-definition source for IDE / TypeScript-Language-Server IntelliSense across the whole server codebase. Deleting it would degrade dev UX without any runtime or LOC win that warrants the trade. The typedef-maintenance work that does need doing (`ModeState` / `DeltaState` typedefs become obsolete after the merger) folds naturally into **P4-3** as part of the file-deletion wave there. P1 shrinks from 3 stages to 2 (P1-1 spatial collapse, P1-2 lcFractions memoization).
+
+The pre-pivot version's stage counts and DoD lines are preserved in git history (`git log --follow docs/plans/M4/2026-04-27-M4-razor-refactor-proposal.md`).
 
 ---
 
@@ -89,13 +93,13 @@ All M4 work goes onto `feat/M4`. A single draft PR (`feat(M4): razor refactor (i
 | Phase | Theme | Stages | Hours | Status |
 |---|---|---|---|---|
 | **P0** | Test scaffolding + plan + low-friction extractions | 4 (was 5; P0-5 dropped) | 9.5h | ✅ all 4 complete |
-| **P1** | Server-side low-hanging fruit | 3 (was 4; P1-2 dropped) | 7.5h | pending |
+| **P1** | Server-side low-hanging fruit | 2 (was 4; original P1-2 dropped pre-execution, post-pivot P1-2 dropped after re-evaluating types.js) | 5h | P1-1 ✅ done; P1-2 pending |
 | **P2** | Targeted frontend code moves | 2 (was 5; P2-1/2/3 dropped) | 4h | pending |
 | **P3** | Audio decomposition (5 stages, 4 new files) | 5 (was 7; bus/swap/announcer absorbed into engine.js) | 13h | pending |
 | **P4** | Server decomposition + state merger | 3 (was 4; bootstrap stage dropped) | 6h | pending |
 | **P5** | Performance + closing docs + milestone close | 4 (unchanged) | 7-9h | pending |
 
-**Total:** 22 stages / ~47-49h. Of these, **5 stages are already complete** (P0-1 through P0-4); 17 remain.
+**Total:** 21 stages / ~45-47h. Of these, **5 stages are already complete** (P0-1 through P0-4 and P1-1); 16 remain.
 
 ---
 
@@ -113,17 +117,20 @@ All M4 work goes onto `feat/M4`. A single draft PR (`feat(M4): razor refactor (i
 
 ---
 
-## 5. Phase 1 — Server-side low-hanging fruit (7.5h)
+## 5. Phase 1 — Server-side low-hanging fruit (5h)
 
 | Stage | Task | Critical files | Hours | DoD |
 |---|---|---|---|---|
-| **P1-1** | Collapse `spatial.js` bucket-range loops into a single pass; remove the `gridData.filter` fallback dead code (the fallback never executes — `spatialIndex` is always truthy after `loadGridData()`). After removal, retain an empty-index early return for the `spatialIndex.size === 0` edge case. | `server/spatial.js`, `server/__tests__/spatial.test.js`, `server/__tests__/spatial-coverage.test.js` | 2.5h | jest green; `npm run benchmark` shows `wide-area` p99 ≥ 5% lower than the 6.231 ms baseline; one new test covers the empty-index path. |
-| **P1-2** | Delete `server/types.js` (104-line empty file). | Delete `server/types.js`; remove its `require()` references | 1h | `grep -r "require\\('./types'\\)" server/` returns nothing; jest still green. |
-| **P1-3** | Add `lcFractions` hash memoization in `server/viewport-processor.js` (M3 audit D.2). Single-entry cache keyed by `lcFractions.map(n => n.toFixed(4)).join(',')`. | `server/viewport-processor.js`, `server/__tests__/viewport-processor.test.js` | 2.5h | `npm run benchmark` average processing time drops 1-2 ms → 0.5-1 ms; new tests cover hit (second call's `elapsedMs` ≈ 0) and miss (different input → recompute). |
+| **P1-1** ✅ | Collapse `spatial.js` bucket-range loops into a single pass; remove the `gridData.filter` fallback dead code. | `server/spatial.js`, `server/__tests__/spatial-coverage.test.js` | 2.5h | jest green (154); `npm run benchmark` `wide-area` p99 6.231 → 4.171 ms (-33%); empty-index early-return test added. **Landed in `cc5e427`.** |
+| **P1-2** | Add `lcFractions` hash memoization in `server/viewport-processor.js` (M3 audit D.2). Single-entry cache keyed by `lcFractions.map(n => n.toFixed(4)).join(',')`. | `server/viewport-processor.js`, `server/__tests__/viewport-processor.test.js` | 2.5h | `npm run benchmark` average processing time drops 1-2 ms → 0.5-1 ms; new tests cover hit (second call's `elapsedMs` ≈ 0) and miss (different input → recompute). |
 
-Dropped from original P1: P1-2 (`http-client-state.js` extraction — fold into P4-3 merger), and the `_statsCounter` SIGTERM rewrite + IIFE-config simplification sub-tasks of original P1-3 (cosmetic, defer).
+Dropped from this phase across the two pivots:
 
-**Phase Gate:** `npm test` green; `npm run smoke:wire-format` passes; **1 phase-close devlog** (covers all 3 stages). P2 starts on the same branch.
+- **Original P1-2** (`http-client-state.js` extraction) — folded into P4-3 merger.
+- **Post-pivot P1-2** ("delete `server/types.js`") — dropped after discovering the file is the JSDoc-typedef source for 45 `import('./types').<TypeName>` references across the server codebase. Deletion would break IDE IntelliSense without a real LOC or runtime win. The typedef cleanup it implied (`ModeState` / `DeltaState` becoming obsolete) folds naturally into P4-3.
+- `_statsCounter` SIGTERM rewrite + `config.js` IIFE simplification — cosmetic; defer to M5 if ever.
+
+**Phase Gate:** `npm test` green; `npm run smoke:wire-format` passes; **1 phase-close devlog** for P1-2 (P1-1's perf-win devlog already landed). P2 starts on the same branch.
 
 ---
 
@@ -246,7 +253,7 @@ The concrete rule-2.A inventory. Server changes during M4 may **only add fields*
 | Audio idle main-thread CPU | (no captured M3 baseline) | P5-1 captures at-time before/after; verify drop ≥ 30% OR ≤ 3.5% absolute | DevTools 5-min idle Performance at P5-1 |
 | Audio audible regression | — | none — verified by §2.E manual A/B listen on every audio-touching commit | listen + devlog code review |
 | Server `wide-area` p99 | 6.231 ms | ≥ 5% lower (P1-1 spatial collapse) | `npm run benchmark` |
-| Server `viewport-processor` p95 (median scenario) | 0.79 ms (land-dense) | ≤ 0.5 ms (P1-3 lcFractions memo) | `npm run benchmark` |
+| Server `viewport-processor` p95 (median scenario) | 0.79 ms (land-dense) | ≤ 0.5 ms (P1-2 lcFractions memo) | `npm run benchmark` |
 | Server total LOC | 3279 | ~3000 | `wc -l server/**/*.js` |
 
 Dropped from original §11: cold-start FCP (no captured baseline), audio LUFS / spectrogram / RMS (no recordings), `frontend/utils.js` / `lifecycle.js` / `event-bus.js` coverage (modules not built per pivot), `progress.js` and `city-announcer.js` coverage (no test files mandated; covered if/when convenient).
@@ -306,7 +313,7 @@ Under single-branch cadence, phase order is preserved but no per-phase prod soak
 | B.6 | rAF loop runs unconditionally | ✅ M4 P5-1 (idle detection) |
 | C.4 | Boot-time asset warnings only reach server stdout | ⏭️ M5 (frontend WS protocol extension required) |
 | D.1 | `_statsTimer` runs even when `dataLoaded=false` | ⏭️ M5 (cosmetic; pivot dropped this from P1) |
-| D.2 | `viewport-processor` doesn't memoize `lcFractions` | ✅ M4 P1-3 |
+| D.2 | `viewport-processor` doesn't memoize `lcFractions` | ✅ M4 P1-2 |
 | D.3 | `delta-state` TTL expiry has no test | ✅ M4 P4-3 (post-merger coverage) |
 | D.4 | `CACHE_SCHEMA_VERSION` has no migration changelog | ⏭️ M5 (small standalone task) |
 | D.5 | mode/delta TTL timers diverge | ✅ M4 P4-3 |

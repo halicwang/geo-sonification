@@ -24,7 +24,8 @@
  */
 
 import { ASSET_BASE, getLoudnessNormEnabled } from './config.js';
-import { clamp01, dbToLinear, equalPowerCurves } from './audio/utils.js';
+import { clamp01, equalPowerCurves } from './audio/utils.js';
+import { createMasterChain } from './audio/context.js';
 import {
     SMOOTHING_TIME_MS,
     PROXIMITY_SMOOTHING_MS,
@@ -865,68 +866,24 @@ function ensureCtx() {
         sampleRate: 48000,
     });
 
-    masterGain = audioCtx.createGain();
-    masterGain.gain.value = masterVolume;
-
-    // 36 dB/oct low-pass: three cascaded 12 dB/oct biquads.
-    // Q values for 6th-order Butterworth (maximally flat, no resonance).
-    // Cutoff driven by proximity in rafLoop().
-    lpFilter1 = audioCtx.createBiquadFilter();
-    lpFilter1.type = 'lowpass';
-    lpFilter1.frequency.value = 20000;
-    lpFilter1.Q.value = 0.5176;
-
-    lpFilter2 = audioCtx.createBiquadFilter();
-    lpFilter2.type = 'lowpass';
-    lpFilter2.frequency.value = 20000;
-    lpFilter2.Q.value = 0.7071;
-
-    lpFilter3 = audioCtx.createBiquadFilter();
-    lpFilter3.type = 'lowpass';
-    lpFilter3.frequency.value = 20000;
-    lpFilter3.Q.value = 1.9319;
-
-    // duckGain is driven by duck() / unduck(); unity while idle, pulls
-    // down to DUCK_DEPTH during city-announcer speech.
-    duckGain = audioCtx.createGain();
-    duckGain.gain.value = 1.0;
-
-    if (getLoudnessNormEnabled()) {
-        // makeupGain offsets the summed-bus output toward the
-        // -16 LUFS target; limiter catches transients so the
-        // true peak stays below -1 dBTP. Both are created once
-        // per AudioContext lifetime and never revisited, so
-        // neither needs a module-level handle.
-        const makeupGain = audioCtx.createGain();
-        makeupGain.gain.value = dbToLinear(MAKEUP_GAIN_DB);
-
-        const limiter = audioCtx.createDynamicsCompressor();
-        limiter.threshold.value = LIMITER_THRESHOLD_DB;
-        limiter.ratio.value = LIMITER_RATIO;
-        limiter.attack.value = LIMITER_ATTACK_SEC;
-        limiter.release.value = LIMITER_RELEASE_SEC;
-        limiter.knee.value = LIMITER_KNEE_DB;
-
-        masterGain.connect(duckGain);
-        duckGain.connect(makeupGain);
-        makeupGain.connect(limiter);
-        limiter.connect(lpFilter1);
-        console.info(
-            `[audio] Loudness norm ON — makeup ${MAKEUP_GAIN_DB.toFixed(1)} dB, limiter threshold ${LIMITER_THRESHOLD_DB} dB`
-        );
-    } else {
-        masterGain.connect(duckGain);
-        duckGain.connect(lpFilter1);
-        console.info('[audio] Loudness norm OFF — legacy chain');
-    }
-    lpFilter1.connect(lpFilter2);
-    lpFilter2.connect(lpFilter3);
-    lpFilter3.connect(audioCtx.destination);
-
+    const chain = createMasterChain(audioCtx, {
+        masterVolume,
+        loudnessNormEnabled: getLoudnessNormEnabled(),
+        numBuses: NUM_BUSES,
+        makeupGainDb: MAKEUP_GAIN_DB,
+        limiterThresholdDb: LIMITER_THRESHOLD_DB,
+        limiterRatio: LIMITER_RATIO,
+        limiterAttackSec: LIMITER_ATTACK_SEC,
+        limiterReleaseSec: LIMITER_RELEASE_SEC,
+        limiterKneeDb: LIMITER_KNEE_DB,
+    });
+    masterGain = chain.masterGain;
+    duckGain = chain.duckGain;
+    lpFilter1 = chain.lpFilter1;
+    lpFilter2 = chain.lpFilter2;
+    lpFilter3 = chain.lpFilter3;
     for (let i = 0; i < NUM_BUSES; i++) {
-        gains[i] = audioCtx.createGain();
-        gains[i].gain.value = 0;
-        gains[i].connect(masterGain);
+        gains[i] = chain.busGains[i];
     }
 
     return audioCtx;

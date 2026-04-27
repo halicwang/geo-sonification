@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-27 | Refactor   | [Collapse `spatial.js` Bucket Loops + Remove `gridData.filter` Dead Code](devlog/M4/2026-04-27-M4-spatial-single-pass.md)                                                                     |
 | 2026-04-27 | Design     | [Occam Pivot — Drop P0-5, P1-2, P2-1/2/3; Collapse P3/P4 Stages; Remove Unused `lerp`](devlog/M4/2026-04-27-M4-occam-pivot.md)                                                                |
 | 2026-04-27 | Refactor   | [Tooling Cleanup — Drop `setup-git-hooks.sh`, Consolidate ESLint Blocks](devlog/M4/2026-04-27-M4-tooling-cleanup-eslint-blocks.md)                                                            |
 | 2026-04-27 | Refactor   | [Extract `frontend/audio/utils.js` and `frontend/audio/constants.js`](devlog/M4/2026-04-27-M4-extract-audio-utils-and-constants.md)                                                           |

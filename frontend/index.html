@@ -21,6 +21,19 @@
         />
 
         <link rel="stylesheet" href="style.css" />
+
+        <!-- Preload the audio module graph in parallel so the browser doesn't
+             wait for main.js to parse before discovering the imports. Without
+             these, the 6 audio/* modules load in a waterfall (~50-100 ms per
+             file on slow networks) since they're each separately fetched once
+             their import statement is reached. M5 stage 1 fix for the M4 P3
+             decomposition cost. -->
+        <link rel="modulepreload" href="audio/engine.js" />
+        <link rel="modulepreload" href="audio/context.js" />
+        <link rel="modulepreload" href="audio/buffer-cache.js" />
+        <link rel="modulepreload" href="audio/raf-loop.js" />
+        <link rel="modulepreload" href="audio/utils.js" />
+        <link rel="modulepreload" href="audio/constants.js" />
     </head>
     <body>
         <!-- Full-screen Mapbox map (layers added by main.js) -->

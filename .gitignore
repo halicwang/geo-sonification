@@ -35,3 +35,6 @@ CLAUDE.md
 # Deploy-time secrets + build output
 .env.deploy
 dist/
+
+# Vitest coverage reports (regenerate with: npm run test:frontend -- --coverage)
+coverage/

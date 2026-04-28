@@ -16,7 +16,7 @@
  */
 
 import { BASE_PATH } from './config.js';
-import { engine } from './audio-engine.js';
+import { engine } from './audio/engine.js';
 
 // ============ Constants ============
 
@@ -46,7 +46,7 @@ const POP_PRIORITY_EXPONENT = 0.15;
 
 /**
  * TTS gain relative to master volume. Announcer output is a parallel
- * path that bypasses audio-engine's ambience chain (masterGain →
+ * path that bypasses the ambience chain (masterGain →
  * duckGain → makeupGain(+12 dB) → limiter → lpFilters), so the TTS
  * does NOT receive the master loudness-normalization makeup. Running
  * near unity keeps the voice clearly audible above the ducked

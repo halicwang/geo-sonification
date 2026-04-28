@@ -1,0 +1,79 @@
+{
+    "version": 1,
+    "capturedAt": "2026-04-27",
+    "capturedFromCommit": "899f4bd",
+    "note": "M4 P0-1 frozen contract. Any rename or removal of a listed name fails npm run smoke:wire-format. Additive fields are tolerated; rerun with --update to refresh the baseline when a wire-format change is intentional.",
+    "httpRoutes": [
+        {
+            "method": "GET",
+            "path": "/health",
+            "responseFields": ["ok", "dataLoaded"]
+        },
+        {
+            "method": "GET",
+            "path": "/api/config",
+            "responseFields": ["gridSize", "landcoverMeta"]
+        },
+        {
+            "method": "POST",
+            "path": "/api/viewport",
+            "responseFields": [
+                "dominantLandcover",
+                "nightlightNorm",
+                "populationNorm",
+                "forestNorm",
+                "avgForestPct",
+                "avgPopulationDensity",
+                "avgNightlightMean",
+                "avgNightlightP90",
+                "gridCount",
+                "landcoverDistribution",
+                "landcoverBreakdown",
+                "theoreticalGridCount",
+                "landCoverageRatio",
+                "mode",
+                "perGridThresholdEnter",
+                "perGridThresholdExit",
+                "audioParams",
+                "error"
+            ]
+        }
+    ],
+    "wsInbound": [
+        {
+            "type": "viewport",
+            "fields": ["bounds", "zoom"]
+        }
+    ],
+    "wsOutbound": [
+        {
+            "type": "stats",
+            "fields": [
+                "dominantLandcover",
+                "nightlightNorm",
+                "populationNorm",
+                "forestNorm",
+                "avgForestPct",
+                "avgPopulationDensity",
+                "avgNightlightMean",
+                "avgNightlightP90",
+                "gridCount",
+                "landcoverDistribution",
+                "landcoverBreakdown",
+                "theoreticalGridCount",
+                "landCoverageRatio",
+                "mode",
+                "perGridThresholdEnter",
+                "perGridThresholdExit",
+                "audioParams",
+                "broadcast",
+                "loading",
+                "message"
+            ]
+        },
+        {
+            "type": "error",
+            "fields": ["error"]
+        }
+    ]
+}

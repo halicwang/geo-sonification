@@ -118,12 +118,30 @@ function buildSpatialIndex() {
 /**
  * Query grids that intersect the given bounds.
  * Handles date-line crossing (west > east).
+ *
+ * Single-pass over the (range, ix, iy) bucket-index ranges: counts the
+ * theoretical bucket population AND collects the actual cells in one
+ * traversal. Both counts use the same fine-grained intersection test
+ * so they stay perfectly consistent.
+ *
+ * Bucket convention: bucket (ix, iy) covers
+ *   [ix*GS-180, (ix+1)*GS-180) × [iy*GS-90, (iy+1)*GS-90).
+ * `ceil()-1` excludes the bucket whose left edge == range.east; the
+ * per-cell test below uses strict-less-than (<) on the same edge,
+ * keeping the two consistent. Do not change one without the other.
+ *
+ * If `spatialIndex` is null (init not yet called) or empty, the
+ * theoretical count is still computed (it's index-independent),
+ * `gridsInView` returns []. This is the only entry point that touches
+ * the index, so a separate O(N) gridData.filter fallback would be
+ * unreachable in practice and was removed.
+ *
  * @param {number[]} bounds - [west, south, east, north]
  * @returns {{ gridsInView: import('./types').GridCell[], theoreticalGridCount: number }}
  */
 function queryGridsInBounds(bounds) {
     const [west, south, east, north] = bounds;
-    let gridsInView = [];
+    const gridsInView = [];
     let theoreticalGridCount = 0;
 
     const crossesDateLine = west > east;
@@ -134,9 +152,8 @@ function queryGridsInBounds(bounds) {
           ]
         : [{ west, east }];
 
-    // Count theoretical grid cells (all possible 0.5° buckets in the viewport)
-    // using the same bucket-index ranges and fine-grained intersection test as
-    // the data query, so the two counts are perfectly consistent.
+    const indexHasData = spatialIndex && spatialIndex.size > 0;
+
     for (const range of ranges) {
         const ixStart = Math.max(0, Math.floor((range.west + 180) / GRID_SIZE));
         const ixEnd = Math.min(LON_BUCKETS - 1, Math.ceil((range.east + 180) / GRID_SIZE) - 1);
@@ -151,66 +168,31 @@ function queryGridsInBounds(bounds) {
             for (let iy = iyStart; iy <= iyEnd; iy++) {
                 const gs = iy * GRID_SIZE - 90;
                 const gn = gs + GRID_SIZE;
-                if (gs < north && gn > south) {
-                    theoreticalGridCount++;
-                }
-            }
-        }
-    }
+                if (!(gs < north && gn > south)) continue;
 
-    if (spatialIndex && spatialIndex.size > 0) {
-        for (const range of ranges) {
-            // Convert geographic bounds to bucket index ranges.
-            // A bucket (ix, iy) covers [ix*GS-180, (ix+1)*GS-180) x [iy*GS-90, (iy+1)*GS-90).
-            // NOTE: ceil()-1 means we exclude the bucket whose left edge == range.east.
-            // This is intentional — the fine-grained test below uses strict-less-than (<)
-            // for the same edge, so the two are consistent. Do not change one without the other.
-            const ixStart = Math.max(0, Math.floor((range.west + 180) / GRID_SIZE));
-            const ixEnd = Math.min(LON_BUCKETS - 1, Math.ceil((range.east + 180) / GRID_SIZE) - 1);
-            const iyStart = Math.max(0, Math.floor((south + 90) / GRID_SIZE));
-            const iyEnd = Math.min(LAT_BUCKETS - 1, Math.ceil((north + 90) / GRID_SIZE) - 1);
+                theoreticalGridCount++;
 
-            for (let ix = ixStart; ix <= ixEnd; ix++) {
-                for (let iy = iyStart; iy <= iyEnd; iy++) {
-                    const key = ix * LAT_BUCKETS + iy;
-                    const cells = spatialIndex.get(key);
-                    if (!cells) continue;
+                if (!indexHasData) continue;
+                const cells = spatialIndex.get(ix * LAT_BUCKETS + iy);
+                if (!cells) continue;
 
-                    for (const cell of cells) {
-                        // Fine-grained intersection: open boundaries (strict < / >)
-                        // to exclude cells that merely touch at an edge.
-                        // Coupled with ceil()-1 above — see note.
-                        const gridWest = cell.lon;
-                        const gridEast = cell.lon + GRID_SIZE;
-                        const gridSouth = cell.lat;
-                        const gridNorth = cell.lat + GRID_SIZE;
+                for (const cell of cells) {
+                    // Fine-grained intersection: open boundaries (strict < / >)
+                    // to exclude cells that merely touch at an edge.
+                    const gridEast = cell.lon + GRID_SIZE;
+                    const gridNorth = cell.lat + GRID_SIZE;
 
-                        if (
-                            gridWest < range.east &&
-                            gridEast > range.west &&
-                            gridSouth < north &&
-                            gridNorth > south
-                        ) {
-                            gridsInView.push(cell);
-                        }
+                    if (
+                        cell.lon < range.east &&
+                        gridEast > range.west &&
+                        cell.lat < north &&
+                        gridNorth > south
+                    ) {
+                        gridsInView.push(cell);
                     }
                 }
             }
         }
-    } else {
-        // Fallback to O(N) filter if index not available
-        gridsInView = gridData.filter((g) => {
-            const gridEast = g.lon + GRID_SIZE;
-            const gridNorth = g.lat + GRID_SIZE;
-
-            const latOverlap = g.lat < north && gridNorth > south;
-            if (!latOverlap) return false;
-
-            if (crossesDateLine) {
-                return (g.lon < 180 && gridEast > west) || (g.lon < east && gridEast > -180);
-            }
-            return g.lon < east && gridEast > west;
-        });
     }
 
     return { gridsInView, theoreticalGridCount };

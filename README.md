@@ -33,7 +33,7 @@ commands, credential map, and known production issues.
 │  viewport ──────┼──────┼─> calculate     │
 │  interaction    │      │   stats +       │
 │                 │      │   audioParams   │
-│  audio-engine ◄─┼──────┼── busTargets,   │
+│  audio engine ◄─┼──────┼── busTargets,   │
 │  (Web Audio)    │  WS  │   coverage …    │
 └─────────────────┘      └─────────────────┘
 ```
@@ -134,12 +134,15 @@ geo-sonification/
 │   ├── config.js                         # Env parsing, aggregation settings
 │   ├── landcover.js                      # ESA WorldCover class metadata + normalization
 │   ├── audio-metrics.js                  # Audio computation: bus fold-mapping, proximity, delta, ocean detection
-│   ├── delta-state.js                    # Per-client delta state management
-│   ├── mode-manager.js                   # Aggregated ↔ per-grid hysteresis
+│   ├── routes.js                         # HTTP route handlers (M4 P4-1)
+│   ├── ws-handler.js                     # WebSocket message router (M4 P4-2)
+│   ├── client-state.js                   # Per-client mode + delta state (M4 P4-3 merger)
 │   ├── viewport-processor.js             # Viewport processing orchestrator
+│   ├── parse-bounds.js                   # Shared bounds parser
 │   ├── data-loader.js                    # CSV parsing, caching, deduplication
 │   ├── spatial.js                        # Spatial index, viewport stats, bounds validation
 │   ├── normalize.js                      # p1/p99 percentile normalization
+│   ├── load-env.js                       # Minimal .env loader
 │   ├── types.js                          # JSDoc type definitions
 │   └── __tests__/                        # Jest test suite
 ├── frontend/
@@ -151,7 +154,8 @@ geo-sonification/
 │   ├── map.js                            # Mapbox init, grid overlay, viewport tracking, HTTP fallback
 │   ├── websocket.js                      # WebSocket connection with exponential-backoff reconnect
 │   ├── ui.js                             # DOM updates: stats panel, connection status, toast
-│   ├── audio-engine.js                   # Web Audio engine: 7-bus EMA crossfade + ocean detector
+│   ├── audio/engine.js                   # Web Audio engine: 7-bus EMA crossfade + ocean detector
+│   ├── audio/                            # context, buffer-cache, raf-loop, utils, constants (M4 P3)
 │   ├── city-announcer.js                 # City name voice announcement with stereo panning
 │   ├── audio/ambience/                   # Loopable stereo WAVs (one per bus)
 │   ├── audio/cities/                     # Pre-generated TTS M4A clips (one per city)
@@ -164,7 +168,6 @@ geo-sonification/
 │   ├── clean-cache.js                     # Cross-platform cache cleaner
 │   ├── generate-city-audio.js             # City TTS audio generator (macOS `say`)
 │   ├── setup-git-hooks.js                 # Cross-platform git hooks installer
-│   ├── setup-git-hooks.sh                 # Git hooks installer (Unix)
 │   └── test_bounds_validation.sh          # Bounds regression test (Unix, requires curl)
 └── .gitattributes                         # Line ending rules (CRLF for .bat)
 ```
@@ -218,7 +221,7 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 
 Drag-stop feedback latency on the grid overlay is dominated by `VIEWPORT_DEBOUNCE` (`frontend/config.js`, default 120 ms) plus the WebSocket round-trip; spatial-index queries themselves average 1–2 ms (visible in the server's `[Stats]` log every 30 s). Several layers reduce that loop without changing user-visible behavior:
 
-- **Server response compression** — `compression` middleware (gzip on HTTP) and `ws perMessageDeflate` (zlib level 1, threshold 256 B, no context takeover). Drops the ~1.5 KB stats frame to ~0.5 KB. Verify with `curl -sI --compressed http://localhost:3000/audio-engine.js`.
+- **Server response compression** — `compression` middleware (gzip on HTTP) and `ws perMessageDeflate` (zlib level 1, threshold 256 B, no context takeover). Drops the ~1.5 KB stats frame to ~0.5 KB. Verify with `curl -sI --compressed http://localhost:3000/audio/engine.js`.
 - **Static-asset cache headers** — PMTiles 7 days, ambience 30 days. Repeat reloads skip the network entirely; in production, R2 + Cloudflare carries its own cache layer.
 - **Drag-state stroke suppression** — the per-grid dot stroke is set to width 0 during `movestart` and restored on `moveend`. Halves fragment-shader cost at low zoom on the 67k-feature dot layer; the resting visual is unchanged.
 

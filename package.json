@@ -13,6 +13,8 @@
         "benchmark": "node scripts/benchmark-viewport.js",
         "setup:hooks": "node scripts/setup-git-hooks.js",
         "smoke": "node scripts/smoke-worldcover.js",
+        "smoke:wire-format": "node scripts/smoke-wire-format.js",
+        "test:frontend": "vitest run",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --cache --ignore-unknown --write .",
@@ -22,9 +24,12 @@
         "@commitlint/cli": "^20.4.2",
         "@commitlint/config-conventional": "^20.4.2",
         "@eslint/js": "^10.0.1",
+        "@vitest/coverage-v8": "^3.2.4",
         "eslint": "^10.0.1",
         "eslint-config-prettier": "^10.1.8",
         "globals": "^17.3.0",
-        "prettier": "^3.8.1"
+        "happy-dom": "^15.11.0",
+        "prettier": "^3.8.1",
+        "vitest": "^3.2.4"
     }
 }

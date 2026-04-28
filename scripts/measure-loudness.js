@@ -4,7 +4,7 @@
 
 /**
  * Measure per-bus and blended integrated loudness of the ambience
- * WAVs so the master makeup gain in audio-engine.js can be calibrated
+ * WAVs so the master makeup gain in audio/engine.js can be calibrated
  * against a fixed LUFS target (default -16).
  *
  * Uses ffmpeg's `loudnorm` filter (EBU R128 implementation) to read
@@ -49,7 +49,7 @@ function parseArgs() {
     return args;
 }
 
-// Bus order must match BUS_NAMES in frontend/audio-engine.js.
+// Bus order must match the bus index in frontend/audio/engine.js.
 const BUS_NAMES = ['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water'];
 
 // ── ffmpeg wrapper ──

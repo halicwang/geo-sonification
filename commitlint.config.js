@@ -27,11 +27,14 @@ module.exports = {
         'header-max-length': [2, 'always', 100],
 
         // --- Body ---
-        'body-max-line-length': [2, 'always', 72],
+        // Bumped 72 -> 100 (2026-04-27) to match header-max-length, per
+        // M4 P0-1 history-fix decision. Earlier headers were raised to 100
+        // in commit e923a8f for similar reasons.
+        'body-max-line-length': [2, 'always', 100],
         'body-leading-blank': [2, 'always'],
 
         // --- Footer ---
         'footer-leading-blank': [2, 'always'],
-        'footer-max-line-length': [2, 'always', 72],
+        'footer-max-line-length': [2, 'always', 100],
     },
 };

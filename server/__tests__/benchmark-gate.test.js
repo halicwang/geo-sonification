@@ -24,8 +24,7 @@
 const { performance } = require('node:perf_hooks');
 const { init } = require('../spatial');
 const { processViewport } = require('../viewport-processor');
-const { createModeState } = require('../mode-manager');
-const { createDeltaState } = require('../delta-state');
+const { createClientState } = require('../client-state');
 const { GOLDEN_VIEWPORTS, NORMALIZE_PARAMS } = require('./helpers/golden-viewports');
 const { percentile } = require('./helpers/percentile');
 
@@ -48,10 +47,9 @@ const CATASTROPHIC_P99_MS = 5000;
 function measureLatencies(bounds, zoom, n) {
     const latencies = [];
     for (let i = 0; i < n; i++) {
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
+        const clientState = createClientState();
         const t0 = performance.now();
-        processViewport(bounds, modeState, deltaState, zoom);
+        processViewport(bounds, clientState, zoom);
         const t1 = performance.now();
         latencies.push(t1 - t0);
     }

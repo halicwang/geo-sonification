@@ -2,13 +2,10 @@
 // Copyright (C) 2026 Zixiao Wang
 
 /**
- * Audio subsystem constants.
- *
- * Pure code-move from the head of frontend/audio-engine.js (M4 P0-3).
- * Grouped: 12 timing constants, per-bus preamp gain table, and 5
- * limiter knobs. Other audio-engine constants (bus topology, filter Q,
- * curve params, ducking, makeup gain) stay in audio-engine.js until
- * the P3 modules that own them are extracted.
+ * Audio subsystem constants — timing taus, per-bus preamp gain table,
+ * limiter coefficients. The remaining engine-resident constants
+ * (filter Q, curve params, ducking, makeup gain) live inline in
+ * `frontend/audio/engine.js`.
  *
  * @module frontend/audio/constants
  */

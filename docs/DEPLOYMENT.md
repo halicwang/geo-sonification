@@ -83,7 +83,6 @@ frontend/              ← static site (deployed to Pages)
   │                      raf-loop.js + utils.js + constants.js
   │                      (M4 P3 audio decomposition;
   │                      see docs/ARCHITECTURE.md "Audio subsystem")
-  ├── audio-engine.js  ← re-export shim, scheduled for P5-4 deletion
   └── main.js, map.js, websocket.js, ui.js, popup.js, progress.js,
       city-announcer.js, landcover.js, config.js
 frontend/config.runtime.js  ← empty placeholder in repo; regenerated at build
@@ -259,8 +258,8 @@ starts_with(path, "/audio/")`. PMTiles then bypass cache and Range
    approach a minute. Compressing to Opus 128 kbps should land under
    ~4 MB per file (~28 MB total, ~10× reduction) without audibly
    degrading the ambient textures. Requires re-encoding via ffmpeg,
-   updating `audio-engine.js` to request `.opus` (or transparently
-   content-negotiate), re-uploading to R2.
+   updating `frontend/audio/buffer-cache.js` to request `.opus` (or
+   transparently content-negotiate), re-uploading to R2.
 
 3. **Grid tiles still noticeably slower than localhost** — even with
    the cache rule narrowed, Range requests to R2 cost 40-80 ms at a US

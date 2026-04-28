@@ -12,7 +12,7 @@
 
 import { state, ASSET_BASE, VIEWPORT_DEBOUNCE, getClientId } from './config.js';
 import { updateUI, showToast } from './ui.js';
-import { engine } from './audio-engine.js';
+import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
 
 // ============ Motion Tracking ============

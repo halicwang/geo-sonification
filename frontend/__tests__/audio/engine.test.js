@@ -301,22 +301,3 @@ describe('engine — stop lifecycle', () => {
         await expect(engine.stop()).resolves.toBeUndefined();
     });
 });
-
-describe('engine — shim path', () => {
-    beforeEach(() => {
-        vi.resetModules();
-    });
-
-    afterEach(() => {
-        vi.unstubAllGlobals();
-    });
-
-    it('frontend/audio-engine.js re-exports the same engine object', async () => {
-        stubAudioContext();
-        vi.stubGlobal('fetch', mockFetchOk());
-
-        const direct = await import('../../audio/engine.js');
-        const shimmed = await import('../../audio-engine.js');
-        expect(shimmed.engine).toBe(direct.engine);
-    });
-});

@@ -5,8 +5,7 @@
  * Hand-rolled Web Audio API mock for vitest + happy-dom.
  *
  * happy-dom does not implement Web Audio. This helper provides the
- * minimum surface that audio-engine.js, city-announcer.js, and the
- * future frontend/audio/* modules will exercise.
+ * minimum surface that frontend/audio/* + city-announcer.js exercise.
  *
  * Every node factory returns a chainable object so `a.connect(b).connect(c)`
  * compiles. Each node carries vi spies on `connect` / `disconnect` so tests

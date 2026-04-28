@@ -55,10 +55,9 @@ frontend/audio/
 │   └──> constants.js      timing τ, snap threshold, gain shaping
 │                          exponent, limiter coefficients,
 │                          bus preamp gain table
-│
-frontend/audio-engine.js   re-export shim, kept while call sites
-                           migrate. **Deleted in P5-4.**
 ```
+
+Callers (`main.js`, `map.js`, `city-announcer.js`) `import { engine } from './audio/engine.js'` directly. The M3-era `frontend/audio-engine.js` monolith was decomposed in P3 and the transitional re-export shim was deleted in P5-4.
 
 ### Server subsystem (`server/`)
 

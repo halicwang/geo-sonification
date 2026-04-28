@@ -20,7 +20,7 @@
  *
  * No icon triggers — sample folders are empty (YAGNI).
  *
- * @module frontend/audio-engine
+ * @module frontend/audio/engine
  */
 
 import { ASSET_BASE, getLoudnessNormEnabled } from '../config.js';
@@ -330,7 +330,7 @@ function computeLoopCycleSeconds() {
     const minDuration = Math.min(...durations);
     const cycle = minDuration - LOOP_OVERLAP_SECONDS;
     if (!(cycle > 0)) {
-        console.error('[audio-engine] Invalid loop cycle:', {
+        console.error('[audio/engine] Invalid loop cycle:', {
             minDuration,
             overlap: LOOP_OVERLAP_SECONDS,
         });
@@ -440,7 +440,7 @@ function performGlobalSwap() {
 
     if (phaseDelaySeconds > SWAP_LATE_WARN_SECONDS) {
         console.warn(
-            `[audio-engine] Late loop swap: ${(phaseDelaySeconds * 1000).toFixed(1)}ms behind`
+            `[audio/engine] Late loop swap: ${(phaseDelaySeconds * 1000).toFixed(1)}ms behind`
         );
     }
 

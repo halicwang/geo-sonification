@@ -15,7 +15,7 @@
  *     --> server calculates stats (spatial.js) + audioParams (audio-metrics.js)
  *     --> server responds with stats JSON
  *     --> updateUI() renders landcover breakdown in the side panel
- *     --> audio-engine receives audioParams for sonification
+ *     --> audio engine receives audioParams for sonification
  *
  * @module frontend/main
  */
@@ -24,7 +24,7 @@ import { state, getMapboxToken, loadServerConfig, getClientId } from './config.j
 import { showToast, updateUI, updateConnectionStatus } from './ui.js';
 import { initMap, onViewportChange, refreshServerConfig } from './map.js';
 import { connectWebSocket } from './websocket.js';
-import { engine } from './audio-engine.js';
+import { engine } from './audio/engine.js';
 import { announcer } from './city-announcer.js';
 import { attachProgressBar } from './progress.js';
 

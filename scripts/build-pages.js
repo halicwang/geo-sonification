@@ -67,8 +67,9 @@ fs.mkdirSync(distDir, { recursive: true });
 
 // Exclude directories that live on R2 rather than Pages. The ambience
 // WAVs are ~46 MB each — far over Pages' 25 MB per-file ceiling — and
-// audio-engine.js fetches them from ASSET_BASE (R2) in production
-// anyway. Cities M4A clips (~8 KB each, 555 files) stay in dist/.
+// audio/buffer-cache.js fetches them from ASSET_BASE (R2) in
+// production anyway. Cities M4A clips (~8 KB each, 555 files) stay
+// in dist/.
 console.log('[build-pages] Copying frontend/ → dist/ (skipping audio/ambience/)');
 const excludedRelative = new Set([path.join('audio', 'ambience')]);
 fs.cpSync(frontendDir, distDir, {

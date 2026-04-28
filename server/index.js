@@ -23,23 +23,13 @@ const { WebSocketServer } = WebSocket;
 const fs = require('fs');
 const path = require('path');
 
-const { HTTP_PORT, ALLOWED_ORIGINS, BROADCAST_STATS, GRID_SIZE } = require('./config');
-const { LANDCOVER_META } = require('./landcover');
+const { HTTP_PORT, ALLOWED_ORIGINS, BROADCAST_STATS } = require('./config');
 const { loadGridData } = require('./data-loader');
 const spatial = require('./spatial');
-const {
-    createDeltaState,
-    getHttpDeltaState,
-    saveHttpDeltaState,
-    getHttpDeltaClientKey,
-} = require('./delta-state');
-const {
-    createModeState,
-    getHttpModeState,
-    saveHttpModeState,
-    getHttpClientKey,
-} = require('./mode-manager');
+const { createDeltaState } = require('./delta-state');
+const { createModeState } = require('./mode-manager');
 const { processViewport } = require('./viewport-processor');
+const { attachRoutes } = require('./routes');
 
 // ============ Constants ============
 
@@ -231,52 +221,17 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Serve city data (JSON database for city announcer)
 app.use('/data', express.static(path.join(__dirname, '../data'), { extensions: ['json'] }));
 
-// Health check (used by start.command readiness probe)
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        ok: true,
-        dataLoaded,
-    });
-});
-
-// API: Get server configuration (for frontend)
-app.get('/api/config', (req, res) => {
-    res.json({
-        gridSize: GRID_SIZE,
-        landcoverMeta: LANDCOVER_META,
-    });
-});
-
-// API: Calculate viewport stats
-// - Hysteresis state keying: mode-manager rules (existing behavior)
-// - Delta state keying: clientId-first, fallback to IP
-app.post('/api/viewport', (req, res) => {
-    if (!dataLoaded) {
-        return res.status(503).json({ error: 'Data not loaded yet', dataLoaded: false });
-    }
-    const modeClientKey = getHttpClientKey(req);
-    const deltaClientKey = getHttpDeltaClientKey(req);
-    const { modeState, previousMode } = getHttpModeState(modeClientKey);
-    const { deltaState } = getHttpDeltaState(deltaClientKey);
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const parsedBounds = parseViewportBounds(body.bounds, 'HTTP');
-    if (parsedBounds.error) {
-        return res.status(400).json({ error: parsedBounds.error });
-    }
-
-    const zoom = Number.isFinite(body.zoom) ? body.zoom : undefined;
-    const result = processViewport(parsedBounds.bounds, modeState, deltaState, zoom);
-    if (result.error) {
-        return res.status(400).json({ error: result.error });
-    }
-    _statsCounter.viewports++;
-    _statsCounter.totalMs += result.elapsedMs;
-    saveHttpModeState(modeClientKey, modeState);
-    saveHttpDeltaState(deltaClientKey, deltaState);
-    if (modeState.currentMode !== previousMode) {
-        console.log(`[HTTP mode] ${modeClientKey}: ${previousMode} -> ${modeState.currentMode}`);
-    }
-    res.json(result.stats);
+// Application routes (/health, /api/config, /api/viewport).
+// Implementation is in `./routes`; deps that depend on this file's mutable
+// state (dataLoaded flag, stats counter) are passed in as closures so the
+// routes module never has to require './index'.
+attachRoutes(app, {
+    getDataLoaded: () => dataLoaded,
+    incrementStats: (elapsedMs) => {
+        _statsCounter.viewports++;
+        _statsCounter.totalMs += elapsedMs;
+    },
+    parseViewportBounds,
 });
 
 // ============ WebSocket Handler ============

@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-27 | Refactor   | [Extract `server/ws-handler.js` and `server/parse-bounds.js`](devlog/M4/2026-04-27-M4-extract-ws-handler.md)                                                                                  |
 | 2026-04-27 | Refactor   | [Extract `server/routes.js` (HTTP Route Handlers)](devlog/M4/2026-04-27-M4-extract-server-routes.md)                                                                                          |
 | 2026-04-27 | Refactor   | [Collapse `audio-engine.js` to a Re-Export Shim, New `audio/engine.js`](devlog/M4/2026-04-27-M4-collapse-engine-shim.md)                                                                      |
 | 2026-04-27 | Refactor   | [Extract `frontend/audio/raf-loop.js` (Pure EMA Driver)](devlog/M4/2026-04-27-M4-extract-raf-loop.md)                                                                                         |

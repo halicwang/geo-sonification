@@ -23,12 +23,12 @@ const { LANDCOVER_META } = require('./landcover');
 const { getHttpDeltaState, saveHttpDeltaState, getHttpDeltaClientKey } = require('./delta-state');
 const { getHttpModeState, saveHttpModeState, getHttpClientKey } = require('./mode-manager');
 const { processViewport } = require('./viewport-processor');
+const { parseViewportBounds } = require('./parse-bounds');
 
 /**
  * @typedef {Object} RouteDeps
  * @property {() => boolean} getDataLoaded - read at request time, gates /api/viewport
  * @property {(elapsedMs: number) => void} incrementStats - bumps the 30s rolling counter
- * @property {(bounds: unknown, clientLabel?: string) => ({bounds: number[]} | {error: string})} parseViewportBounds
  */
 
 /**
@@ -39,7 +39,7 @@ const { processViewport } = require('./viewport-processor');
  * @param {RouteDeps} deps
  */
 function attachRoutes(app, deps) {
-    const { getDataLoaded, incrementStats, parseViewportBounds } = deps;
+    const { getDataLoaded, incrementStats } = deps;
 
     // Health check (used by start.command readiness probe)
     app.get('/health', (req, res) => {

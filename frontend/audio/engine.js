@@ -27,7 +27,7 @@ import { ASSET_BASE, getLoudnessNormEnabled } from '../config.js';
 import { clamp01, equalPowerCurves } from './utils.js';
 import { createMasterChain } from './context.js';
 import { createBufferCache } from './buffer-cache.js';
-import { createEmaState, tickEma, snapEmaToTargets, resetEma, isEmaIdle } from './raf-loop.js';
+import { createEmaState, tickEma, snapEmaToTargets, resetEma } from './raf-loop.js';
 import {
     SMOOTHING_TIME_MS,
     PROXIMITY_SMOOTHING_MS,
@@ -171,14 +171,6 @@ const EMA_TICK_OPTS = Object.freeze({
     velocityAttackMs: VELOCITY_ATTACK_MS,
     velocityDecayMs: VELOCITY_DECAY_MS,
 });
-
-/**
- * Per-channel `|smoothed - target|` tolerance below which a tick is treated
- * as fully converged. The rAF callback suspends itself when every EMA
- * channel is under this threshold (M4 P5-1; M3 audit B.6 fix). Wakes via
- * `update()` / `updateMotion()` re-arm `requestAnimationFrame`.
- */
-const IDLE_THRESHOLD = 0.001;
 
 // ── Timing ──
 let lastEmaTime = 0;
@@ -547,11 +539,6 @@ function update(audioParams) {
     if (typeof audioParams.proximity === 'number') {
         ema.proximityTarget = clamp01(audioParams.proximity);
     }
-
-    // Wake rAF if it suspended itself after the last convergence (P5-1).
-    // No-op when already running. One frame of overhead at most if the new
-    // targets equal the smoothed values — the next idle check re-suspends.
-    startRaf();
 }
 
 /**
@@ -563,9 +550,6 @@ function update(audioParams) {
  */
 function updateMotion(velocity, _latitude) {
     ema.velocityTarget = clamp01(velocity);
-    // Wake rAF — see update() comment. Required when a drag starts after
-    // the loop suspended itself; otherwise the EMA wouldn't advance.
-    startRaf();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -619,25 +603,11 @@ function rafLoop() {
         }
     }
 
-    // Idle suspend: every EMA has converged within IDLE_THRESHOLD of its
-    // target, so a continued rAF tick would re-write identical AudioParam
-    // values — pure waste. Suspend `requestAnimationFrame` until update()
-    // / updateMotion() / handleVisibilityChange() wakes us.
-    if (isEmaIdle(ema, IDLE_THRESHOLD)) {
-        rafId = null;
-        return;
-    }
-
     rafId = requestAnimationFrame(rafLoop);
 }
 
 function startRaf() {
     if (rafId !== null) return;
-    // First tick after wake should compute a normal-sized dt — without this
-    // reset, a long-suspended loop would cross snapThresholdMs on the first
-    // post-wake tick and snap busSmoothed to busTargets, bypassing the
-    // gradual convergence the user expects after a viewport change.
-    lastEmaTime = performance.now();
     rafId = requestAnimationFrame(rafLoop);
 }
 

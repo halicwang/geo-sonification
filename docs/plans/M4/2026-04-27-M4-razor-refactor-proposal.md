@@ -2,7 +2,7 @@
 
 **Author:** Zixiao Wang (Halic)
 **Date:** 2026-04-27 (revised 2026-04-27 — Occam pivot, see §0)
-**Status:** Active
+**Status:** Completed (P5-4 pending) — see [M4 summary](2026-04-27-M4-summary.md) for §11 verification, missed-targets analysis, M3 audit closure, and the P5-4 definition-of-done.
 **Companion docs:**
 
 - `docs/DEVLOG.md` — devlog entries indexed under M4

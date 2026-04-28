@@ -2,7 +2,13 @@
 // Copyright (C) 2026 Zixiao Wang
 
 import { describe, it, expect } from 'vitest';
-import { createEmaState, tickEma, snapEmaToTargets, resetEma } from '../../audio/raf-loop.js';
+import {
+    createEmaState,
+    tickEma,
+    snapEmaToTargets,
+    resetEma,
+    isEmaIdle,
+} from '../../audio/raf-loop.js';
 
 const NUM_BUSES = 7;
 
@@ -171,5 +177,66 @@ describe('resetEma', () => {
         expect(s.proximitySmoothed).toBe(0);
         expect(s.velocityTarget).toBe(0);
         expect(s.velocitySmoothed).toBe(0);
+    });
+});
+
+describe('isEmaIdle', () => {
+    const THRESHOLD = 0.001;
+
+    it('returns true on a freshly-created state (smoothed === target everywhere)', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        expect(isEmaIdle(s, THRESHOLD)).toBe(true);
+    });
+
+    it('returns false when a bus smoothed differs from its target by more than threshold', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.busTargets[2] = 0.5;
+        // busSmoothed[2] still 0, gap is 0.5
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('returns false when proximity is mid-convergence', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.proximityTarget = 0.4;
+        s.proximitySmoothed = 0.2;
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('returns false when only coverage is mid-convergence (buses + others idle)', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        // coverage starts at target=1, smoothed=1; nudge smoothed to expose
+        // the coverage-only check branch (after bus loop, before proximity).
+        s.coverageSmoothed = 0.5;
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('returns false when velocitySmoothed is non-zero against a zero target', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.velocityTarget = 0;
+        s.velocitySmoothed = 0.05;
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('returns true once every channel has converged within threshold', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.busTargets[0] = 0.7;
+        s.busTargets[6] = 0.3;
+        s.coverageTarget = 0.5;
+        s.proximityTarget = 0.6;
+        // Run enough ticks so every channel falls under the threshold.
+        // Bus + coverage τ = 500 ms (slowest); 1000 ticks of 16 ms is far
+        // past 5 time constants → convergence guaranteed.
+        for (let k = 0; k < 1000; k++) {
+            tickEma(s, 16, OPTS);
+        }
+        expect(isEmaIdle(s, THRESHOLD)).toBe(true);
+    });
+
+    it('threshold parameter is respected (loose threshold accepts mid-convergence)', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.proximityTarget = 0.6;
+        s.proximitySmoothed = 0.55;
+        expect(isEmaIdle(s, 0.001)).toBe(false); // tight: 0.05 > 0.001
+        expect(isEmaIdle(s, 0.1)).toBe(true); // loose: 0.05 < 0.1
     });
 });

@@ -612,7 +612,14 @@ function rafLoop() {
     const norm = Math.max(shapedSum, 1.0);
 
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (gains[i] && bufferCache.has(i)) {
+        // No bufferCache.has(i) gate: P5-1 idle detection lets rAF suspend
+        // before bufferCache.loadAll completes, so gating writes on
+        // "buffer ready" would freeze gains[i].gain.value at 0 across the
+        // whole load. Writing the EMA-derived value pre-load is harmless
+        // (no source flows through that gain yet), and means startAllSources
+        // connects each voice into a gain that is already at the correct
+        // level — no startup transient.
+        if (gains[i]) {
             const landValue = (shaped[i] / norm) * landMix;
             const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
             gains[i].gain.value = value * BUS_PREAMP_GAIN[i];

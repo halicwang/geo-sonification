@@ -134,12 +134,15 @@ geo-sonification/
 │   ├── config.js                         # Env parsing, aggregation settings
 │   ├── landcover.js                      # ESA WorldCover class metadata + normalization
 │   ├── audio-metrics.js                  # Audio computation: bus fold-mapping, proximity, delta, ocean detection
-│   ├── delta-state.js                    # Per-client delta state management
-│   ├── mode-manager.js                   # Aggregated ↔ per-grid hysteresis
+│   ├── routes.js                         # HTTP route handlers (M4 P4-1)
+│   ├── ws-handler.js                     # WebSocket message router (M4 P4-2)
+│   ├── client-state.js                   # Per-client mode + delta state (M4 P4-3 merger)
 │   ├── viewport-processor.js             # Viewport processing orchestrator
+│   ├── parse-bounds.js                   # Shared bounds parser
 │   ├── data-loader.js                    # CSV parsing, caching, deduplication
 │   ├── spatial.js                        # Spatial index, viewport stats, bounds validation
 │   ├── normalize.js                      # p1/p99 percentile normalization
+│   ├── load-env.js                       # Minimal .env loader
 │   ├── types.js                          # JSDoc type definitions
 │   └── __tests__/                        # Jest test suite
 ├── frontend/

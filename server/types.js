@@ -81,7 +81,7 @@
  * @property {string} scale - "log" or "linear"
  */
 
-// ============ Per-client state types (used by delta-state.js, mode-manager.js, viewport-processor.js, audio-metrics.js) ============
+// ============ Per-client state types (used by client-state.js, viewport-processor.js, audio-metrics.js) ============
 
 /**
  * Per-client landcover snapshot for delta computation.

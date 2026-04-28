@@ -138,8 +138,7 @@ function applyHysteresis(state, gridCount) {
 
 /**
  * Validate and trim a client ID value. Handles arrays (e.g. repeated headers)
- * by recursing into the first valid element. The mode-manager pre-merger
- * variant; replaces the stricter delta-state variant which only accepted strings.
+ * by recursing into the first valid element.
  * @param {*} value
  * @returns {string} Trimmed ID, or empty string if invalid
  */

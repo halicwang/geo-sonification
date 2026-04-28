@@ -27,8 +27,7 @@
 const WebSocket = require('ws');
 
 const { BROADCAST_STATS } = require('./config');
-const { createDeltaState } = require('./delta-state');
-const { createModeState } = require('./mode-manager');
+const { createClientState } = require('./client-state');
 const { processViewport } = require('./viewport-processor');
 const { parseViewportBounds } = require('./parse-bounds');
 
@@ -63,10 +62,10 @@ function attachWsHandler(wss, deps) {
     wss.on('connection', (ws) => {
         console.log('WebSocket client connected');
 
-        // Per-client hysteresis state — each client tracks its own mode
-        // so multiple viewports don't interfere with each other.
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
+        // Per-client merged state — hysteresis mode + delta snapshot.
+        // Each WS connection tracks its own state so multiple viewports
+        // don't interfere with each other.
+        const clientState = createClientState();
 
         // Mark alive; the ping timer will flip to false before each ping.
         // If pong comes back, it flips back to true.
@@ -117,12 +116,7 @@ function attachWsHandler(wss, deps) {
                     }
 
                     const zoom = Number.isFinite(data.zoom) ? data.zoom : undefined;
-                    const result = processViewport(
-                        parsedBounds.bounds,
-                        modeState,
-                        deltaState,
-                        zoom
-                    );
+                    const result = processViewport(parsedBounds.bounds, clientState, zoom);
                     if (result.error) {
                         ws.send(JSON.stringify({ type: 'error', error: result.error }));
                         return;

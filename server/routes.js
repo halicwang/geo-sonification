@@ -20,8 +20,7 @@
 
 const { GRID_SIZE } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
-const { getHttpDeltaState, saveHttpDeltaState, getHttpDeltaClientKey } = require('./delta-state');
-const { getHttpModeState, saveHttpModeState, getHttpClientKey } = require('./mode-manager');
+const { getHttpClientState, saveHttpClientState, getHttpClientKey } = require('./client-state');
 const { processViewport } = require('./viewport-processor');
 const { parseViewportBounds } = require('./parse-bounds');
 
@@ -57,17 +56,15 @@ function attachRoutes(app, deps) {
         });
     });
 
-    // API: Calculate viewport stats
-    // - Hysteresis state keying: mode-manager rules (existing behavior)
-    // - Delta state keying: clientId-first, fallback to IP
+    // API: Calculate viewport stats. Per-client hysteresis mode + delta
+    // snapshot share a single Map entry keyed by getHttpClientKey() (M4 P4-3
+    // merger; M3 audit D.5 fix).
     app.post('/api/viewport', (req, res) => {
         if (!getDataLoaded()) {
             return res.status(503).json({ error: 'Data not loaded yet', dataLoaded: false });
         }
-        const modeClientKey = getHttpClientKey(req);
-        const deltaClientKey = getHttpDeltaClientKey(req);
-        const { modeState, previousMode } = getHttpModeState(modeClientKey);
-        const { deltaState } = getHttpDeltaState(deltaClientKey);
+        const clientKey = getHttpClientKey(req);
+        const { state, previousMode } = getHttpClientState(clientKey);
         const body = req.body && typeof req.body === 'object' ? req.body : {};
         const parsedBounds = parseViewportBounds(body.bounds, 'HTTP');
         if (parsedBounds.error) {
@@ -75,17 +72,14 @@ function attachRoutes(app, deps) {
         }
 
         const zoom = Number.isFinite(body.zoom) ? body.zoom : undefined;
-        const result = processViewport(parsedBounds.bounds, modeState, deltaState, zoom);
+        const result = processViewport(parsedBounds.bounds, state, zoom);
         if (result.error) {
             return res.status(400).json({ error: result.error });
         }
         incrementStats(result.elapsedMs);
-        saveHttpModeState(modeClientKey, modeState);
-        saveHttpDeltaState(deltaClientKey, deltaState);
-        if (modeState.currentMode !== previousMode) {
-            console.log(
-                `[HTTP mode] ${modeClientKey}: ${previousMode} -> ${modeState.currentMode}`
-            );
+        saveHttpClientState(clientKey, state);
+        if (state.currentMode !== previousMode) {
+            console.log(`[HTTP mode] ${clientKey}: ${previousMode} -> ${state.currentMode}`);
         }
         res.json(result.stats);
     });

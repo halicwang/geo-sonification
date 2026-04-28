@@ -28,7 +28,7 @@ const {
     applyHysteresis,
     PER_GRID_THRESHOLD_ENTER,
     PER_GRID_THRESHOLD_EXIT,
-} = require('./mode-manager');
+} = require('./client-state');
 
 /**
  * Single-entry bounds-keyed cache for the spatial-pipeline outputs.
@@ -72,12 +72,12 @@ function _resetCache() {
 /**
  * Validate bounds, compute viewport stats, and assemble audio parameters.
  * @param {number[]} bounds - [west, south, east, north]
- * @param {import('./types').ModeState} modeState - Per-client hysteresis state (mutated in place)
- * @param {import('./types').DeltaState} deltaState - Per-client delta state (mutated in place)
+ * @param {{ currentMode: string, previousSnapshot: import('./types').Snapshot|null }} clientState
+ *        Per-client merged state (hysteresis mode + delta snapshot). Mutated in place.
  * @param {number} [zoom]
  * @returns {{ stats: import('./types').ViewportStats, gridsInView: import('./types').GridCell[], elapsedMs: number } | { error: string }}
  */
-function processViewport(bounds, modeState, deltaState, zoom) {
+function processViewport(bounds, clientState, zoom) {
     const t0 = Date.now();
 
     const validation = validateBounds(bounds);
@@ -112,16 +112,16 @@ function processViewport(bounds, modeState, deltaState, zoom) {
 
     const gridCount = gridsInView.length;
 
-    applyHysteresis(modeState, gridCount);
+    applyHysteresis(clientState, gridCount);
 
     const proximity = computeProximityFromZoom(zoom, PROXIMITY_ZOOM_LOW, PROXIMITY_ZOOM_HIGH);
 
-    const delta = computeDeltaMetrics(lcFractions, deltaState?.previousSnapshot || null);
-    if (deltaState) {
-        deltaState.previousSnapshot = delta.snapshot;
+    const delta = computeDeltaMetrics(lcFractions, clientState?.previousSnapshot || null);
+    if (clientState) {
+        clientState.previousSnapshot = delta.snapshot;
     }
 
-    stats.mode = modeState.currentMode;
+    stats.mode = clientState.currentMode;
     stats.perGridThresholdEnter = PER_GRID_THRESHOLD_ENTER;
     stats.perGridThresholdExit = PER_GRID_THRESHOLD_EXIT;
 

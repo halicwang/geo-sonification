@@ -20,8 +20,7 @@
 
 const { init } = require('../spatial');
 const { processViewport } = require('../viewport-processor');
-const { createModeState } = require('../mode-manager');
-const { createDeltaState } = require('../delta-state');
+const { createClientState } = require('../client-state');
 const { LANDCOVER_META } = require('../landcover');
 const {
     GRID_SIZE,
@@ -85,9 +84,8 @@ describe('P0-A Environment Pinning Guard', () => {
 // ── Helpers ──
 
 function runViewport(bounds, zoom) {
-    const modeState = createModeState();
-    const deltaState = createDeltaState();
-    const result = processViewport(bounds, modeState, deltaState, zoom);
+    const clientState = createClientState();
+    const result = processViewport(bounds, clientState, zoom);
     expect(result.error).toBeUndefined();
     return result.stats;
 }

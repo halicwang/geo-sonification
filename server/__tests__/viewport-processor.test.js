@@ -6,7 +6,7 @@
  * (M4 P1-2). Asserts:
  *   - identical bounds → spatial.calculateViewportStats called once
  *   - different bounds → cache replaces, spatial called again
- *   - cache hit still mutates per-client modeState / deltaState correctly
+ *   - cache hit still mutates per-client clientState (mode + delta) correctly
  *   - cache hit still produces correct audioParams (busTargets, proximity)
  *
  * `init([cell])` and a `_resetCache()` helper isolate per-test state.
@@ -18,8 +18,7 @@ jest.mock('../normalize', () => ({
 
 const spatial = require('../spatial');
 const { processViewport, _resetCache } = require('../viewport-processor');
-const { createModeState } = require('../mode-manager');
-const { createDeltaState } = require('../delta-state');
+const { createClientState } = require('../client-state');
 const { makeCell } = require('./helpers/make-cell');
 
 beforeEach(() => {
@@ -49,10 +48,9 @@ describe('processViewport bounds cache', () => {
     test('identical bounds → spatial.calculateViewportStats called once', () => {
         const spy = jest.spyOn(spatial, 'calculateViewportStats');
 
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
-        const r1 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
-        const r2 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
+        const clientState = createClientState();
+        const r1 = processViewport([0.1, 0.1, 0.4, 0.4], clientState, 5);
+        const r2 = processViewport([0.1, 0.1, 0.4, 0.4], clientState, 5);
 
         expect(r1.error).toBeUndefined();
         expect(r2.error).toBeUndefined();
@@ -65,27 +63,24 @@ describe('processViewport bounds cache', () => {
     test('different bounds → cache replaces → spatial called twice', () => {
         const spy = jest.spyOn(spatial, 'calculateViewportStats');
 
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
-        processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
-        processViewport([49.5, 49.5, 50.4, 50.4], modeState, deltaState, 5);
+        const clientState = createClientState();
+        processViewport([0.1, 0.1, 0.4, 0.4], clientState, 5);
+        processViewport([49.5, 49.5, 50.4, 50.4], clientState, 5);
 
         expect(spy).toHaveBeenCalledTimes(2);
 
         spy.mockRestore();
     });
 
-    test('cache hit still applies per-client hysteresis to modeState', () => {
-        // Two separate client modeStates, both querying the same bounds.
-        const clientA = createModeState();
-        const clientB = createModeState();
-        const deltaA = createDeltaState();
-        const deltaB = createDeltaState();
+    test('cache hit still applies per-client hysteresis to clientState', () => {
+        // Two separate client states, both querying the same bounds.
+        const clientA = createClientState();
+        const clientB = createClientState();
 
-        const rA = processViewport([0.1, 0.1, 0.4, 0.4], clientA, deltaA, 5);
-        const rB = processViewport([0.1, 0.1, 0.4, 0.4], clientB, deltaB, 5);
+        const rA = processViewport([0.1, 0.1, 0.4, 0.4], clientA, 5);
+        const rB = processViewport([0.1, 0.1, 0.4, 0.4], clientB, 5);
 
-        // Both should have applied hysteresis to their own modeState; the
+        // Both should have applied hysteresis to their own state; the
         // mode field on each result reflects that client's state.
         expect(rA.stats.mode).toBe(clientA.currentMode);
         expect(rB.stats.mode).toBe(clientB.currentMode);
@@ -94,29 +89,27 @@ describe('processViewport bounds cache', () => {
         expect(rA.stats.gridCount).toBe(rB.stats.gridCount);
     });
 
-    test('cache hit still updates per-client deltaState.previousSnapshot', () => {
-        const deltaState = createDeltaState();
-        expect(deltaState.previousSnapshot).toBeNull();
+    test('cache hit still updates per-client clientState.previousSnapshot', () => {
+        const clientState = createClientState();
+        expect(clientState.previousSnapshot).toBeNull();
 
-        const modeState = createModeState();
-        processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
-        const snapAfterFirst = deltaState.previousSnapshot;
+        processViewport([0.1, 0.1, 0.4, 0.4], clientState, 5);
+        const snapAfterFirst = clientState.previousSnapshot;
         expect(snapAfterFirst).not.toBeNull();
         expect(Array.isArray(snapAfterFirst.lcFractions)).toBe(true);
 
         // Second call (cache hit) should still produce a snapshot — and it
         // should equal the first snapshot (same lcFractions in, same out).
-        processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 5);
-        expect(deltaState.previousSnapshot.lcFractions).toEqual(snapAfterFirst.lcFractions);
+        processViewport([0.1, 0.1, 0.4, 0.4], clientState, 5);
+        expect(clientState.previousSnapshot.lcFractions).toEqual(snapAfterFirst.lcFractions);
     });
 
     test('zoom changes between hits → proximity reflects new zoom (zoom not cached)', () => {
         // proximity is per-call (depends on zoom). The cache shares
         // gridsInView/lcFractions across calls but not zoom-derived values.
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
-        const r1 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 3); // zoom < low
-        const r2 = processViewport([0.1, 0.1, 0.4, 0.4], modeState, deltaState, 7); // zoom > high
+        const clientState = createClientState();
+        const r1 = processViewport([0.1, 0.1, 0.4, 0.4], clientState, 3); // zoom < low
+        const r2 = processViewport([0.1, 0.1, 0.4, 0.4], clientState, 7); // zoom > high
 
         expect(r1.stats.audioParams.proximity).toBe(0);
         expect(r2.stats.audioParams.proximity).toBe(1);
@@ -124,9 +117,8 @@ describe('processViewport bounds cache', () => {
 
     test('invalid bounds → cache not consulted, no entry written', () => {
         const spy = jest.spyOn(spatial, 'calculateViewportStats');
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
-        const result = processViewport([1, 2, 3], modeState, deltaState, 5); // wrong length
+        const clientState = createClientState();
+        const result = processViewport([1, 2, 3], clientState, 5); // wrong length
         expect(result.error).toBeDefined();
         expect(spy).not.toHaveBeenCalled();
         spy.mockRestore();
@@ -134,12 +126,11 @@ describe('processViewport bounds cache', () => {
 
     test('antimeridian wrap → cache key uses validated (wrapped) bounds', () => {
         const spy = jest.spyOn(spatial, 'calculateViewportStats');
-        const modeState = createModeState();
-        const deltaState = createDeltaState();
+        const clientState = createClientState();
         // wrapLon(-200) === 160, wrapLon(-190) === 170. Both calls should
         // produce the same wrapped bounds [160, 0, 170, 1].
-        processViewport([-200, 0, -190, 1], modeState, deltaState, 5);
-        processViewport([160, 0, 170, 1], modeState, deltaState, 5);
+        processViewport([-200, 0, -190, 1], clientState, 5);
+        processViewport([160, 0, 170, 1], clientState, 5);
         // Two calls with semantically equivalent (post-wrap) bounds → 1 spatial call.
         expect(spy).toHaveBeenCalledTimes(1);
         spy.mockRestore();

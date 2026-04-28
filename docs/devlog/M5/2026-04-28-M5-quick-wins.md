@@ -67,7 +67,73 @@ Manual reproduction of the race in production cannot be reliably forced from a c
 
 ## Stage 3 — M3 audit closure (D.1 + D.4 + E.2)
 
-_To be appended in the Stage 3 commit._
+Three independently scoped audit items closed in one commit because each is small and self-contained.
+
+### D.1 — `_statsTimer` runs even when `dataLoaded=false`
+
+Original audit ([2026-04-23-M3-tech-debt-audit.md](../M3/2026-04-23-M3-tech-debt-audit.md):72) said the 30 s stats logger fires during boot. The current code already had an inner counter guard (`if (_statsCounter.viewports > 0)`) that produced no log under that condition, since `incrementStats` is only reachable after the route / WS handlers' `dataLoaded` checks pass. So the symptom the audit named is _de facto_ already gone.
+
+What the audit really wants is the **invariant** stated explicitly in the code, not deduced from a chain of unrelated guards. One-line change:
+
+```diff
+ const _statsTimer = setInterval(() => {
++    if (!dataLoaded) return;
+     if (_statsCounter.viewports > 0) {
+         ...
+     }
+ }, STATS_LOG_INTERVAL_MS);
+```
+
+Behavior unchanged; intent now self-evident; future caller that bumps `_statsCounter.viewports` before `dataLoaded` flips can't accidentally log a partially-loaded server's stats. **Files:** `server/index.js` (+5 LOC including the comment block).
+
+### D.4 — `CACHE_SCHEMA_VERSION` migration changelog
+
+Original audit (D.4 in the same M3 doc) flagged that the constant lacked any record of what each version meant or when to bump. The trailing inline comment (`// bump when cache format changes (v3: nightlight -1 sentinel)`) only told you the latest delta.
+
+Replaced with a JSDoc block above the constant that documents (a) the bump protocol — what kinds of change require a bump, what happens when the version mismatches on read — and (b) a version history table. v1 and v2 are pre-repo (initial commit landed at v3 already, per `git log -L /CACHE_SCHEMA_VERSION/`). v3's source is recorded with a commit reference for traceability. Future bumps land a new row.
+
+```diff
+-const CACHE_SCHEMA_VERSION = 3; // bump when cache format changes (v3: ...)
++/**
++ * Cache schema version. Mismatched on read → cache invalidated and rebuilt.
++ *
++ * Bump protocol: (...)
++ * Version history: (table)
++ */
++const CACHE_SCHEMA_VERSION = 3;
+```
+
+**Files:** `server/data-loader.js` (+22 LOC, all docstring; constant value unchanged).
+
+### E.2 — `cities.json` lacks a schema
+
+Original audit (E.2 in the same M3 doc) flagged that the 555-entry `data/cities.json` had no schema definition and no validation. A future contributor could add a malformed entry (wrong slug pattern, out-of-range coordinates, extra fields) and `frontend/city-announcer.js` would either silently misbehave or 404 on the `/audio/cities/{slug}.m4a` fetch.
+
+Two new files:
+
+- **`data/cities.schema.json`** — JSON Schema (draft-07) capturing the actual shape: array of objects with five required fields (`name`, `lat`, `lng`, `pop`, `slug`), no additional properties, lat/lng bounded to WGS84 ranges, integer population ≥ 1, slug constrained to `^[a-z0-9-]+$` (matching the M4A filename naming).
+- **`server/__tests__/cities-schema.test.js`** — Jest gate. Loads both files, runs a hand-rolled validator (the project's `npm-deps-no-add` rule rules out `ajv`), asserts zero violations against the live `cities.json`. Plus four self-tests (missing field, out-of-range coords, non-slug pattern, additionalProperties) that confirm the validator actually rejects bad inputs.
+
+The validator is a single recursive function (~80 LOC including the test cases) covering the JSON Schema subset this one schema actually uses: `type`, `required`, `properties`, `additionalProperties:false`, `minLength`, `pattern`, `minimum`, `maximum`, `minItems`, `items`. Anything beyond that we don't need; if a future schema does need more, extend the validator at that point.
+
+**Files:**
+- **Added** `data/cities.schema.json` — JSON Schema spec (~30 LOC).
+- **Added** `server/__tests__/cities-schema.test.js` — validator + 5 Jest cases (~140 LOC).
+
+### Verification
+
+`npm run lint` clean; `npm run format:check` clean; `npm test` 167 → **173** (5 new schema-validation cases); `npm run test:frontend` unchanged at 71; `npm run smoke:wire-format` ok. No production-code behavior change in D.1 (already a no-op); no production-code change at all in D.4 / E.2.
+
+### M3 audit status
+
+After this commit, three of the four "deferred to M5" items from the M4 P5-4 residual-debt list are closed:
+
+| Item | Status |
+| --- | --- |
+| C.4 — boot-time asset warnings reach frontend | still deferred (extends WS protocol — out of M5 scope per the proposal) |
+| D.1 — `_statsTimer` gate | ✅ closed here |
+| D.4 — `CACHE_SCHEMA_VERSION` changelog | ✅ closed here |
+| E.2 — `cities.json` schema | ✅ closed here |
 
 ---
 

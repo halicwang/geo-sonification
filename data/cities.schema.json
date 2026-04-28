@@ -1,0 +1,43 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://placeecho.com/schemas/cities.schema.json",
+    "title": "PlaceEcho cities database",
+    "description": "Pre-built city database loaded by frontend/city-announcer.js to drive the dwell-triggered TTS announcements. ~555 entries, population > 1M, sourced from GeoNames CC BY 4.0. The frontend does a linear-scan nearest-city lookup filtered to the current viewport bounding box, then fetches the matching frontend/audio/cities/{slug}.m4a clip. M5 stage 3 — closes M3 tech-debt audit E.2.",
+    "type": "array",
+    "minItems": 1,
+    "items": {
+        "type": "object",
+        "required": ["name", "lat", "lng", "pop", "slug"],
+        "additionalProperties": false,
+        "properties": {
+            "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Display name announced by the TTS clip (matches the {slug}.m4a content)."
+            },
+            "lat": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "Latitude in degrees (WGS84)."
+            },
+            "lng": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "Longitude in degrees (WGS84)."
+            },
+            "pop": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Population at the time of database build (GeoNames). Used to sort ties in the nearest-city scan and to gate against tiny localities sneaking in below the 1M threshold."
+            },
+            "slug": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+$",
+                "minLength": 1,
+                "description": "URL-safe identifier matching frontend/audio/cities/{slug}.m4a. Lowercase ASCII, digits, hyphens only — `name` is the spoken/displayed form, `slug` is the file lookup key."
+            }
+        }
+    }
+}

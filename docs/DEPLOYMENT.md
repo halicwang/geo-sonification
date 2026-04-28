@@ -70,8 +70,22 @@ scripts/build-pages.js ← generates dist/ for Pages (frontend/ + cities.json + 
 workers/geo-sonification-proxy/
   ├── worker.js        ← reverse-proxy source
   └── wrangler.toml    ← declares the two Workers Routes on placeecho.com
-server/                ← Node.js backend (runs on Fly)
+server/                ← Node.js backend (runs on Fly; bundled as one image)
+  ├── index.js         ← HTTP+WS bootstrap, single port
+  ├── routes.js        ← HTTP route handlers (/api/config, /api/viewport, /health)
+  ├── ws-handler.js    ← WebSocket message router + per-client fan-out
+  ├── viewport-processor.js, spatial.js, audio-metrics.js, landcover.js,
+  │   client-state.js, parse-bounds.js, normalize.js, data-loader.js,
+  │   config.js, load-env.js, types.js
+  │   (M4 razor refactor; see docs/ARCHITECTURE.md "Server subsystem")
 frontend/              ← static site (deployed to Pages)
+  ├── audio/           ← engine.js + context.js + buffer-cache.js +
+  │                      raf-loop.js + utils.js + constants.js
+  │                      (M4 P3 audio decomposition;
+  │                      see docs/ARCHITECTURE.md "Audio subsystem")
+  ├── audio-engine.js  ← re-export shim, scheduled for P5-4 deletion
+  └── main.js, map.js, websocket.js, ui.js, popup.js, progress.js,
+      city-announcer.js, landcover.js, config.js
 frontend/config.runtime.js  ← empty placeholder in repo; regenerated at build
 dist/                  ← gitignored build output (Pages deploy root)
 ```

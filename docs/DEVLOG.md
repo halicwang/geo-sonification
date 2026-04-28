@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-27 | Design     | [P5-2 ARCHITECTURE.md and DEPLOYMENT.md Refresh for M4 Subsystems](devlog/M4/2026-04-27-M4P5-2-architecture-and-deployment-refresh.md)                                                        |
 | 2026-04-27 | Feature    | [P5-1 rAF Idle Detection (Redo with Buffer-Load Wake)](devlog/M4/2026-04-27-M4-raf-idle-detection-redo.md)                                                                                    |
 | 2026-04-27 | Design     | [Revert P5-1 rAF Idle Detection — Caused Audio Dropout in Production](devlog/M4/2026-04-27-M4-revert-p5-1-raf-idle.md)                                                                        |
 | 2026-04-27 | Refactor   | [Merge `mode-manager.js` + `delta-state.js` into `client-state.js`](devlog/M4/2026-04-27-M4-merge-client-state.md)                                                                            |

@@ -4,8 +4,100 @@ This document describes the browser-based Web Audio engine.
 
 For the overall system architecture (Frontend → Server → Browser Audio), see `README.md`.
 For the **production deployment topology** (Cloudflare Pages + Worker + R2 + Fly.io), see [`DEPLOYMENT.md`](DEPLOYMENT.md).
-For the frontend module structure (8 ES modules: config, landcover, ui, map, websocket, audio-engine, city-announcer, main), see `docs/devlog/M2/2026-02-20-frontend-module-split.md` and `docs/devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-21-web-audio-migration.md`.
+For the original M2-era frontend module split (now superseded by the M4 audio subsystem extraction below), see `docs/devlog/M2/2026-02-20-frontend-module-split.md` and `docs/devlog/deprecated/2026-02-21-M3-open-platform-migration/2026-02-21-web-audio-migration.md`.
 For sound design rationale and task specs, see `docs/plans/M2/2026-02-19-M2-sound-design-plan.md`.
+
+---
+
+## Subsystems
+
+After the M4 razor refactor, both the audio engine (P3) and the server (P4)
+are decomposed into single-purpose modules. The two diagrams below show
+which file owns what, and which arrows are imports vs. WebSocket payloads.
+
+### Audio subsystem (`frontend/audio/`)
+
+```
+frontend/audio/
+├── engine.js              ← public surface
+│   │   start / stop / update / updateMotion / setVolume /
+│   │   duck / unduck / isRunning / getContext /
+│   │   getLoadingStates / getLoopProgress / seekLoop
+│   │
+│   │   Owns AudioContext lifecycle, the seven-bus voice graph
+│   │   (double-buffered swap loop), the swap timer, EMA targets,
+│   │   and the rAF loop. M4 P5-1: rAF self-suspends on
+│   │   `isEmaIdle(state, IDLE_THRESHOLD)`; wakes via update /
+│   │   updateMotion / visibilitychange / start's
+│   │   post-`bufferCache.loadAll()` arm.
+│   │
+│   ├──> context.js        createMasterChain(audioCtx, opts)
+│   │                      → { masterGain, duckGain,
+│   │                          lpFilter1/2/3, busGains[7] }
+│   │
+│   ├──> buffer-cache.js   createBufferCache({ busNames, assetBase,
+│   │                                          priorityFirst,
+│   │                                          prioritySecond,
+│   │                                          onAllLoaded, onUpdate })
+│   │                      → { loadAll, has, get, getLoadingStates,
+│   │                          cancelAndReset }. The `onAllLoaded`
+│   │                      callback fires `startAllSources()` and
+│   │                      its completion is the trigger for the
+│   │                      P5-1 buffer-load wake.
+│   │
+│   ├──> raf-loop.js       Pure EMA driver — no Web Audio deps,
+│   │                      unit-tested against synthetic dt
+│   │                      sequences. Exports createEmaState /
+│   │                      tickEma / snapEmaToTargets / resetEma /
+│   │                      isEmaIdle.
+│   │
+│   ├──> utils.js          clamp01 / equalPowerCurves
+│   └──> constants.js      timing τ, snap threshold, gain shaping
+│                          exponent, limiter coefficients,
+│                          bus preamp gain table
+│
+frontend/audio-engine.js   re-export shim, kept while call sites
+                           migrate. **Deleted in P5-4.**
+```
+
+### Server subsystem (`server/`)
+
+```
+server/
+├── index.js              ← HTTP+WS bootstrap (single port)
+│   │
+│   ├── boot ──> data-loader.js   Grid CSV → in-memory spatial index
+│   │             └─ uses normalize.js (p1/p99 percentile scaling,
+│   │                fingerprint-cached on disk)
+│   │
+│   ├── mounts ──> routes.js      createRouteHandlers(deps)
+│   │                             → /api/config, /api/viewport, /health
+│   │
+│   └── attaches ──> ws-handler.js  attachWsHandler(wss, deps)
+│                                   per-conn ping timer, msg routing,
+│                                   broadcast fan-out for multi-client
+│
+├── ws-handler.js         ← WebSocket message router
+│   ├── per-client state ──> client-state.js   mode + delta state
+│   │                                          (multiple viewports
+│   │                                          per server instance)
+│   └── viewport msg ──> viewport-processor.js bounds → stats +
+│                                              audioParams (single-
+│                                              entry bounds-keyed
+│                                              cache)
+│
+├── viewport-processor.js ← on cache miss, runs:
+│   ├── parse-bounds.js   bounds string parser (shared with routes.js)
+│   ├── spatial.js        single-pass bucket aggregator
+│   ├── landcover.js      LC class normalization (rounds invalid codes)
+│   └── audio-metrics.js  computeBusTargets (11 LC → 7 bus fold) +
+│                         computeProximityFromZoom
+│
+├── config.js             env var parsing (PORT, ALLOWED_ORIGINS, …)
+│   └── load-env.js       minimal `.env` file loader
+│
+└── types.js              shared JSDoc @typedef definitions
+```
 
 ---
 
@@ -14,24 +106,30 @@ For sound design rationale and task specs, see `docs/plans/M2/2026-02-19-M2-soun
 ```
 Frontend (Mapbox) ──WS──> Server (viewport bounds + zoom)
                            │
-                           ├── spatial.js (aggregate stats)
-                           ├── audio-metrics.js
-                           │     ├── computeBusTargets() — fold 11 LC → 7 buses
-                           │     └── computeProximityFromZoom() — zoom-based proximity
-                           ├── viewport-processor.js — attach audioParams to stats
+                           ├── ws-handler.js     — route 'viewport' message
+                           ├── viewport-processor.js — bounds-keyed cache lookup
+                           │     ├── spatial.js          — single-pass aggregate
+                           │     ├── landcover.js        — normalize LC codes
+                           │     └── audio-metrics.js
+                           │           ├── computeBusTargets() — fold 11 LC → 7 buses
+                           │           └── computeProximityFromZoom() — zoom → proximity
                            │
                       <──WS──  { type: 'stats', ..., audioParams }
                            │
-Frontend: audio-engine.js
+Frontend: audio/engine.js
   ├── engine.update(audioParams) — store bus/coverage/proximity targets
-  ├── engine.updateMotion(velocity) — client-side drag velocity (no server round-trip)
-  ├── requestAnimationFrame loop
-  │     ├── EMA smoothing (4 parallel signals, performance.now() timing)
+  │     (wakes rAF if it self-suspended after the previous convergence)
+  ├── engine.updateMotion(velocity) — client-side drag velocity, zero server round-trip
+  ├── requestAnimationFrame loop (audio/raf-loop.js drives EMAs)
+  │     ├── tickEma — 4 parallel signals, performance.now() timing
   │     ├── coverage-linear land/ocean mix → GainNode.gain
   │     ├── proximity → 3-stage LP filter cutoff (500 Hz–20 kHz)
-  │     └── velocity → lpFilter1 Q modulation
-  ├── AudioBufferSourceNode × 7 — double-buffered crossfade loop
-  └── visibilitychange — suspend/resume AudioContext
+  │     ├── velocity → lpFilter1 Q modulation
+  │     └── isEmaIdle ⇒ rafId = null, return  (P5-1 idle suspend)
+  ├── AudioBufferSourceNode × 7 (audio/buffer-cache.js fetched + decoded)
+  │     ├── double-buffered crossfade swap loop
+  │     └── onAllLoaded → startAllSources() → post-load startRaf() wake
+  └── visibilitychange — suspend/resume AudioContext + cancel/restart rAF
 ```
 
 ---
@@ -134,7 +232,19 @@ The engine exposes `getLoopProgress()` (returns `{ progress, cycleSeconds }`) an
 
 ## Idle Behavior
 
-If `update()` is not called (for example, map is stationary), the engine keeps the last smoothed bus values and continues loop playback. It does not auto-fade to silence on idle; suspension is only driven by explicit user stop or tab visibility changes.
+If `update()` is not called (for example, the map is stationary), the engine keeps the last smoothed bus values and continues loop playback. It does **not** auto-fade to silence on idle; audible suspension is only driven by explicit user stop or tab visibility changes.
+
+**rAF self-suspension (M4 P5-1).** The `requestAnimationFrame` callback that writes `gain.value` from the smoothed EMAs short-circuits itself when every channel is within `IDLE_THRESHOLD = 0.001` of its target. After that, no rAF tick is scheduled at all — pure CPU saving — until something wakes it. Five wake triggers cover every relevant transition:
+
+| Wake                                       | Why                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `update()`                                 | new server `audioParams` change a bus / coverage / proximity target                                                                                                                                                                                                                                                      |
+| `updateMotion()`                           | user drags the map; velocity target moves off zero                                                                                                                                                                                                                                                                       |
+| `handleVisibilityChange('visible')`        | tab returned; snap to current targets and resume                                                                                                                                                                                                                                                                         |
+| `start()` initial arm                      | first tick after the user clicks **Start audio**                                                                                                                                                                                                                                                                         |
+| `start()` post-`bufferCache.loadAll()` arm | buffers finished decoding while the rAF was suspended; without this wake the per-bus `gain.value` writes (gated on `bufferCache.has(i)`) would never happen and audio would be silent until the user touched the map. See `docs/devlog/M4/2026-04-27-M4-raf-idle-detection-redo.md` for the production race this closed. |
+
+Web Audio playback continues regardless of rAF state — `AudioParam.value` persists and the loop voices have already been scheduled. The rAF loop is purely a write-path for new EMA values; suspending it does not interrupt audio.
 
 ---
 
@@ -146,20 +256,23 @@ On `document.hidden`: cancel rAF, clear swap timer, and suspend `AudioContext`. 
 
 ## Timing Constants
 
-| Constant                       | Value   | Location        | Purpose                                     |
-| ------------------------------ | ------- | --------------- | ------------------------------------------- |
-| `SMOOTHING_TIME_MS`            | 500 ms  | audio-engine.js | EMA time constant (bus gains, coverage)     |
-| `PROXIMITY_SMOOTHING_MS`       | 120 ms  | audio-engine.js | Faster EMA for LP filter cutoff             |
-| `SNAP_THRESHOLD_MS`            | 2000 ms | audio-engine.js | Snap-to-target when dt too large            |
-| `VELOCITY_ATTACK_MS`           | 50 ms   | audio-engine.js | Velocity EMA attack (fast rise)             |
-| `VELOCITY_DECAY_MS`            | 600 ms  | audio-engine.js | Velocity EMA decay (slow fade)              |
-| `LOOP_OVERLAP_SECONDS`         | 1.875 s | audio-engine.js | Crossfade overlap between loop voices       |
-| `LOOP_START_LOOKAHEAD_SECONDS` | 0.05 s  | audio-engine.js | Initial source scheduling lookahead         |
-| `LOOP_TIMER_LOOKAHEAD_SECONDS` | 0.1 s   | audio-engine.js | JS wake-up before swap boundary             |
-| `GAIN_CURVE_EXPONENT`          | 0.6     | audio-engine.js | Power-curve shaping for perceptual contrast |
-| `BASE_Q1`                      | 0.5176  | audio-engine.js | lpFilter1 Q at rest (Butterworth)           |
-| `MAX_Q1`                       | 4.0     | audio-engine.js | lpFilter1 Q at max velocity                 |
-| `LAND_FULL_COVERAGE_THRESHOLD` | 0.4     | audio-engine.js | Coverage at which land mix reaches 100%     |
+| Constant                       | Value   | Location             | Purpose                                                         |
+| ------------------------------ | ------- | -------------------- | --------------------------------------------------------------- |
+| `SMOOTHING_TIME_MS`            | 500 ms  | `audio/constants.js` | EMA time constant (bus gains, coverage)                         |
+| `PROXIMITY_SMOOTHING_MS`       | 120 ms  | `audio/constants.js` | Faster EMA for LP filter cutoff                                 |
+| `SNAP_THRESHOLD_MS`            | 2000 ms | `audio/constants.js` | Snap-to-target when dt too large                                |
+| `VELOCITY_ATTACK_MS`           | 50 ms   | `audio/constants.js` | Velocity EMA attack (fast rise)                                 |
+| `VELOCITY_DECAY_MS`            | 600 ms  | `audio/constants.js` | Velocity EMA decay (slow fade)                                  |
+| `LOOP_OVERLAP_SECONDS`         | 1.875 s | `audio/constants.js` | Crossfade overlap between loop voices                           |
+| `LOOP_START_LOOKAHEAD_SECONDS` | 0.05 s  | `audio/constants.js` | Initial source scheduling lookahead                             |
+| `LOOP_TIMER_LOOKAHEAD_SECONDS` | 0.1 s   | `audio/constants.js` | JS wake-up before swap boundary                                 |
+| `GAIN_CURVE_EXPONENT`          | 0.6     | `audio/engine.js`    | Power-curve shaping for perceptual contrast                     |
+| `BASE_Q1`                      | 0.5176  | `audio/engine.js`    | lpFilter1 Q at rest (Butterworth)                               |
+| `MAX_Q1`                       | 4.0     | `audio/engine.js`    | lpFilter1 Q at max velocity                                     |
+| `LAND_FULL_COVERAGE_THRESHOLD` | 0.4     | `audio/engine.js`    | Coverage at which land mix reaches 100%                         |
+| `IDLE_THRESHOLD`               | 0.001   | `audio/engine.js`    | Per-channel `\|smoothed - target\|` for rAF self-suspend (P5-1) |
+
+EMA state and the `tickEma` / `isEmaIdle` helpers live in `audio/raf-loop.js` (pure functions, unit-tested in isolation). The audio engine imports them and is responsible for computing dt, calling `tickEma`, writing the snapshot to AudioParams, and re-arming or suspending rAF based on `isEmaIdle`.
 
 ---
 

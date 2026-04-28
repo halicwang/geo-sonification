@@ -2,7 +2,13 @@
 // Copyright (C) 2026 Zixiao Wang
 
 import { describe, it, expect } from 'vitest';
-import { createEmaState, tickEma, snapEmaToTargets, resetEma } from '../../audio/raf-loop.js';
+import {
+    createEmaState,
+    tickEma,
+    snapEmaToTargets,
+    resetEma,
+    isEmaIdle,
+} from '../../audio/raf-loop.js';
 
 const NUM_BUSES = 7;
 
@@ -141,6 +147,65 @@ describe('snapEmaToTargets', () => {
         snapEmaToTargets(s);
         expect(s.velocityTarget).toBe(0.8); // target untouched
         expect(s.velocitySmoothed).toBe(0); // smoothed reset
+    });
+});
+
+describe('isEmaIdle', () => {
+    const THRESHOLD = 0.001;
+
+    it('returns true for a fresh state (all targets equal smoothed)', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        expect(isEmaIdle(s, THRESHOLD)).toBe(true);
+    });
+
+    it('returns false when any single bus is above threshold', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.busTargets[3] = 0.5;
+        s.busSmoothed[3] = 0.4; // |0.5 - 0.4| = 0.1 > threshold
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('returns false when coverage is above threshold', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.coverageTarget = 0.5;
+        s.coverageSmoothed = 0.4;
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('returns false when proximity is above threshold', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.proximityTarget = 0.7;
+        s.proximitySmoothed = 0.6;
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('returns false when velocity is above threshold', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.velocityTarget = 0;
+        s.velocitySmoothed = 0.5; // mid-decay
+        expect(isEmaIdle(s, THRESHOLD)).toBe(false);
+    });
+
+    it('honors the threshold parameter (looser threshold → more idle)', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.busTargets[0] = 0.5;
+        s.busSmoothed[0] = 0.495; // gap = 0.005
+        expect(isEmaIdle(s, 0.001)).toBe(false); // strict
+        expect(isEmaIdle(s, 0.01)).toBe(true); // loose
+    });
+
+    it('returns true after 1000 ticks of constant target (post-convergence)', () => {
+        const s = createEmaState({ numBuses: NUM_BUSES });
+        s.busTargets[0] = 0.7;
+        s.busTargets[6] = 0.3;
+        s.coverageTarget = 0.5;
+        for (let k = 0; k < 1000; k++) {
+            tickEma(s, 16, OPTS);
+        }
+        // After 1000×16ms = 16s with τ=500ms, gap is ~e^(-32) ≈ 0 — well
+        // under any sane threshold. This is the convergence regime that
+        // triggers the engine's rAF idle suspend in production.
+        expect(isEmaIdle(s, THRESHOLD)).toBe(true);
     });
 });
 

@@ -136,6 +136,34 @@ export function snapEmaToTargets(state) {
 }
 
 /**
+ * Test whether every smoothed value is within `threshold` of its target.
+ * Used by the audio engine's rAF callback (M4 P5-1) to suspend the loop
+ * after EMA convergence — a tick that produces no observable change is
+ * pure overhead, so we skip it and re-arm rAF only when a target moves
+ * (or when buffers finish loading and the gain writes finally have
+ * something to flow into — see engine.js `start()`).
+ *
+ * Uniform threshold across all four EMAs (buses, coverage, proximity,
+ * velocity). The proposal's "velocity = 0" wording maps to the same
+ * `|smoothed - target| < threshold` check, since the engine sets
+ * `velocityTarget = 0` whenever the user stops dragging.
+ *
+ * @param {EmaState} state
+ * @param {number} threshold - max |smoothed - target| per channel
+ * @returns {boolean}
+ */
+export function isEmaIdle(state, threshold) {
+    const numBuses = state.busTargets.length;
+    for (let i = 0; i < numBuses; i++) {
+        if (Math.abs(state.busSmoothed[i] - state.busTargets[i]) > threshold) return false;
+    }
+    if (Math.abs(state.coverageSmoothed - state.coverageTarget) > threshold) return false;
+    if (Math.abs(state.proximitySmoothed - state.proximityTarget) > threshold) return false;
+    if (Math.abs(state.velocitySmoothed - state.velocityTarget) > threshold) return false;
+    return true;
+}
+
+/**
  * Zero out targets and smoothed values, with coverage held at 1.
  * Called at engine start() before the pendingParams replay so an old
  * session's state can't bleed into the new one (e.g. water bus loud →

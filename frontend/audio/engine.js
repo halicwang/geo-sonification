@@ -27,7 +27,7 @@ import { ASSET_BASE, getLoudnessNormEnabled } from '../config.js';
 import { clamp01, equalPowerCurves } from './utils.js';
 import { createMasterChain } from './context.js';
 import { createBufferCache } from './buffer-cache.js';
-import { createEmaState, tickEma, snapEmaToTargets, resetEma } from './raf-loop.js';
+import { createEmaState, tickEma, snapEmaToTargets, resetEma, isEmaIdle } from './raf-loop.js';
 import {
     SMOOTHING_TIME_MS,
     PROXIMITY_SMOOTHING_MS,
@@ -171,6 +171,17 @@ const EMA_TICK_OPTS = Object.freeze({
     velocityAttackMs: VELOCITY_ATTACK_MS,
     velocityDecayMs: VELOCITY_DECAY_MS,
 });
+
+/**
+ * Per-channel `|smoothed - target|` tolerance below which a tick is treated
+ * as fully converged. The rAF callback suspends itself when every EMA
+ * channel is under this threshold (M4 P5-1; M3 audit B.6 fix). Wakes via
+ * `update()`, `updateMotion()`, `handleVisibilityChange()`, and the
+ * post-`bufferCache.loadAll()` arm in `start()` (the missing path that
+ * caused the original P5-1 to dropout silently — see devlog
+ * 2026-04-27-M4-raf-idle-detection-redo.md).
+ */
+const IDLE_THRESHOLD = 0.001;
 
 // ── Timing ──
 let lastEmaTime = 0;
@@ -539,6 +550,11 @@ function update(audioParams) {
     if (typeof audioParams.proximity === 'number') {
         ema.proximityTarget = clamp01(audioParams.proximity);
     }
+
+    // Wake rAF if it suspended itself after the last convergence (P5-1).
+    // No-op when already running. One frame of overhead at most if the new
+    // targets equal the smoothed values — the next idle check re-suspends.
+    startRaf();
 }
 
 /**
@@ -550,6 +566,9 @@ function update(audioParams) {
  */
 function updateMotion(velocity, _latitude) {
     ema.velocityTarget = clamp01(velocity);
+    // Wake rAF — see update() comment. Required when a drag starts after
+    // the loop suspended itself; otherwise the EMA wouldn't advance.
+    startRaf();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -603,11 +622,36 @@ function rafLoop() {
         }
     }
 
+    // Idle suspend: every EMA has converged within IDLE_THRESHOLD of its
+    // target, so a continued rAF tick would re-write identical AudioParam
+    // values — pure waste. Suspend `requestAnimationFrame` until update()
+    // / updateMotion() / handleVisibilityChange() / startAllSources()
+    // wakes us. The startAllSources wake (re-armed via start()'s
+    // post-loadAll startRaf) is what kept the original P5-1 from working:
+    // without it, a fresh-load convergence-before-buffers race left the
+    // gain.value writes gated out forever.
+    if (isEmaIdle(ema, IDLE_THRESHOLD)) {
+        rafId = null;
+        return;
+    }
+
     rafId = requestAnimationFrame(rafLoop);
 }
 
 function startRaf() {
+    // Skip wake when the engine has no work to do. Without this guard,
+    // updateMotion() called before start() (e.g. user drags map before
+    // clicking Start audio) would schedule a rafLoop that early-returns
+    // on `!audioCtx`, leaving rafId pointing to a stale handle — then
+    // start()'s own startRaf() would no-op on `rafId !== null` and the
+    // engine would never tick. Same hazard for calls after stop().
+    if (!audioCtx || suspended) return;
     if (rafId !== null) return;
+    // First tick after wake should compute a normal-sized dt — without this
+    // reset, a long-suspended loop would cross snapThresholdMs on the first
+    // post-wake tick and snap busSmoothed to busTargets, bypassing the
+    // gradual convergence the user expects after a viewport change.
+    lastEmaTime = performance.now();
     rafId = requestAnimationFrame(rafLoop);
 }
 
@@ -731,6 +775,18 @@ async function start() {
     startRaf();
 
     await bufferCache.loadAll(audioCtx);
+
+    // Wake rAF after buffers finish loading. While loadAll() was awaiting,
+    // EMAs may have converged within IDLE_THRESHOLD and the rAF callback
+    // suspended itself — but bufferCache.has(i) was still false, so the
+    // per-bus gain.value writes never happened. By the time we reach this
+    // line, onAllLoaded → startAllSources() has already connected sources
+    // to busGains, so a single wake tick will write the converged
+    // gain.value through and audio becomes audible. Without this line,
+    // gain.value stays at the initial 0 forever and the seven ambience
+    // buses are silent until the user moves the map (the production bug
+    // the original P5-1 hit; see devlog 2026-04-27-M4-revert-p5-1-raf-idle).
+    startRaf();
 }
 
 /**

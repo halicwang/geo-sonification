@@ -2,8 +2,9 @@
  * Geo-Sonification UI
  *
  * Layout: full-screen Mapbox map + floating info panel (top-right).
- * Color scheme: pure black background to match the mapbox dark-v10 basemap
- * (forced to an all-black background by applyMinimalBasemap in map.js).
+ * Color scheme: pure black background — matches the inline minimal
+ * basemap style configured in map.js (single black background layer,
+ * no source/sprite/glyphs fetches).
  */
 
 /* ============ Theme Variables ============ */

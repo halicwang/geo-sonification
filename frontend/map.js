@@ -93,24 +93,6 @@ async function addGridLayer() {
     });
 }
 
-/**
- * Paint every non-background layer transparent and force the background
- * to pure black. Combined with dark-v10, this keeps the globe view focused
- * on the dot overlay without extra basemap clutter.
- */
-function applyMinimalBasemap() {
-    const map = state.runtime.map;
-    const layers = map.getStyle().layers || [];
-
-    for (const layer of layers) {
-        if (layer.type === 'background') {
-            map.setPaintProperty(layer.id, 'background-color', '#000');
-        } else {
-            map.setLayoutProperty(layer.id, 'visibility', 'none');
-        }
-    }
-}
-
 // ============ Viewport ============
 
 /** Return current map viewport as [west, south, east, north]. */
@@ -249,11 +231,27 @@ export async function refreshServerConfig() {
 export function initMap() {
     mapboxgl.accessToken = state.config.mapboxToken;
 
-    // Keep the globe view, but use a static v8 style to avoid dark-v11
-    // imports changing the layer stack after our overlay is added.
+    // Inline minimal v8 style — single black background layer, no
+    // sources/sprite/glyphs. Used to be 'mapbox://styles/mapbox/dark-v10'
+    // immediately stripped to black by an applyMinimalBasemap pass on
+    // style.load, but the dark-v10 fetch left a visible navy-blue
+    // (#08111f) flash on cold loads while the style.json + sprite were
+    // in flight. Inlining removes the CDN round-trip and renders a
+    // black canvas from the very first frame; the dot overlay layer is
+    // added in our own style.load handler below.
     state.runtime.map = new mapboxgl.Map({
         container: 'map',
-        style: 'mapbox://styles/mapbox/dark-v10',
+        style: {
+            version: 8,
+            sources: {},
+            layers: [
+                {
+                    id: 'background',
+                    type: 'background',
+                    paint: { 'background-color': '#000' },
+                },
+            ],
+        },
         projection: 'globe',
         center: [-55, -10], // Amazon region
         zoom: 4,
@@ -264,15 +262,16 @@ export function initMap() {
     state.runtime.map.addControl(new mapboxgl.NavigationControl(), 'top-left');
     state.runtime.map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
 
-    // Using 'style.load' rather than 'load' — dark-v10 is a v8 style, but
-    // keeping 'style.load' keeps the setup path generic.
+    // Using 'style.load' rather than 'load' — keeps the setup path
+    // generic in case the inline style is ever swapped for a remote one.
     let setupDone = false;
     state.runtime.map.on('style.load', async () => {
         if (setupDone) return;
         setupDone = true;
 
-        applyMinimalBasemap();
-
+        // Disable globe projection's default atmosphere/fog. The inline
+        // style has no fog config, but globe adds its own halo unless
+        // we explicitly null it.
         state.runtime.map.setFog(null);
 
         // Mapbox's globe projection renders the circle layer as pitch

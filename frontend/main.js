@@ -144,6 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.matchMedia('(max-width: 600px)').matches) {
         state.els.infoPanel.classList.add('hidden');
         state.els.panelToggle.classList.remove('open');
+        state.els.panelToggle.setAttribute('aria-expanded', 'false');
     }
 
     // ── Audio toggle button ──

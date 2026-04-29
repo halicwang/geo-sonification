@@ -44,13 +44,14 @@ function makeNode(extra = {}) {
     return node;
 }
 
-function makeBuffer({ numberOfChannels = 2, length = 44100, sampleRate = 48000 } = {}) {
+function makeBuffer({ numberOfChannels = 2, length, sampleRate = 48000 } = {}) {
+    const resolvedLength = length ?? sampleRate * 4;
     return {
         numberOfChannels,
-        length,
+        length: resolvedLength,
         sampleRate,
-        duration: length / sampleRate,
-        getChannelData: vi.fn(() => new Float32Array(length)),
+        duration: resolvedLength / sampleRate,
+        getChannelData: vi.fn(() => new Float32Array(resolvedLength)),
         copyFromChannel: vi.fn(),
         copyToChannel: vi.fn(),
     };

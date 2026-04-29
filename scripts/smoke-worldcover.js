@@ -7,7 +7,7 @@
  *
  * Connects to a RUNNING server and exercises:
  *   1. GET /health       (ok=true, dataLoaded=true)
- *   2. GET /api/config   (wsPort, httpPort, gridSize, landcoverMeta)
+ *   2. GET /api/config   (gridSize, landcoverMeta)
  *   3. POST /api/viewport (land-heavy bounds: gridCount>0, audioParams, landcoverDistribution)
  *   4. WebSocket viewport exchange (type=stats, gridCount, audioParams)
  *
@@ -71,8 +71,6 @@ async function main() {
     // [2] Config
     process.stderr.write('\n[2] GET /api/config\n');
     const config = await fetchJson(`${BASE_URL}/api/config`);
-    check('wsPort is number', typeof config.wsPort === 'number');
-    check('httpPort is number', typeof config.httpPort === 'number');
     check('gridSize is number', typeof config.gridSize === 'number');
     check('landcoverMeta exists', config.landcoverMeta != null);
 

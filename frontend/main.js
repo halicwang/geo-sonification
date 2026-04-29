@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function togglePanel() {
         const hidden = state.els.infoPanel.classList.toggle('hidden');
         state.els.panelToggle.classList.toggle('open', !hidden);
+        state.els.panelToggle.setAttribute('aria-expanded', String(!hidden));
     }
     state.els.panelToggle.addEventListener('click', togglePanel);
 

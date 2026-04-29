@@ -60,6 +60,8 @@
                 id="panel-toggle"
                 class="floating-btn panel-toggle-btn"
                 aria-label="Toggle panel"
+                aria-controls="info-panel"
+                aria-expanded="true"
             >
                 <span class="hamburger-bar"></span>
                 <span class="hamburger-bar"></span>
@@ -164,6 +166,7 @@
         <script>
             if (window.matchMedia('(max-width: 600px)').matches) {
                 document.getElementById('info-panel').classList.add('hidden');
+                document.getElementById('panel-toggle').setAttribute('aria-expanded', 'false');
             }
         </script>
 

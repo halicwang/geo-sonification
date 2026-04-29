@@ -331,3 +331,23 @@ DevTools mobile 375 × 812: computed `brand-mark margin-bottom` is back to `6 px
 
 - **Modified** `frontend/style.css` — deleted three `@media (max-width: 600px)` rules.
 - **Modified** `docs/devlog/2026-04-28-mobile-bottom-sheet.md` — this section.
+
+---
+
+## Iteration 5 — a11y: aria-expanded on the hamburger toggle
+
+Surfaced during a post-merge self-audit pass. The hamburger button (`#panel-toggle`) toggles the info panel between visible / hidden but didn't carry any ARIA state, so screen readers couldn't announce the expanded / collapsed transition. Audio-toggle button already had `aria-pressed`; sheet-handle had `aria-label`. The hamburger was the only interactive control without an ARIA state attribute.
+
+### Fix
+
+- `frontend/index.html`: add `aria-controls="info-panel"` and `aria-expanded="true"` to the `#panel-toggle` button (desktop default — panel visible).
+- `frontend/index.html`: inline boot script now also calls `setAttribute('aria-expanded', 'false')` when it detects mobile + applies the initial collapse.
+- `frontend/main.js`: `togglePanel()` updates `aria-expanded` to match the new visibility state every time the panel flips.
+
+Three edits, no JS contract change. Net 4 LOC.
+
+### Files
+
+- **Modified** `frontend/index.html` — 2 attributes added + 1 line in inline boot script.
+- **Modified** `frontend/main.js` — 1 line in `togglePanel()`.
+- **Modified** `docs/devlog/2026-04-28-mobile-bottom-sheet.md` — this section.

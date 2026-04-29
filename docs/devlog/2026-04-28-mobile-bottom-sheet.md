@@ -237,3 +237,58 @@ Gates: lint clean, format clean, vitest **71 → 79** (+8 sheet-drag cases), smo
 - **Added** `frontend/__tests__/sheet-drag.test.js` — 8 vitest cases (~160 LOC).
 - **Modified** `frontend/main.js` — import + `attachSheetDrag` wiring (3 LOC net).
 - **Modified** `docs/devlog/2026-04-28-mobile-bottom-sheet.md` — this iteration section.
+
+---
+
+## Iteration 3 — fix the boot-time flash-of-visible-then-jumps-down
+
+User feedback after iteration 2: "怎么第一次启动的时候,能清晰目视到一个页面从上面往下蹦下去?"
+
+### Diagnosis
+
+The mobile-collapsed-by-default behavior was being applied by `main.js` inside DOMContentLoaded:
+
+```js
+if (window.matchMedia('(max-width: 600px)').matches) {
+    state.els.infoPanel.classList.add('hidden');
+}
+```
+
+`main.js` is a deferred ES module — it runs **after** the browser has already parsed the HTML, applied CSS, performed layout, and painted the first frame. Sequence on first mobile load:
+
+1. HTML + CSS parsed → panel computed at default mobile position (visible at bottom).
+2. Browser performs first layout → panel laid out at `bottom: 12 px, left: 12 px, right: 12 px`, fully visible.
+3. Browser paints → user sees the panel rendered in expanded state.
+4. (~100–300 ms later, depending on device speed) DOMContentLoaded fires → `main.js` runs → adds `.hidden` → CSS transition fires → 280 ms slide-off animation plays.
+
+Total visible time: 400–600 ms of "panel briefly here" + an animated slide-down. That's the "蹦下去" the user saw.
+
+### Fix
+
+Add a small **inline `<script>` in the body, immediately after the panel element**:
+
+```html
+<div id="info-panel">…</div>
+<script>
+    if (window.matchMedia('(max-width: 600px)').matches) {
+        document.getElementById('info-panel').classList.add('hidden');
+    }
+</script>
+```
+
+Inline scripts (no `type="module"`, no `async`/`defer`) execute **synchronously during HTML parsing**, before the browser performs any layout / paint. By the time the first paint happens, `#info-panel` already carries `.hidden` and CSS computes its translate at the off-screen position. The transition property is set, but no transition fires because the property never changed — the panel was created at its final off-screen state in one step.
+
+`main.js`'s `matchMedia` check still runs later and re-applies `.hidden` idempotently, so a hotfix that removes the inline script can't strand the panel mistakenly visible.
+
+### Verification
+
+DevTools mobile 375 × 812, hard reload + screenshot taken at first frame after CSS load: full-screen globe, no panel visible, only the top-right ▶ + ≡ buttons and the zoom controls. No flash. ✅
+
+After the boot-collapse, tapping ≡ to expand still triggers the normal 280 ms slide-up transition (verified live: mid-transition transform was `translateY(57px)`, fully expanded was `translateY(0)`). The inline script doesn't break the toggle path. ✅
+
+### Iteration 3 files
+
+- **Modified** `frontend/index.html` — added 5-line inline `<script>` after `#info-panel` close tag.
+- **Modified** `docs/devlog/2026-04-28-mobile-bottom-sheet.md` — this iteration section.
+
+The redundant `matchMedia` check in `main.js` is **kept on purpose** for defense in depth — the inline script can vanish through a future HTML rewrite, and the JS-side check survives that.

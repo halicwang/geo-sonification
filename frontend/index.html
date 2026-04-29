@@ -150,6 +150,23 @@
             <div id="copyright-footer">&copy; 2026 PlaceEcho. All rights reserved.</div>
         </div>
 
+        <!-- Boot-time bottom-sheet collapse on mobile.
+             Runs synchronously during HTML parse — by the time the
+             browser performs first layout / paint, the .hidden class
+             is already on #info-panel, so the panel paints directly
+             at its off-screen position. Without this, main.js (a
+             deferred module) only adds .hidden after DOMContentLoaded,
+             which leaves the panel visible for ~100–300 ms and then
+             plays the 280 ms slide-off transition — the user sees the
+             panel flash visible then "蹦下去". main.js still runs the
+             same matchMedia check (idempotent) so a hotfix to this
+             inline script can't strand the panel mistakenly visible. -->
+        <script>
+            if (window.matchMedia('(max-width: 600px)').matches) {
+                document.getElementById('info-panel').classList.add('hidden');
+            }
+        </script>
+
         <!-- Toast: temporary notifications (e.g. connection errors) -->
         <div id="toast" class="toast hidden"></div>
 

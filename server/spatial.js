@@ -201,7 +201,14 @@ function queryGridsInBounds(bounds) {
 /**
  * Assemble the stats object returned to the frontend.
  *
- * @param {{ dominantLandcover?: number|null, nightlightNorm?: number, populationNorm?: number, forestNorm?: number, avgForestPct?: number, avgPopulationDensity?: number, avgNightlightMean?: number, avgNightlightP90?: number, gridCount?: number, lcCounts?: Object<string, number>, displayItems?: import('./types').LandcoverBreakdownItem[] }} params
+ * Numeric fields are required — every caller produces them via
+ * `n>0 ? avg : 0` ternaries or initializes to 0, so they always
+ * arrive finite. `lcCounts` and `displayItems` are optional because
+ * the area-weighted early-return path (when `validLandcoverWeight <= 0`)
+ * intentionally omits them; the `?? {}` / `?? []` fallback materializes
+ * an empty distribution for the WebSocket schema.
+ *
+ * @param {{ dominantLandcover: number|null, nightlightNorm: number, populationNorm: number, forestNorm: number, avgForestPct: number, avgPopulationDensity: number, avgNightlightMean: number, avgNightlightP90: number, gridCount: number, lcCounts?: Object<string, number>, displayItems?: import('./types').LandcoverBreakdownItem[] }} params
  * @returns {import('./types').ViewportStats}
  */
 function buildStatsResult({
@@ -219,14 +226,14 @@ function buildStatsResult({
 }) {
     return {
         dominantLandcover,
-        nightlightNorm: nightlightNorm ?? 0,
-        populationNorm: populationNorm ?? 0,
-        forestNorm: forestNorm ?? 0,
-        avgForestPct: avgForestPct ?? 0,
-        avgPopulationDensity: avgPopulationDensity ?? 0,
-        avgNightlightMean: avgNightlightMean ?? 0,
-        avgNightlightP90: avgNightlightP90 ?? 0,
-        gridCount: gridCount ?? 0,
+        nightlightNorm,
+        populationNorm,
+        forestNorm,
+        avgForestPct,
+        avgPopulationDensity,
+        avgNightlightMean,
+        avgNightlightP90,
+        gridCount,
         landcoverDistribution: lcCounts ?? {},
         landcoverBreakdown: displayItems ?? [],
     };
@@ -240,7 +247,18 @@ function buildStatsResult({
  * @returns {import('./types').ViewportStats}
  */
 function emptyStats(gridCount = 0) {
-    return buildStatsResult({ dominantLandcover: 80, gridCount, lcCounts: { 80: 1 } });
+    return buildStatsResult({
+        dominantLandcover: 80,
+        nightlightNorm: 0,
+        populationNorm: 0,
+        forestNorm: 0,
+        avgForestPct: 0,
+        avgPopulationDensity: 0,
+        avgNightlightMean: 0,
+        avgNightlightP90: 0,
+        gridCount,
+        lcCounts: { 80: 1 },
+    });
 }
 
 /**

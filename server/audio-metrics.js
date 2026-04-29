@@ -22,15 +22,6 @@ function clamp01(value) {
 }
 
 /**
- * Return the value if finite, otherwise 0.
- * @param {number} value
- * @returns {number}
- */
-function finiteOrZero(value) {
-    return Number.isFinite(value) ? value : 0;
-}
-
-/**
  * Convert weighted-area landcover distribution into normalized 0-1 fractions
  * matching the canonical LC class order.
  *
@@ -39,11 +30,16 @@ function finiteOrZero(value) {
  */
 function getLcFractionsFromDistribution(distribution) {
     const dist = distribution || {};
-    const totalWeight = LC_CLASS_ORDER.reduce((sum, cls) => sum + finiteOrZero(dist[cls]), 0);
+    const totalWeight = LC_CLASS_ORDER.reduce(
+        (sum, cls) => sum + (Number.isFinite(dist[cls]) ? dist[cls] : 0),
+        0
+    );
     if (totalWeight <= 0) {
         return LC_CLASS_ORDER.map(() => 0);
     }
-    return LC_CLASS_ORDER.map((cls) => clamp01(finiteOrZero(dist[cls]) / totalWeight));
+    return LC_CLASS_ORDER.map((cls) =>
+        clamp01((Number.isFinite(dist[cls]) ? dist[cls] : 0) / totalWeight)
+    );
 }
 
 /**
@@ -99,12 +95,13 @@ function computeProximityFromZoom(zoom, zoomLow, zoomHigh) {
 
 /**
  * Normalize a values array to length-11 clamped [0,1].
+ * Caller must pass an array; non-array inputs are a contract violation.
  * @param {number[]} values
  * @returns {number[]}
  */
 function normalizeLcArray(values) {
     return LC_CLASS_ORDER.map((_, index) =>
-        clamp01(Array.isArray(values) ? finiteOrZero(values[index]) : 0)
+        clamp01(Number.isFinite(values[index]) ? values[index] : 0)
     );
 }
 
@@ -181,13 +178,13 @@ const BUS_LC_INDICES = Object.freeze([
  * @returns {number[]} length-7 array [forest, shrub, grass, crop, urban, bare, water]
  */
 function computeBusTargets(lcFractions) {
-    const f = Array.isArray(lcFractions) ? lcFractions : [];
-    const safeVal = (i) => {
-        const v = f[i];
-        return Number.isFinite(v) ? v : 0;
-    };
     return BUS_LC_INDICES.map((indices) =>
-        clamp01(indices.reduce((sum, i) => sum + safeVal(i), 0))
+        clamp01(
+            indices.reduce(
+                (sum, i) => sum + (Number.isFinite(lcFractions[i]) ? lcFractions[i] : 0),
+                0
+            )
+        )
     );
 }
 

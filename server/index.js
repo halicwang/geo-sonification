@@ -52,6 +52,16 @@ let wssServer = null;
 // ============ Runtime Monitoring ============
 let _statsCounter = { viewports: 0, totalMs: 0 };
 const STATS_LOG_INTERVAL_MS = 30000;
+
+// Shared closures over module-scope state. `attachRoutes` and `attachWsHandler`
+// both need read access to `dataLoaded` and write access to `_statsCounter`;
+// passing the same references avoids duplicating the lambdas at each call site.
+const getDataLoaded = () => dataLoaded;
+const incrementStats = (elapsedMs) => {
+    _statsCounter.viewports++;
+    _statsCounter.totalMs += elapsedMs;
+};
+
 const _statsTimer = setInterval(() => {
     // Skip while CSV ingestion is still running. The inner counter
     // guard already produces no log under this condition (no viewports
@@ -198,13 +208,7 @@ app.use('/data', express.static(path.join(__dirname, '../data'), { extensions: [
 // Implementation is in `./routes`; deps that depend on this file's mutable
 // state (dataLoaded flag, stats counter) are passed in as closures so the
 // routes module never has to require './index'.
-attachRoutes(app, {
-    getDataLoaded: () => dataLoaded,
-    incrementStats: (elapsedMs) => {
-        _statsCounter.viewports++;
-        _statsCounter.totalMs += elapsedMs;
-    },
-});
+attachRoutes(app, { getDataLoaded, incrementStats });
 
 // ============ Startup ============
 
@@ -235,13 +239,7 @@ async function startServer() {
             console.error('WebSocket server error:', err);
         });
 
-        attachWsHandler(wss, {
-            getDataLoaded: () => dataLoaded,
-            incrementStats: (elapsedMs) => {
-                _statsCounter.viewports++;
-                _statsCounter.totalMs += elapsedMs;
-            },
-        });
+        attachWsHandler(wss, { getDataLoaded, incrementStats });
 
         console.log(`
 ======================================

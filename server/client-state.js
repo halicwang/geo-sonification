@@ -136,24 +136,20 @@ function applyHysteresis(state, gridCount) {
 // ============ HTTP Client Key ============
 
 /**
- * Validate and trim a client ID value. Handles arrays (e.g. repeated headers)
- * by recursing into the first valid element.
+ * Validate and trim a client ID value. Accepts a string or an array of
+ * candidates (e.g. a `body.clientId` JSON array); returns the first
+ * non-empty trimmed string of length <= 128, or '' if none qualify.
  * @param {*} value
  * @returns {string} Trimmed ID, or empty string if invalid
  */
 function normalizeClientId(value) {
-    if (Array.isArray(value)) {
-        for (const item of value) {
-            const normalized = normalizeClientId(item);
-            if (normalized) {
-                return normalized;
-            }
-        }
-        return '';
+    const candidates = Array.isArray(value) ? value : [value];
+    for (const c of candidates) {
+        if (typeof c !== 'string') continue;
+        const trimmed = c.trim();
+        if (trimmed.length > 0 && trimmed.length <= 128) return trimmed;
     }
-    if (typeof value !== 'string') return '';
-    const trimmed = value.trim();
-    return trimmed.length > 0 && trimmed.length <= 128 ? trimmed : '';
+    return '';
 }
 
 /**

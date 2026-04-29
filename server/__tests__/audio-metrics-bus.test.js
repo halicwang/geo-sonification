@@ -125,10 +125,6 @@ describe('computeBusTargets', () => {
         expect(result[6]).toBeCloseTo(0.2, 6); // water
     });
 
-    test('handles null input', () => {
-        expect(computeBusTargets(null)).toEqual([0, 0, 0, 0, 0, 0, 0]);
-    });
-
     test('handles empty array', () => {
         expect(computeBusTargets([])).toEqual([0, 0, 0, 0, 0, 0, 0]);
     });

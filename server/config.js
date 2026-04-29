@@ -26,18 +26,17 @@ function readEnv(name) {
 
 /**
  * Parse an env var as a valid TCP/UDP port (1-65535), exit on invalid.
- * @param {string} envVar - Environment variable name
+ * @param {string} envVar - Environment variable name (also used in error messages)
  * @param {number} defaultPort - Fallback value
- * @param {string} name - Display name for error messages
  * @returns {number}
  */
-function parsePort(envVar, defaultPort, name) {
+function parsePort(envVar, defaultPort) {
     const value = readEnv(envVar);
     if (value === undefined) return defaultPort;
     const port = parseInt(value, 10);
     if (isNaN(port) || port < 1 || port > 65535) {
         console.error(
-            `ERROR: Invalid ${name} port "${value}". Must be a number between 1 and 65535.`
+            `ERROR: Invalid ${envVar} port "${value}". Must be a number between 1 and 65535.`
         );
         process.exit(1);
     }
@@ -46,17 +45,16 @@ function parsePort(envVar, defaultPort, name) {
 
 /**
  * Parse an env var as a non-negative float, exit on invalid.
- * @param {string} envVar - Environment variable name
+ * @param {string} envVar - Environment variable name (also used in error messages)
  * @param {number} defaultValue - Fallback value
- * @param {string} name - Display name for error messages
  * @returns {number}
  */
-function parseNonNegativeFloat(envVar, defaultValue, name) {
+function parseNonNegativeFloat(envVar, defaultValue) {
     const value = readEnv(envVar);
     if (value === undefined) return defaultValue;
     const parsed = Number.parseFloat(value);
     if (!Number.isFinite(parsed) || parsed < 0) {
-        console.error(`ERROR: Invalid ${name} "${value}". Must be a non-negative number.`);
+        console.error(`ERROR: Invalid ${envVar} "${value}". Must be a non-negative number.`);
         process.exit(1);
     }
     return parsed;
@@ -64,17 +62,16 @@ function parseNonNegativeFloat(envVar, defaultValue, name) {
 
 /**
  * Parse an env var as a non-negative integer, exit on invalid.
- * @param {string} envVar - Environment variable name
+ * @param {string} envVar - Environment variable name (also used in error messages)
  * @param {number} defaultValue - Fallback value
- * @param {string} name - Display name for error messages
  * @returns {number}
  */
-function parseNonNegativeInt(envVar, defaultValue, name) {
+function parseNonNegativeInt(envVar, defaultValue) {
     const value = readEnv(envVar);
     if (value === undefined) return defaultValue;
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed < 0) {
-        console.error(`ERROR: Invalid ${name} "${value}". Must be a non-negative integer.`);
+        console.error(`ERROR: Invalid ${envVar} "${value}". Must be a non-negative integer.`);
         process.exit(1);
     }
     return parsed;
@@ -88,9 +85,7 @@ function parseNonNegativeInt(envVar, defaultValue, name) {
 // `HTTP_PORT` is accepted as a legacy alias for existing local dev setups.
 
 const HTTP_PORT =
-    readEnv('PORT') !== undefined
-        ? parsePort('PORT', 3000, 'PORT')
-        : parsePort('HTTP_PORT', 3000, 'HTTP');
+    readEnv('PORT') !== undefined ? parsePort('PORT', 3000) : parsePort('HTTP_PORT', 3000);
 
 // ---- Aggregation ----
 // Two modes: "legacy" (simple grid-count average) vs "v2_area_weighted" (land-area weighted).
@@ -105,13 +100,9 @@ const AGGREGATION_VERSION = USE_LEGACY_AGGREGATION ? 'legacy' : 'v2_area_weighte
 const LAND_FRACTION_WEIGHT_MODE = String(
     process.env.LAND_FRACTION_WEIGHT_MODE || 'identity'
 ).toLowerCase();
-const LAND_FRACTION_WEIGHT_EXP = parseNonNegativeFloat(
-    'LAND_FRACTION_WEIGHT_EXP',
-    1,
-    'LAND_FRACTION_WEIGHT_EXP'
-);
+const LAND_FRACTION_WEIGHT_EXP = parseNonNegativeFloat('LAND_FRACTION_WEIGHT_EXP', 1);
 // Skip cells with less land than this threshold (km2) during aggregation only.
-const MIN_LAND_AREA_KM2 = parseNonNegativeFloat('MIN_LAND_AREA_KM2', 0, 'MIN_LAND_AREA_KM2');
+const MIN_LAND_AREA_KM2 = parseNonNegativeFloat('MIN_LAND_AREA_KM2', 0);
 
 const LAND_FRACTION_WEIGHT_MODES = new Set(['identity', 'linear', 'sqrt', 'pow']);
 if (!LAND_FRACTION_WEIGHT_MODES.has(LAND_FRACTION_WEIGHT_MODE)) {
@@ -199,23 +190,10 @@ console.log(`[Grid] GRID_SIZE=${GRID_SIZE}° (${LON_BUCKETS}x${LAT_BUCKETS} buck
 // Two thresholds prevent rapid mode flipping at the boundary:
 //   - ENTER: switch from aggregated -> per-grid when gridCount <= this
 //   - EXIT:  switch from per-grid -> aggregated when gridCount > this
-// Configure via explicit ENTER/EXIT or via center + half-width.
-const PER_GRID_THRESHOLD_CENTER = parseNonNegativeInt(
-    'PER_GRID_THRESHOLD',
-    50,
-    'PER_GRID_THRESHOLD'
-);
-const PER_GRID_HYSTERESIS = parseNonNegativeInt('PER_GRID_HYSTERESIS', 0, 'PER_GRID_HYSTERESIS');
-
-const PER_GRID_THRESHOLD_ENTER =
-    readEnv('PER_GRID_THRESHOLD_ENTER') !== undefined
-        ? parseNonNegativeInt('PER_GRID_THRESHOLD_ENTER', 0, 'PER_GRID_THRESHOLD_ENTER')
-        : Math.max(0, PER_GRID_THRESHOLD_CENTER - PER_GRID_HYSTERESIS);
-
-const PER_GRID_THRESHOLD_EXIT =
-    readEnv('PER_GRID_THRESHOLD_EXIT') !== undefined
-        ? parseNonNegativeInt('PER_GRID_THRESHOLD_EXIT', 0, 'PER_GRID_THRESHOLD_EXIT')
-        : PER_GRID_THRESHOLD_CENTER + PER_GRID_HYSTERESIS;
+// Defaults coincide (both 50) for hysteresis-free switching; set them
+// apart to introduce a dead band (e.g. ENTER=40, EXIT=60).
+const PER_GRID_THRESHOLD_ENTER = parseNonNegativeInt('PER_GRID_THRESHOLD_ENTER', 50);
+const PER_GRID_THRESHOLD_EXIT = parseNonNegativeInt('PER_GRID_THRESHOLD_EXIT', 50);
 
 if (PER_GRID_THRESHOLD_ENTER > PER_GRID_THRESHOLD_EXIT) {
     console.error(
@@ -233,8 +211,8 @@ console.log(
 //   zoom >= PROXIMITY_ZOOM_HIGH => 1 (zoomed in — land detail)
 //   zoom <= PROXIMITY_ZOOM_LOW  => 0 (zoomed out — ocean/distant)
 //   linear interpolation between
-const PROXIMITY_ZOOM_LOW = parseNonNegativeFloat('PROXIMITY_ZOOM_LOW', 4, 'PROXIMITY_ZOOM_LOW');
-const PROXIMITY_ZOOM_HIGH = parseNonNegativeFloat('PROXIMITY_ZOOM_HIGH', 6, 'PROXIMITY_ZOOM_HIGH');
+const PROXIMITY_ZOOM_LOW = parseNonNegativeFloat('PROXIMITY_ZOOM_LOW', 4);
+const PROXIMITY_ZOOM_HIGH = parseNonNegativeFloat('PROXIMITY_ZOOM_HIGH', 6);
 
 if (PROXIMITY_ZOOM_LOW >= PROXIMITY_ZOOM_HIGH) {
     console.error(

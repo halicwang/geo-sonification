@@ -175,6 +175,10 @@ export async function loadServerConfig() {
 
 // ============ Client ID ============
 
+function generateClientId() {
+    return `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** Retrieve or generate a unique client ID (persisted in localStorage). */
 export function getClientId() {
     if (state.runtime.clientId) {
@@ -188,15 +192,14 @@ export function getClientId() {
             return state.runtime.clientId;
         }
     } catch {
-        state.runtime.clientId = `client-${Math.floor(Math.random() * 1e9)}`;
+        state.runtime.clientId = generateClientId();
         return state.runtime.clientId;
     }
 
-    const fallback = `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-    state.runtime.clientId = fallback;
+    state.runtime.clientId = generateClientId();
 
     try {
-        window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, fallback);
+        window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, state.runtime.clientId);
     } catch {
         // localStorage may be unavailable; keep in-memory client id only.
     }

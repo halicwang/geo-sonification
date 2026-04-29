@@ -55,9 +55,25 @@ import {
 
 const NUM_BUSES = 7;
 const WATER_BUS_INDEX = 6;
+
+/**
+ * Compresses the coverage → landMix curve so land textures fully express
+ * on inland / urban viewports. Real land-dominant viewports rarely exceed
+ * ~40% land-cell ratio — coastlines, lakes and grid-edge cells always
+ * trim the count — so a linear cov → landMix map would leave ocean
+ * dominant everywhere outside the open continents. Used by the rAF loop
+ * as `landMix = clamp01(cov / threshold)` (see the use site below).
+ */
 const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
 
-/** lpFilter1 Q range: Butterworth base → resonant peak at max velocity. */
+/**
+ * lpFilter1 Q range, modulated by velocity (`Q = BASE + vel*(MAX-BASE)`).
+ * BASE_Q1 = 1/√2 ≈ 0.5176 is the Butterworth Q for a flat passband when
+ * the user is still. MAX_Q1 = 4.0 reaches ~+12 dB resonance at the
+ * cutoff during fast drags, giving an audible filter-sweep "whoosh"
+ * without entering the self-oscillating / clipping regime that
+ * BiquadFilterNode starts to exhibit past Q ≈ 6.
+ */
 const BASE_Q1 = 0.5176;
 const MAX_Q1 = 4.0;
 
@@ -373,8 +389,6 @@ function swapBusVoice(busIndex, swapTime, phaseDelaySeconds, incomingOffsetSecon
     stopSlotImmediately(state.slots[incomingIndex]);
 
     const incoming = createVoice(busIndex, swapTime, incomingOffsetSeconds);
-    if (!incoming || !incoming.gain) return;
-
     const overlapRemaining = LOOP_OVERLAP_SECONDS - Math.max(0, phaseDelaySeconds);
 
     if (outgoing.source && outgoing.gain && overlapRemaining > 1e-3) {
@@ -444,7 +458,7 @@ function performGlobalSwap() {
     }
 
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (bufferCache.has(i) && gains[i]) {
+        if (bufferCache.has(i)) {
             swapBusVoice(i, swapTime, phaseDelaySeconds, incomingOffsetSeconds);
         }
     }
@@ -483,11 +497,9 @@ function startAllSources() {
     let startedCount = 0;
 
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (!bufferCache.has(i) || !gains[i]) continue;
+        if (!bufferCache.has(i)) continue;
 
         const first = createVoice(i, when);
-        if (!first || !first.gain) continue;
-
         first.gain.gain.setValueAtTime(1, when);
 
         const state = busLoops[i];
@@ -640,12 +652,12 @@ function rafLoop() {
     // Logarithmic spacing matches human pitch perception, so zoom-in and
     // zoom-out feel equally gradual.
     const cutoff = 500 * Math.pow(40, ema.proximitySmoothed);
-    if (lpFilter1) lpFilter1.frequency.value = cutoff;
-    if (lpFilter2) lpFilter2.frequency.value = cutoff;
-    if (lpFilter3) lpFilter3.frequency.value = cutoff;
+    lpFilter1.frequency.value = cutoff;
+    lpFilter2.frequency.value = cutoff;
+    lpFilter3.frequency.value = cutoff;
 
     // Q modulation on lpFilter1 only: velocity drives resonance peak
-    if (lpFilter1) lpFilter1.Q.value = BASE_Q1 + ema.velocitySmoothed * (MAX_Q1 - BASE_Q1);
+    lpFilter1.Q.value = BASE_Q1 + ema.velocitySmoothed * (MAX_Q1 - BASE_Q1);
     // Keep playbackRate fixed at 1.0. Rate-shifting voices changes the
     // real loop boundary and makes scheduled retriggers sound late.
 
@@ -667,7 +679,7 @@ function rafLoop() {
     const norm = Math.max(shapedSum, 1.0);
 
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (gains[i] && bufferCache.has(i)) {
+        if (bufferCache.has(i)) {
             const landValue = (shaped[i] / norm) * landMix;
             const value = i === WATER_BUS_INDEX ? Math.max(landValue, oceanMix) : landValue;
             gains[i].gain.value = value * BUS_PREAMP_GAIN[i];
@@ -752,6 +764,13 @@ function handleVisibilityChange() {
  * Sibling modules under `frontend/audio/` call this helper to obtain
  * the singleton AudioContext, which is what makes the graph-build a
  * single point of truth across the package.
+ *
+ * Lifetime invariant: once this function returns, `audioCtx`,
+ * `masterGain`, `duckGain`, `lpFilter1/2/3`, and every `gains[i]` are
+ * non-null for the rest of the page lifetime. `stop()` only suspends
+ * the context; node references are never reset to null. Hot-path
+ * functions rely on this — once their `if (!audioCtx) return;` entry
+ * guard clears, downstream chain nodes need no further null checks.
  *
  * @returns {AudioContext}
  */
@@ -907,11 +926,9 @@ function seekLoop(progress) {
 
     let startedCount = 0;
     for (let i = 0; i < NUM_BUSES; i++) {
-        if (!bufferCache.has(i) || !gains[i]) continue;
+        if (!bufferCache.has(i)) continue;
 
         const voice = createVoice(i, startTime, targetOffset);
-        if (!voice || !voice.gain) continue;
-
         voice.gain.gain.setValueAtTime(1, startTime);
 
         const state = busLoops[i];

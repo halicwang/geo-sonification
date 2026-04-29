@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-29 | Refactor   | [Occam's Razor Sweep (Group B)](devlog/M5/2026-04-29-M5-occam-razor-group-b.md)                                                                                                               |
 | 2026-04-28 | Refactor   | [Unify `getClientId` ID Format](devlog/M5/2026-04-28-M5-getclientid-format-unify.md)                                                                                                          |
 | 2026-04-28 | Refactor   | [Occam's Razor Sweep (Group A)](devlog/M5/2026-04-28-M5-occam-razor-group-a.md)                                                                                                               |
 | 2026-04-28 | Refactor   | [Prune Dead Code and Over-Modularization](devlog/M5/2026-04-28-M5-prune-dead-code.md)                                                                                                         |

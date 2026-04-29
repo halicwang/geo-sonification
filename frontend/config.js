@@ -37,9 +37,52 @@ export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
 
 // ============ Shared State ============
 
-/** @type {{ config: Object, runtime: Object, els: Object }} */
+/**
+ * @typedef {Object} StateConfig
+ * Server-driven configuration. Populated by `loadServerConfig()` at
+ * startup and `refreshServerConfig()` after reconnects; treated as
+ * read-only by every other module.
+ * @property {number} gridSize - Grid cell size in degrees.
+ * @property {string} apiBase - Backend base URL ('' = same origin).
+ * @property {string|null} mapboxToken - Mapbox GL access token.
+ * @property {Object<string, {name: string, color: string}>} landcoverMeta -
+ *   Land-cover class metadata keyed by class code.
+ * @property {number} proximityZoomLow - Zoom at which the low-pass cutoff
+ *   sits at its low end.
+ * @property {number} proximityZoomHigh - Zoom at which the low-pass cutoff
+ *   sits at its high end.
+ */
+
+/**
+ * @typedef {Object} StateRuntime
+ * Live instances and transient per-session values. Ownership of writes:
+ * `clientId` ← config.js, `ws` / `wsReconnectDelay` ← websocket.js,
+ * `map` / `debounceTimer` / `lastViewportSend` ← map.js,
+ * `audioEnabled` ← main.js.
+ * @property {WebSocket|null} ws - Active WebSocket; null between connections.
+ * @property {import('mapbox-gl').Map|null} map - Mapbox GL instance once
+ *   initialised.
+ * @property {number|null} debounceTimer - Pending `setTimeout` id for the
+ *   trailing viewport push, or null when no flush is queued.
+ * @property {number} lastViewportSend - `performance.now()` of the last
+ *   leading-edge viewport push, used by the throttle in map.js.
+ * @property {string|null} clientId - Persistent client ID, loaded from
+ *   localStorage and re-issued on first page load.
+ * @property {number} wsReconnectDelay - Current reconnect backoff (ms);
+ *   doubles per failed retry, resets on a successful open.
+ * @property {boolean} audioEnabled - Toggled by the user via the start
+ *   button; gates `engine.start()` / `engine.stop()`.
+ */
+
+/**
+ * @typedef {Object<string, HTMLElement>} StateEls
+ * DOM element cache, populated once on DOMContentLoaded in main.js.
+ * Intentionally untyped per-key — enumerating every cached node here
+ * would couple this contract to UI churn without meaningful IDE benefit.
+ */
+
+/** @type {{ config: StateConfig, runtime: StateRuntime, els: StateEls }} */
 export const state = {
-    /** Server-provided configuration (populated by loadServerConfig). */
     config: {
         gridSize: 0.5,
         apiBase: runtime.apiBase || '',
@@ -53,7 +96,6 @@ export const state = {
         proximityZoomLow: 4,
         proximityZoomHigh: 6,
     },
-    /** Runtime instances and transient values. */
     runtime: {
         ws: null,
         map: null,
@@ -63,7 +105,6 @@ export const state = {
         wsReconnectDelay: 1000,
         audioEnabled: false,
     },
-    /** Cached DOM element references (populated in main.js DOMContentLoaded). */
     els: {},
 };
 
@@ -138,11 +179,6 @@ export function buildWsUrl() {
     const host =
         override != null ? `${window.location.hostname}:${override}` : window.location.host;
     return `${protocol}//${host}`;
-}
-
-/** Return the current WebSocket URL. */
-export function getWebSocketURL() {
-    return buildWsUrl();
 }
 
 // ============ Server Config ============

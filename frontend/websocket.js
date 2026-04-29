@@ -11,7 +11,7 @@
  * @module frontend/websocket
  */
 
-import { state, getWebSocketURL, WS_RECONNECT_MAX } from './config.js';
+import { state, buildWsUrl, WS_RECONNECT_MAX } from './config.js';
 
 /** @type {number|null} */
 let reconnectTimerId = null;
@@ -49,7 +49,7 @@ export function connectWebSocket(callbacks) {
         }
     }
 
-    const wsUrl = getWebSocketURL();
+    const wsUrl = buildWsUrl();
     state.runtime.ws = new WebSocket(wsUrl);
 
     state.runtime.ws.onopen = async () => {

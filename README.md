@@ -261,7 +261,7 @@ Drag-stop feedback latency on the grid overlay is dominated by `VIEWPORT_DEBOUNC
 ### HTTP
 
 - `GET /health` — Health check (used by `start.command` to wait for readiness)
-- `GET /api/config` — Server configuration (grid size, landcover metadata)
+- `GET /api/config` — Server configuration (grid size, landcover metadata, proximity zoom thresholds)
 - `POST /api/viewport` — Calculate stats for given bounds (HTTP fallback when WebSocket is unavailable)
 
 ### WebSocket

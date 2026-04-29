@@ -228,6 +228,16 @@ export async function refreshServerConfig() {
         if (config.landcoverMeta) {
             state.config.landcoverMeta = config.landcoverMeta;
         }
+        if (Number.isFinite(config.proximityZoomLow)) {
+            state.config.proximityZoomLow = config.proximityZoomLow;
+        }
+        if (Number.isFinite(config.proximityZoomHigh)) {
+            state.config.proximityZoomHigh = config.proximityZoomHigh;
+        }
+        engine.setProximityThresholds(
+            state.config.proximityZoomLow,
+            state.config.proximityZoomHigh
+        );
     } catch (err) {
         console.warn('Failed to refresh server config:', err.message || err);
     }
@@ -296,9 +306,14 @@ export function initMap() {
         }
 
         state.runtime.map.on('move', () => {
+            const zoom = state.runtime.map.getZoom();
             if (state.els.zoomLevel) {
-                state.els.zoomLevel.textContent = state.runtime.map.getZoom().toFixed(2);
+                state.els.zoomLevel.textContent = zoom.toFixed(2);
             }
+            // Drive the low-pass filter cutoff locally from the live
+            // zoom — bypasses WS round-trip and viewport debounce so
+            // the filter tracks the zoom animation in real time.
+            engine.updateProximity(zoom);
             onViewportChange();
         });
 

@@ -82,6 +82,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load server config first to get correct WebSocket port
     await loadServerConfig();
+    // Push canonical proximity thresholds to the audio engine before
+    // initMap() wires up the move handler — otherwise the very first
+    // move events would drive proximity from the (correct) defaults
+    // but couldn't pick up an env-overridden server value until the
+    // first refreshServerConfig() round-trip.
+    engine.setProximityThresholds(state.config.proximityZoomLow, state.config.proximityZoomHigh);
 
     initMap();
 

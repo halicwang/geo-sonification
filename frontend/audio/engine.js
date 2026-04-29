@@ -547,9 +547,12 @@ function update(audioParams) {
     if (typeof audioParams.coverage === 'number') {
         ema.coverageTarget = clamp01(audioParams.coverage);
     }
-    if (typeof audioParams.proximity === 'number') {
-        ema.proximityTarget = clamp01(audioParams.proximity);
-    }
+    // Note: audioParams.proximity is intentionally ignored. proximity is
+    // driven locally from map.getZoom() via updateProximity() so the
+    // filter cutoff tracks the live zoom animation instead of waiting
+    // for a debounced WS round-trip (which would also cause a one-step
+    // backslide mid-animation when a stale-zoom server frame arrives
+    // after a fresher local update).
 
     // Wake rAF if it suspended itself after the last convergence (P5-1).
     // No-op when already running. One frame of overhead at most if the new
@@ -568,6 +571,56 @@ function updateMotion(velocity, _latitude) {
     ema.velocityTarget = clamp01(velocity);
     // Wake rAF — see update() comment. Required when a drag starts after
     // the loop suspended itself; otherwise the EMA wouldn't advance.
+    startRaf();
+}
+
+// Mirror of server/audio-metrics.js computeProximityFromZoom defaults.
+// The actual values come from /api/config via setProximityThresholds()
+// — set in main.js after loadServerConfig() / refreshServerConfig().
+let proximityZoomLow = 4;
+let proximityZoomHigh = 6;
+
+/**
+ * Configure the zoom thresholds that map onto proximity 0..1.
+ * Mirrors server/config.js PROXIMITY_ZOOM_{LOW,HIGH}; values can be
+ * overridden via env on the server, so the frontend reads them from
+ * /api/config rather than hardcoding.
+ *
+ * @param {number} low  - zoom at/below which proximity = 0
+ * @param {number} high - zoom at/above which proximity = 1
+ */
+function setProximityThresholds(low, high) {
+    if (Number.isFinite(low)) proximityZoomLow = low;
+    if (Number.isFinite(high)) proximityZoomHigh = high;
+}
+
+/**
+ * Update the low-pass filter proximity from the live map zoom.
+ * Called directly from map.js on every `move` event — bypasses the
+ * WebSocket round-trip and viewport debounce so the filter cutoff
+ * tracks the zoom animation in real time. EMA smoothing in rafLoop
+ * still shapes the cutoff transition (PROXIMITY_SMOOTHING_MS).
+ *
+ * @param {number} zoom - Mapbox zoom level
+ */
+function updateProximity(zoom) {
+    const z = Number.isFinite(zoom) ? zoom : 0;
+    const low = proximityZoomLow;
+    const high = proximityZoomHigh;
+    let target;
+    if (low >= high) {
+        target = z >= high ? 1 : 0;
+    } else if (z >= high) {
+        target = 1;
+    } else if (z <= low) {
+        target = 0;
+    } else {
+        target = clamp01((z - low) / (high - low));
+    }
+    ema.proximityTarget = target;
+    // Wake rAF — see updateMotion() comment. Required so a zoom that
+    // happens before audio start (or after idle suspend) actually
+    // advances the EMA.
     startRaf();
 }
 
@@ -926,6 +979,8 @@ export const engine = {
     stop,
     update,
     updateMotion,
+    updateProximity,
+    setProximityThresholds,
     getLoadingStates,
     setOnLoadingUpdate,
     isRunning,

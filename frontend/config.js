@@ -45,6 +45,13 @@ export const state = {
         apiBase: runtime.apiBase || '',
         mapboxToken: null,
         landcoverMeta: {},
+        // Proximity-zoom thresholds drive the low-pass filter cutoff
+        // locally (frontend/map.js → engine.updateProximity). Defaults
+        // mirror server/config.js so a missing /api/config field still
+        // produces sane behaviour; the canonical values arrive via
+        // loadServerConfig() and refreshServerConfig().
+        proximityZoomLow: 4,
+        proximityZoomHigh: 6,
     },
     /** Runtime instances and transient values. */
     runtime: {
@@ -154,6 +161,12 @@ export async function loadServerConfig() {
         }
         if (config.landcoverMeta) {
             state.config.landcoverMeta = config.landcoverMeta;
+        }
+        if (Number.isFinite(config.proximityZoomLow)) {
+            state.config.proximityZoomLow = config.proximityZoomLow;
+        }
+        if (Number.isFinite(config.proximityZoomHigh)) {
+            state.config.proximityZoomHigh = config.proximityZoomHigh;
         }
     } catch (err) {
         console.warn('Failed to load server config, using defaults:', err);

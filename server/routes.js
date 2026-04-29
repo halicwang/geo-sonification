@@ -7,7 +7,8 @@
  * Hosts the three application routes:
  *
  *   GET  /health         — liveness probe (used by start.command readiness)
- *   GET  /api/config     — frontend bootstrap (gridSize + landcoverMeta)
+ *   GET  /api/config     — frontend bootstrap (gridSize, landcoverMeta,
+ *                          proximityZoomLow/High)
  *   POST /api/viewport   — single-shot viewport stats
  *
  * Static-file middleware (/tiles, /data, the frontend dir) and the
@@ -18,7 +19,7 @@
  * @module server/routes
  */
 
-const { GRID_SIZE } = require('./config');
+const { GRID_SIZE, PROXIMITY_ZOOM_LOW, PROXIMITY_ZOOM_HIGH } = require('./config');
 const { LANDCOVER_META } = require('./landcover');
 const { getHttpClientState, saveHttpClientState, getHttpClientKey } = require('./client-state');
 const { processViewport } = require('./viewport-processor');
@@ -48,11 +49,17 @@ function attachRoutes(app, deps) {
         });
     });
 
-    // API: Get server configuration (for frontend)
+    // API: Get server configuration (for frontend).
+    // proximityZoom{Low,High} are exposed so the frontend can drive the
+    // low-pass filter cutoff locally from map.getZoom() without a
+    // WebSocket round-trip. Server still computes audioParams.proximity
+    // for HTTP fallback clients that prefer the canonical mapping.
     app.get('/api/config', (req, res) => {
         res.json({
             gridSize: GRID_SIZE,
             landcoverMeta: LANDCOVER_META,
+            proximityZoomLow: PROXIMITY_ZOOM_LOW,
+            proximityZoomHigh: PROXIMITY_ZOOM_HIGH,
         });
     });
 

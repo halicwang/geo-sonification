@@ -14,6 +14,7 @@ import { state, ASSET_BASE, VIEWPORT_DEBOUNCE, getClientId } from './config.js';
 import { updateUI, showToast } from './ui.js';
 import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
+import { initHoverGlow } from './hover-glow.js';
 
 // ============ Motion Tracking ============
 
@@ -82,7 +83,26 @@ async function addGridLayer() {
         source: 'grid-source',
         'source-layer': 'grids',
         paint: {
-            'circle-color': DOT_COLOR,
+            // circle-color interpolates between the rest grey and pure
+            // white based on a per-feature `glow` state value in [0,1]
+            // written by frontend/hover-glow.js on each render tick.
+            // The `coalesce → 0` is load-bearing — features whose state
+            // has never been written would otherwise render
+            // indeterminately on Mapbox v3.x. Cubic-bezier produces a
+            // perceptually smoother color ramp than linear.
+            //
+            // Deliberately NOT interpolating circle-radius with glow:
+            // radius changes triggered the previous attempt's
+            // progressive-degradation regression. Color-only.
+            'circle-color': [
+                'interpolate',
+                ['cubic-bezier', 0.4, 0.0, 0.2, 1.0],
+                ['coalesce', ['feature-state', 'glow'], 0],
+                0,
+                DOT_COLOR,
+                1,
+                '#FFFFFF',
+            ],
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
             'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
             'circle-stroke-color': 'rgba(255, 255, 255, 0.18)',
@@ -303,6 +323,13 @@ export function initMap() {
                 8000
             );
         }
+
+        // Hover glow loads its own sidecar. Failure is non-fatal \u2014 the
+        // module logs a warning and the dot layer keeps rendering at
+        // its rest grey. Wired here (after addGridLayer) so the source
+        // and layer exist by the time runtime ticks (P1-2) start
+        // calling setFeatureState.
+        initHoverGlow(state.runtime.map);
 
         state.runtime.map.on('move', () => {
             const zoom = state.runtime.map.getZoom();

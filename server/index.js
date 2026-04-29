@@ -42,6 +42,7 @@ const EXPECTED_AMBIENCE_FILES = [
 
 const AMBIENCE_DIR = path.join(__dirname, '../frontend/audio/ambience');
 const PMTILES_PATH = path.join(__dirname, '../data/tiles/grids.pmtiles');
+const GRID_INDEX_PATH = path.join(__dirname, '../data/tiles/grid_index.bin');
 
 // ============ State ============
 let dataLoaded = false;
@@ -96,6 +97,13 @@ function warnIfStaticAssetsMissing() {
         console.warn(
             '[Static Assets] Missing data/tiles/grids.pmtiles. ' +
                 'Run npm --prefix server run build:tiles to restore the grid overlay.'
+        );
+    }
+
+    if (!fs.existsSync(GRID_INDEX_PATH)) {
+        console.warn(
+            '[Static Assets] Missing data/tiles/grid_index.bin. ' +
+                'Run npm --prefix server run build:tiles to restore the hover-glow sidecar.'
         );
     }
 }

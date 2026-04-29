@@ -202,6 +202,12 @@ No code changes. Numbers captured in this devlog only.
 
 C.4 is the last surviving M3 audit item. It needs a frontend WS-protocol extension (server already has the warnings in stdout; needs a wire-format addition to push them to the UI). Not a "quick win" — leaves it for a future milestone where WS protocol changes are intentional.
 
+### Cloudflare Cache Rule reality check (out-of-scope dashboard inspection)
+
+Mid-merge the user proposed clicking through DEPLOYMENT.md known issue #1 ("Cache Rule too broad, narrow to `/audio/*`") to bag a quick user-visible win. Inspecting the dashboard before saving any change revealed the rule was a **Disabled empty shell** with no Cache eligibility set and no Edge TTL mode selected — never actually applied. Live `curl` against `assets.placeecho.com/tiles/grids.pmtiles` and `/audio/ambience/forest.opus` returned `cf-cache-status: DYNAMIC` for both, with 74–78 ms range round-trip (no 10–30 s prefetch).
+
+The "Cache Rule too broad" diagnosis carried in DEPLOYMENT.md from M3 was unverified theory. Corrected the entry in the same M5 close commit (`docs/DEPLOYMENT.md` known issue #1 rewritten); the M6+ backlog item above re-framed from "narrow" to "actually enable for `/audio/*`". No production change made — dashboard exited via Cancel.
+
 ### Test counts
 
 | Suite | Before M5 | After M5 |
@@ -229,7 +235,7 @@ Production-code growth is intentionally small (~10 LOC). The bulk is the schema 
 
 Recorded here so they're visible in one place rather than scattered across devlogs:
 
-- **Cloudflare Cache Rule narrowing to `/audio/*`** (DEPLOYMENT.md known issue #1) — needs Cloudflare dashboard click; wrangler missing `zone_rulesets:edit`. Highest user-visible value of the open items.
+- **Enable Cloudflare edge caching for `/audio/*`** (re-framed; DEPLOYMENT.md known issue #1 was rewritten 2026-04-28). Original framing said "Cache Rule is too broad, narrow it"; dashboard inspection during M5 close found the rule was actually a **Disabled empty shell** that never did anything, and `cf-cache-status: DYNAMIC` confirmed neither PMTiles nor Audio is being edge-cached today. The real opportunity is to **enable** the rule with Cache eligibility = Eligible for cache, filter `/audio/*` only — second-and-later visitors get edge HIT (~5–10 ms vs current ~80–200 ms direct-from-R2). Needs dashboard access (wrangler missing `zone_rulesets:edit` scope). Still highest user-visible value among open items.
 - **DevTools Performance recording for P5-1 idle CPU** (M4 §11 row 10) — needs browser interaction.
 - **PMTiles Worker proxy** (DEPLOYMENT.md known issue #3) — separate undertaking.
 - **Globe ↔ Mercator stutter** — subjective; needs A/B human verification.

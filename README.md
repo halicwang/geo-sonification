@@ -70,15 +70,25 @@ npm install && cd server && npm install
 
 Run the scripts in `gee-scripts/` and download CSVs to `data/raw/`. See `gee-scripts/README_EXPORT.md`.
 
-**Before starting the server**: Confirm CSVs in `data/raw/` match the schema in `data/raw/SCHEMA.md`. If you have old `loss_*` CSVs, re-export and replace them. Validate the CSVs, clear derived caches, then rebuild the gitignored PMTiles overlay:
+**Before starting the server**: Confirm CSVs in `data/raw/` match the schema in `data/raw/SCHEMA.md`. If you have old `loss_*` CSVs, re-export and replace them. Validate the CSVs, clear derived caches, then rebuild the gitignored PMTiles overlay + the hover-glow border-distance index:
 
 ```bash
 npm run check:csv
 npm run clean:cache
-npm --prefix server run build:tiles
+node scripts/download-natural-earth.js          # idempotent — skips if files present
+node scripts/compute-border-distance.js         # ~3s, fingerprinted cache
+npm --prefix server run build:tiles             # rebuilds grids.pmtiles + grid_index.bin
 ```
 
-`data/tiles/grids.pmtiles` is generated locally and is not committed. Re-run the build step whenever the raw CSVs or grid size change.
+`data/tiles/grids.pmtiles` and `data/tiles/grid_index.bin` are generated locally and are not committed. Re-run the build steps whenever the raw CSVs or grid size change. The Natural Earth GeoJSONs in `data/sources/natural-earth/` are also gitignored — `download-natural-earth.js` fetches them on first run.
+
+### Border-aware hover glow (M6)
+
+When the cursor hovers over the map, grid dots near a country border or coastline brighten on a smooth radial falloff. The visual is fully data-driven:
+
+- Build time: `compute-border-distance.js` flattens Natural Earth coastline + country-boundary GeoJSONs into 476k segments and computes the minimum distance from each grid centroid to any segment using a 1° bbox-prefiltered point-to-segment scan. Distances are baked into PMTiles as a `border_dist_km` per-feature property and into a parallel `grid_index.bin` sidecar.
+- Run time: `frontend/hover-glow.js` loads the sidecar once, tracks the screen-space cursor on `mousemove`, and runs a per-frame tick from `map.on('render')` that re-`unproject`s the cursor via the _current_ transform (so the glow follows the cursor through pan and zoom without lag) and writes `circle-color` feature-state for the affected dots.
+- Live tunables in DevTools: `__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })` patches the runtime constants and triggers a repaint — the next render frame uses the new values, no reload.
 
 ### 5. Start the System
 
@@ -117,9 +127,13 @@ geo-sonification/
 │   ├── cities.json                       # City database (~555 entries, pop > 1M)
 │   ├── cache/                            # Derived data (safe to delete, auto-rebuilt)
 │   │   ├── all_grids.json
-│   │   └── normalize.json
-│   └── tiles/                            # PMTiles (built by scripts/build-tiles.js)
-│       └── grids.pmtiles
+│   │   ├── normalize.json
+│   │   └── border-distance.v1.json       # Per-cell border distance (M6, fingerprinted)
+│   ├── sources/                          # Third-party source data (gitignored)
+│   │   └── natural-earth/                # Coastline + admin boundaries (M6)
+│   └── tiles/                            # PMTiles + sidecar (built by build-tiles.js)
+│       ├── grids.pmtiles
+│       └── grid_index.bin                # Hover-glow sidecar (M6, ~1 MB)
 ├── docs/
 │   ├── ARCHITECTURE.md                   # System architecture
 │   ├── DEVLOG.md                         # Development log index + recording guide

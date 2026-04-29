@@ -59,6 +59,43 @@ frontend/audio/
 
 Callers (`main.js`, `map.js`, `city-announcer.js`) `import { engine } from './audio/engine.js'` directly. The M3-era `frontend/audio-engine.js` monolith was decomposed in P3 and the transitional re-export shim was deleted in P5-4.
 
+### Hover glow (`frontend/hover-glow.js`)
+
+Brightens the existing `grid-dots` near both the cursor AND a country
+border or coastline, on a smooth radial falloff. M6.
+
+```
+frontend/hover-glow.js
+├── parseGridIndex(buf)    Validate magic + length on data/tiles/grid_index.bin
+│                          → { count, gridSize, u32, f32 } dual views
+│                          (single buffer slice, two typed-array views)
+│
+├── tick()                 Per-`render`-event:
+│   ├── unproject cursor   via *current* transform — drag-lag fix
+│   ├── linear scan 67k    dSq < R² early-skip → cursorFactor × borderFactor
+│   ├── candidates sorted  desc by glow, sliced to MAX_GLOWING (1500)
+│   ├── setFeatureState    {glow:x} for each newGlowingFid
+│   └── cleanup diff       prevGlowingFids \ newGlowingFids → {glow:0}
+│                          (anti-progressive-degradation invariant)
+│
+└── window.__hg            DevTools surface — map ref, gridIndex, cursor,
+                           glowing fids, forceTick, getTunables, tune({...})
+```
+
+Constants (`HOVER_GLOW_R_KM_BY_ZOOM`, `HOVER_GLOW_BORDER_FALLOFF`,
+`HOVER_GLOW_MAX_GLOWING`, `HOVER_GLOW_EPS`) live in
+`frontend/config.js` and overlay onto a mutable `tunables` object the
+runtime reads each frame; `__hg.tune({...})` patches them live.
+
+The data is baked offline by `scripts/compute-border-distance.js`
+(Natural Earth coastline + boundary GeoJSON → per-cell `border_dist_km`)
+and emitted as both a PMTiles property and a `grid_index.bin`
+sidecar by `scripts/build-tiles.js` + `scripts/build-grid-index.js`.
+
+`frontend/map.js` provides the `circle-color` paint expression that
+interpolates from grey to white via cubic-bezier on
+`['coalesce', ['feature-state', 'glow'], 0]`.
+
 ### Server subsystem (`server/`)
 
 ```

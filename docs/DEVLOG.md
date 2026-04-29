@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-29 | Feature    | [Hover-glow Tunables + Tests (M6 P1-4/P1-5)](devlog/M6/2026-04-29-M6-hover-glow-tunables-tests.md)                                                                                            |
 | 2026-04-29 | Feature    | [Hover-glow Runtime (M6 P1-1/P1-2/P1-3)](devlog/M6/2026-04-29-M6-hover-glow-runtime.md)                                                                                                       |
 | 2026-04-29 | Feature    | [Border-distance Pipeline (M6 P0)](devlog/M6/2026-04-29-M6-border-distance-pipeline.md)                                                                                                       |
 | 2026-04-29 | Refactor   | [cloneSnapshot Audit and Removal](devlog/M5/2026-04-29-M5-clonesnapshot-audit-removal.md)                                                                                                     |

@@ -135,6 +135,52 @@ export const WS_RECONNECT_MAX = 30000;
  */
 export const STALE_GRACE_MS = 5000;
 
+// ============ Hover-glow tunables ============
+//
+// Consumed by frontend/hover-glow.js. Live-overridable in DevTools via
+// `window.__hg.tune({ rByZoom: [...], borderFalloff: [...], ... })`.
+
+/**
+ * Cursor falloff radius in km, by zoom level. Linear-interpolated
+ * between breakpoints. Visual size on screen stays roughly constant
+ * across zooms — at zoom 2 we paint ~600 km (small on screen), at
+ * zoom 10 we paint ~180 km (large on screen).
+ */
+export const HOVER_GLOW_R_KM_BY_ZOOM = [
+    [2, 600],
+    [5, 350],
+    [7, 250],
+    [10, 180],
+];
+
+/**
+ * Border-distance penalty curve: cells far from any border cap glow
+ * to zero, regardless of how close the cursor is. Hermite-blended
+ * between breakpoints (C¹-continuous, no sharp transitions).
+ *   1.0 @ 0 km, 0.7 @ 50 km, 0.1 @ 150 km, 0 @ 250 km+
+ */
+export const HOVER_GLOW_BORDER_FALLOFF = [
+    [0, 1.0],
+    [50, 0.7],
+    [150, 0.1],
+    [250, 0.0],
+];
+
+/**
+ * Hard cap on cells writing setFeatureState per frame. Defense in
+ * depth — realistic counts even at maximum overlap (Europe at zoom 7)
+ * are 200–800. Truncating affects only the dimmest cells (sorted by
+ * glow desc).
+ */
+export const HOVER_GLOW_MAX_GLOWING = 1500;
+
+/**
+ * Minimum glow value to bother writing feature-state. Below this the
+ * pixel difference is invisible. Also serves as the threshold for
+ * declaring a cell "in the active set" for the cleanup-diff.
+ */
+export const HOVER_GLOW_EPS = 0.005;
+
 const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 
 // ============ Mapbox Token ============

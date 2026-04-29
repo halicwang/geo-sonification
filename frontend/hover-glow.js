@@ -21,57 +21,35 @@
  *      cell from the previous frame's set that didn't make this one's
  *      (the anti-progressive-degradation invariant).
  *
- * Runtime constants currently live in `frontend/config.js`. P1-4 will
- * expose `window.__hg.tune({...})` for live tweaking in DevTools.
+ * Runtime constants live in `frontend/config.js` (HOVER_GLOW_*).
+ * `window.__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })`
+ * patches them live in DevTools — change takes effect on the next
+ * render tick, no reload.
  *
  * @module frontend/hover-glow
  */
 
-import { ASSET_BASE } from './config.js';
+import {
+    ASSET_BASE,
+    HOVER_GLOW_R_KM_BY_ZOOM,
+    HOVER_GLOW_BORDER_FALLOFF,
+    HOVER_GLOW_MAX_GLOWING,
+    HOVER_GLOW_EPS,
+} from './config.js';
 
 // ============ Tunable runtime constants ============
 //
-// Hardcoded for P1-2/P1-3. P1-4 lifts these into frontend/config.js
-// and exposes window.__hg.tune({...}) for live DevTools tweaking.
+// Defaults pull from `frontend/config.js`. The runtime overlays them
+// onto a mutable `tunables` object, which `window.__hg.tune({...})`
+// patches in place. Tick reads from `tunables` every frame, so live
+// DevTools edits take effect on the next render — no reload needed.
 
-/**
- * Cursor falloff radius in km, by zoom level. Linear-interpolated
- * between breakpoints. Visual size on screen stays roughly constant
- * across zooms — at zoom 2 we paint ~600 km which is small on screen,
- * at zoom 10 we paint ~180 km which is large. Tune in P1-4.
- */
-const R_KM_BY_ZOOM = [
-    [2, 600],
-    [5, 350],
-    [7, 250],
-    [10, 180],
-];
-
-/**
- * Border-distance penalty curve: cells far from any border cap glow
- * to zero, regardless of how close the cursor is. Hermite-blended
- * on three intervals to avoid sharp breakpoints.
- *   1.0 @ 0 km, 0.7 @ 50 km, 0.1 @ 150 km, 0 @ 250 km+
- */
-const BORDER_FALLOFF = [
-    [0, 1.0],
-    [50, 0.7],
-    [150, 0.1],
-    [250, 0.0],
-];
-
-/**
- * Hard cap on cells writing setFeatureState per frame. Defense in
- * depth — realistic counts are 200–800 even at maximum overlap.
- * Truncating affects only the dimmest cells (sorted by glow desc).
- */
-const MAX_GLOWING = 1500;
-
-/**
- * Minimum glow value to bother writing feature-state. Below this the
- * pixel difference is invisible.
- */
-const EPS = 0.005;
+const tunables = {
+    rByZoom: HOVER_GLOW_R_KM_BY_ZOOM,
+    borderFalloff: HOVER_GLOW_BORDER_FALLOFF,
+    maxGlowing: HOVER_GLOW_MAX_GLOWING,
+    eps: HOVER_GLOW_EPS,
+};
 
 /** Earth radius for the equirectangular distance approximation. */
 const EARTH_RADIUS_KM = 6371;
@@ -211,13 +189,13 @@ function hermiteBlend(x, x0, x1, y0, y1) {
 /**
  * Border-distance penalty: cells far from any border return ~0,
  * cells right on a border return 1. Piecewise Hermite over the
- * `BORDER_FALLOFF` table.
+ * `tunables.borderFalloff` table (overridable via `__hg.tune`).
  *
  * @param {number} dKm
+ * @param {Array<[number, number]>} [table=tunables.borderFalloff]
  * @returns {number} [0, 1]
  */
-export function borderFactor(dKm) {
-    const table = BORDER_FALLOFF;
+export function borderFactor(dKm, table = tunables.borderFalloff) {
     if (dKm <= table[0][0]) return table[0][1];
     if (dKm >= table[table.length - 1][0]) return table[table.length - 1][1];
     for (let i = 0; i < table.length - 1; i++) {
@@ -231,13 +209,14 @@ export function borderFactor(dKm) {
 }
 
 /**
- * Linear interpolation over the zoom→radius table.
+ * Linear interpolation over the zoom→radius table. Overridable via
+ * `__hg.tune({ rByZoom: [...] })`.
  *
  * @param {number} zoom
+ * @param {Array<[number, number]>} [table=tunables.rByZoom]
  * @returns {number} R in km
  */
-function rByZoom(zoom) {
-    const table = R_KM_BY_ZOOM;
+export function rByZoom(zoom, table = tunables.rByZoom) {
     if (zoom <= table[0][0]) return table[0][1];
     if (zoom >= table[table.length - 1][0]) return table[table.length - 1][1];
     for (let i = 0; i < table.length - 1; i++) {
@@ -299,7 +278,10 @@ function tick() {
     const lngLat = mapRef.unproject([cursor.sx, cursor.sy]);
     const cLat = lngLat.lat;
     const cLng = lngLat.lng;
-    const R = rByZoom(mapRef.getZoom());
+    const R = rByZoom(mapRef.getZoom(), tunables.rByZoom);
+    const eps = tunables.eps;
+    const maxGlowing = tunables.maxGlowing;
+    const borderTable = tunables.borderFalloff;
     const RSqGuess = R * R; // for early-skip (no sqrt) on cells obviously too far
 
     const u32 = gridIndex.u32;
@@ -335,20 +317,20 @@ function tick() {
         if (cf <= 0) continue;
 
         const borderDist = f32[off + 3];
-        const bf = borderFactor(borderDist);
+        const bf = borderFactor(borderDist, borderTable);
         if (bf <= 0) continue;
 
         const g = cf * bf;
-        if (g < EPS) continue;
+        if (g < eps) continue;
 
         candidates.push({ fid: u32[off], glow: g });
     }
 
-    // Cap to MAX_GLOWING by sorting on glow descending. Truncated cells
+    // Cap to maxGlowing by sorting on glow descending. Truncated cells
     // are the dimmest, so the visual loss is minimal.
-    if (candidates.length > MAX_GLOWING) {
+    if (candidates.length > maxGlowing) {
         candidates.sort((a, b) => b.glow - a.glow);
-        candidates.length = MAX_GLOWING;
+        candidates.length = maxGlowing;
     }
 
     // Apply this frame's set.
@@ -447,8 +429,10 @@ export async function initHoverGlow(map) {
     // drag-lag fix.
     map.on('render', tick);
 
-    // Debug surface for DevTools introspection. P1-4 will extend this
-    // with live-tunable knobs (`__hg.tune({...})`).
+    // Debug surface for DevTools introspection + live tuning. Patch
+    // `__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })` to
+    // override defaults from frontend/config.js. The change takes
+    // effect on the very next render tick — no reload, no rebuild.
     if (typeof window !== 'undefined') {
         window.__hg = {
             map,
@@ -456,6 +440,17 @@ export async function initHoverGlow(map) {
             getCursor: () => cursor,
             getGlowingFids: () => new Set(prevGlowingFids),
             forceTick: tick,
+            getTunables: () => ({ ...tunables }),
+            tune: (patch) => {
+                if (!patch || typeof patch !== 'object') return tunables;
+                if (Array.isArray(patch.rByZoom)) tunables.rByZoom = patch.rByZoom;
+                if (Array.isArray(patch.borderFalloff))
+                    tunables.borderFalloff = patch.borderFalloff;
+                if (typeof patch.maxGlowing === 'number') tunables.maxGlowing = patch.maxGlowing;
+                if (typeof patch.eps === 'number') tunables.eps = patch.eps;
+                if (mapRef) mapRef.triggerRepaint();
+                return { ...tunables };
+            },
         };
     }
 }

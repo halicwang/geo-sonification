@@ -55,19 +55,6 @@ function ensureCleanupTimer() {
     httpClientCleanupTimer.unref(); // don't prevent process exit
 }
 
-// ============ Snapshot Helpers ============
-
-/**
- * Deep-clone a snapshot, returning null if invalid.
- * @param {import('./types').Snapshot|null|undefined} snapshot
- * @returns {import('./types').Snapshot|null}
- */
-function cloneSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== 'object') return null;
-    if (!Array.isArray(snapshot.lcFractions)) return null;
-    return { lcFractions: snapshot.lcFractions.slice() };
-}
-
 // ============ Per-Client State Helpers ============
 
 /**
@@ -82,6 +69,12 @@ function createClientState() {
  * Get or create HTTP client state, restoring snapshot from persisted entry.
  * Returns the previous mode separately so callers can detect transitions.
  *
+ * The returned `previousSnapshot` shares its reference with the Map entry —
+ * callers MUST NOT mutate `lcFractions` (no index assignment, no array
+ * mutators). The only legal write is `state.previousSnapshot = newSnapshot`,
+ * which reassigns the local field and leaves the Map entry untouched.
+ * `audio-metrics.normalizeSnapshot` already copies on read for downstream use.
+ *
  * @param {string} clientKey - Unique key from getHttpClientKey()
  * @returns {{ state: { currentMode: string, previousSnapshot: import('./types').Snapshot|null }, previousMode: string }}
  */
@@ -90,20 +83,24 @@ function getHttpClientState(clientKey) {
     const previousMode = entry ? entry.currentMode : 'aggregated';
     const state = {
         currentMode: previousMode,
-        previousSnapshot: entry ? cloneSnapshot(entry.snapshot) : null,
+        previousSnapshot: entry ? entry.snapshot : null,
     };
     return { state, previousMode };
 }
 
 /**
- * Persist HTTP client state after a viewport update.
+ * Persist HTTP client state after a viewport update. Stores the snapshot
+ * by reference; `processViewport` always assigns a freshly-allocated
+ * `delta.snapshot` to `state.previousSnapshot` before this call, so no
+ * outside reference outlives the call.
+ *
  * @param {string} clientKey
  * @param {{ currentMode: string, previousSnapshot: import('./types').Snapshot|null }} state
  */
 function saveHttpClientState(clientKey, state) {
     httpClientByKey.set(clientKey, {
         currentMode: state.currentMode,
-        snapshot: cloneSnapshot(state.previousSnapshot),
+        snapshot: state.previousSnapshot,
         lastSeen: Date.now(),
     });
     ensureCleanupTimer();

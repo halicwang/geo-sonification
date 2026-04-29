@@ -169,19 +169,6 @@ describe('HTTP client state persist/restore', () => {
         expect(previousMode).toBe('aggregated');
         expect(state).toEqual({ currentMode: 'aggregated', previousSnapshot: null });
     });
-
-    test('mutating returned state does not bleed into stored entry (deep clone)', () => {
-        const key = 'client:isolation-check';
-        const state = createClientState();
-        state.previousSnapshot = { lcFractions: [0.5, 0.25, 0.25, 0, 0, 0, 0, 0, 0, 0, 0] };
-        saveHttpClientState(key, state);
-
-        const { state: first } = getHttpClientState(key);
-        first.previousSnapshot.lcFractions[0] = 999;
-
-        const { state: second } = getHttpClientState(key);
-        expect(second.previousSnapshot.lcFractions[0]).toBe(0.5);
-    });
 });
 
 describe('TTL cleanup (M3 audit D.3 + D.5 fix)', () => {

@@ -151,6 +151,29 @@ body {
     transform: translateY(-6px) rotate(-45deg);
 }
 
+/* ============ Sheet handle (mobile-only drag indicator) ============
+   Visible only inside #info-panel on narrow screens; rendered above
+   .brand-mark to give the bottom-sheet UI an unmistakable "this is
+   dismissable" affordance. Tap toggles the panel via main.js. */
+.sheet-handle {
+    display: none; /* desktop hides the handle entirely */
+    background: none;
+    border: none;
+    padding: 0;
+    width: 100%;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sheet-handle-bar {
+    display: block;
+    width: 36px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.32);
+    border-radius: 2.5px;
+    margin: 0 auto;
+}
+
 /* ============ Info Panel (floating top-right, below controls-bar) ============ */
 #info-panel {
     position: absolute;
@@ -630,26 +653,70 @@ body {
     color: var(--color-text-tier2);
 }
 
-/* ============ Responsive: narrow screens ============ */
+/* ============ Responsive: bottom-sheet on narrow screens ============
+   On phones the right-side panel becomes a bottom sheet anchored to
+   the viewport bottom. Default state (set by main.js viewport detect)
+   is collapsed — the sheet slides off-screen, leaving the full globe
+   visible plus the floating audio + hamburger buttons up top. Tapping
+   the hamburger or the in-sheet drag handle toggles the sheet between
+   collapsed and expanded.
+
+   Debug-leaning stats (Zoom / Grids in View / Mode / Land Type /
+   Proximity) and the "Interactive Sound Map" subtitle are hidden on
+   mobile — they aren't useful while listening, and they were the bulk
+   of the panel's vertical real estate. The landcover percentages
+   (the actual sonification mapping) plus the audio controls stay. */
 @media (max-width: 600px) {
     #info-panel {
         top: auto;
-        bottom: 20px;
+        bottom: 0;
         left: 0;
         right: 0;
         width: 100%;
-        padding: 16px 18px;
-        border-radius: 12px 12px 0 0;
-        max-height: 50vh;
+        max-width: none;
+        max-height: 60dvh; /* dvh: doesn't jump when iOS URL bar shows/hides */
+        padding: 8px 18px calc(18px + env(safe-area-inset-bottom));
+        border-radius: 14px 14px 0 0;
         overflow-y: auto;
+        transform: translateY(0);
+        transition:
+            transform 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+            opacity 0.18s ease;
     }
 
     #info-panel.hidden {
-        transform: translateY(20px);
+        opacity: 1; /* override the desktop-hidden's opacity:0 fade */
+        transform: translateY(100%); /* slide entirely off-screen */
+        pointer-events: none;
     }
 
+    /* Drag-handle visible only on mobile; sits above .brand-mark */
+    .sheet-handle {
+        display: block;
+        margin: 0 -18px 8px;
+        padding: 8px 0;
+    }
+
+    /* Hide debug-stats + subtitle on mobile */
+    #info-panel .stats-section,
+    #info-panel .subtitle {
+        display: none;
+    }
+
+    /* Tighten branding spacing now that subtitle is gone */
+    #info-panel .brand-mark {
+        margin-bottom: 2px;
+    }
+    #info-panel h2 {
+        margin-bottom: 4px;
+    }
+    #info-panel .vintage {
+        margin-bottom: 14px;
+    }
+
+    /* Let landcover list take whatever it needs (sheet itself scrolls) */
     .landcover-list {
-        max-height: 120px;
+        max-height: none;
     }
 }
 

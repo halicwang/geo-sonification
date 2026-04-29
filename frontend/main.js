@@ -117,10 +117,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ── Info panel toggle ──
-    state.els.panelToggle.addEventListener('click', () => {
+    // On mobile (≤ 600 px) the panel renders as a bottom sheet. Default
+    // state on first load is collapsed so the user gets a full-globe view
+    // before opting in to the stats. The hamburger ≡ at top-right and the
+    // in-sheet drag handle both call the same toggle.
+    function togglePanel() {
         const hidden = state.els.infoPanel.classList.toggle('hidden');
         state.els.panelToggle.classList.toggle('open', !hidden);
-    });
+    }
+    state.els.panelToggle.addEventListener('click', togglePanel);
+
+    const sheetHandle = document.getElementById('sheet-handle');
+    if (sheetHandle) {
+        sheetHandle.addEventListener('click', togglePanel);
+    }
+
+    if (window.matchMedia('(max-width: 600px)').matches) {
+        state.els.infoPanel.classList.add('hidden');
+        state.els.panelToggle.classList.remove('open');
+    }
 
     // ── Audio toggle button ──
     let audioAllFailedToastShown = false;

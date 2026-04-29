@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-28 | Feature    | [Mobile UX Redesign — Info Panel as Bottom Sheet](devlog/2026-04-28-mobile-bottom-sheet.md)                                                                                                   |
 | 2026-04-28 | Milestone  | [M5 Quick Wins (Pack A) — single growing entry across stages](devlog/M5/2026-04-28-M5-quick-wins.md)                                                                                          |
 | 2026-04-27 | Milestone  | [M4 Residual Debt → M5 Candidates (P5-4)](devlog/M4/2026-04-27-M4P5-4-residual-debt.md)                                                                                                       |
 | 2026-04-27 | Milestone  | [M4 Razor Refactor Summary (P5-3)](devlog/M4/2026-04-27-M4P5-3-milestone-summary.md)                                                                                                          |

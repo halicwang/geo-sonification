@@ -1,0 +1,71 @@
+name: Pages Deploy
+
+# Auto-build and deploy the static frontend to Cloudflare Pages on every
+# push to main. Replaces the Pages-GitHub-integration auto-build, which
+# proved brittle (broke silently after the GitHub App was reinstalled,
+# leaving placeecho.com stuck on M3-era frontend through the entire
+# M4 + M5 + mobile-UX merges until a manual `wrangler pages deploy`
+# unstuck it). This workflow runs the same build script + wrangler
+# command that the manual recovery used, but on every relevant push,
+# so the integration's health is no longer a single point of failure.
+#
+# Required GitHub secrets:
+#   CLOUDFLARE_API_TOKEN   — Cloudflare API token with the
+#                            "Cloudflare Pages — Edit" permission.
+#                            Create at https://dash.cloudflare.com/profile/api-tokens
+#                            using the "Edit Cloudflare Pages" template.
+#   CLOUDFLARE_ACCOUNT_ID  — Account ID, visible in the Cloudflare
+#                            dashboard right sidebar on any zone or
+#                            on the Workers & Pages overview page.
+#   MAPBOX_TOKEN           — Production Mapbox token (the one that's
+#                            URL-restricted to placeecho.com). The
+#                            same value already lives in the Pages
+#                            project's "Environment variables" panel
+#                            under the previous integration; this
+#                            workflow needs its own copy because the
+#                            build runs in a GitHub runner.
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - 'frontend/**'
+            - 'data/cities.json'
+            - 'data/cities.schema.json'
+            - 'scripts/build-pages.js'
+            - '.github/workflows/pages-deploy.yml'
+    # Manual trigger for emergency redeploys (no code change required).
+    workflow_dispatch:
+
+# Serialize Pages deploys; never cancel an in-flight deploy mid-build.
+concurrency:
+    group: pages-deploy
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: Build + Deploy to Cloudflare Pages
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+
+            - name: Build dist/
+              run: node scripts/build-pages.js
+              env:
+                  MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+                  BASE_PATH: /geo-sonification
+                  API_BASE: https://placeecho-geo-sonification.fly.dev
+                  WS_URL: wss://placeecho-geo-sonification.fly.dev
+                  ASSET_BASE: https://assets.placeecho.com
+
+            - name: Deploy via wrangler
+              uses: cloudflare/wrangler-action@v3
+              with:
+                  apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  command: pages deploy dist/ --project-name=placeecho-geo-sonification --branch=main --commit-dirty=true

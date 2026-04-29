@@ -669,24 +669,32 @@ body {
 @media (max-width: 600px) {
     #info-panel {
         top: auto;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
+        /* Floating card -- gaps on all four sides + safe-area awareness.
+           The sheet sits ~12 px above the home-indicator gesture zone
+           (or above the actual safe-area inset on notched devices,
+           whichever is larger), with 12 px breathing room left/right. */
+        bottom: max(12px, env(safe-area-inset-bottom));
+        left: 12px;
+        right: 12px;
+        width: auto;
         max-width: none;
         max-height: 60dvh; /* dvh: doesn't jump when iOS URL bar shows/hides */
-        padding: 8px 18px calc(18px + env(safe-area-inset-bottom));
-        border-radius: 14px 14px 0 0;
+        padding: 8px 18px 18px;
+        border-radius: 18px; /* all four corners rounded — true card */
         overflow-y: auto;
         transform: translateY(0);
         transition:
             transform 0.28s cubic-bezier(0.32, 0.72, 0, 1),
             opacity 0.18s ease;
+        touch-action: pan-y; /* let inner scroll work; drag handle owns its own touch-action */
     }
 
     #info-panel.hidden {
         opacity: 1; /* override the desktop-hidden's opacity:0 fade */
-        transform: translateY(100%); /* slide entirely off-screen */
+        /* Slide fully past the bottom edge -- 100% covers the panel
+           height; the +24px overshoot covers the safe-area gap so no
+           rounded corner peeks back in on iOS. */
+        transform: translateY(calc(100% + 24px));
         pointer-events: none;
     }
 
@@ -694,12 +702,17 @@ body {
     .sheet-handle {
         display: block;
         margin: 0 -18px 8px;
-        padding: 8px 0;
+        padding: 12px 0; /* enlarged tap + drag target */
+        touch-action: none; /* drag JS captures pointer; native scroll mustn't fight */
     }
 
-    /* Hide debug-stats + subtitle on mobile */
+    /* Hide debug-stats + subtitle + audio section on mobile.
+       The audio section's controls (Audio Off label + Vol slider) are
+       redundant with the always-visible top-right floating play/stop
+       button, and Vol on mobile is rarely worth the space. */
     #info-panel .stats-section,
-    #info-panel .subtitle {
+    #info-panel .subtitle,
+    #info-panel .audio-section {
         display: none;
     }
 
@@ -717,6 +730,13 @@ body {
     /* Let landcover list take whatever it needs (sheet itself scrolls) */
     .landcover-list {
         max-height: none;
+    }
+
+    /* While the user is actively dragging the sheet, suppress the
+       transition so movement follows the finger 1:1; the drag JS adds
+       the `dragging` class on pointerdown and removes on pointerup. */
+    #info-panel.dragging {
+        transition: none;
     }
 }
 

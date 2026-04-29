@@ -28,6 +28,7 @@ import { engine } from './audio/engine.js';
 import { announcer } from './city-announcer.js';
 import { attachProgressBar } from './progress.js';
 import { triggerInitialViewportPush } from './initial-viewport-push.js';
+import { attachSheetDrag } from './sheet-drag.js';
 
 // Build-tag banner (M4 P0-2, rule 2.F): identifies which commit served
 // the current page so an open DevTools session attributes regressions
@@ -130,6 +131,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sheetHandle = document.getElementById('sheet-handle');
     if (sheetHandle) {
         sheetHandle.addEventListener('click', togglePanel);
+        // Pull the handle down past ~80 px to dismiss the sheet.
+        // Drag-up is rubber-banded to zero (no further-expanded state).
+        attachSheetDrag({
+            handle: sheetHandle,
+            panel: state.els.infoPanel,
+            onDismiss: togglePanel,
+        });
     }
 
     if (window.matchMedia('(max-width: 600px)').matches) {

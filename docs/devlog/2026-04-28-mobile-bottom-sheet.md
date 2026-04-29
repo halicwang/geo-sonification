@@ -122,3 +122,118 @@ If real-device testing surfaces issues:
 4. **Real swipe-to-dismiss** — only if tap proves insufficient.
 
 None of these block landing the current change.
+
+---
+
+## Iteration 2 — drag gesture + floating card + drop audio section
+
+User feedback after the initial DevTools screenshots:
+
+> 1. 手机版上不要有 Audio Off 和 Volume 这种控制旋钮,这样太多余了
+> 2. (a) 顶上应该增加拖动动作。现在的浮窗上面虽然有一个小灰条,但不能往下滑动或往上拖动
+>    (b) 建议搞成悬浮式的设计。四个角采用弯曲的曲线,而不是直接贴着边。它应该是悬浮在上面,跟四周的 edge 有一个夹缝
+
+Three independent changes packaged into one iteration commit because they're tightly coupled to the same mobile code paths.
+
+### 2.1 — Drop the audio section on mobile
+
+The `.audio-section` (Audio Off / On status label + Vol slider + percentage readout) is redundant on mobile: the always-visible top-right ▶/■ floating button already conveys play/stop, and Vol on a phone is rarely worth the screen real estate. One CSS line:
+
+```css
+@media (max-width: 600px) {
+    #info-panel .audio-section { display: none; }
+}
+```
+
+Desktop keeps the audio section as before. No HTML / JS change.
+
+### 2.2 — Real drag-to-dismiss gesture
+
+The previous "drag handle" was a tap-only target — the user noticed it visually suggests dragging but didn't actually respond to drag input. Implemented proper pointer-event drag in a new module so it's testable in isolation.
+
+**`frontend/sheet-drag.js`** — `attachSheetDrag({ handle, panel, onDismiss, dismissThreshold = 80 })`:
+
+- `pointerdown` on handle → start tracking, capture pointer, add `dragging` class to panel (CSS suppresses transition during the live drag so movement follows the finger 1:1).
+- `pointermove` → update `panel.style.transform = translateY(N)` where `N = max(0, clientY - startY)`. Drag-up is rubber-banded to zero — no further-expanded state in the two-state design, and a negative translate would just lift the sheet into nowhere.
+- `pointerup` → reset state, decide based on `lastDelta > dismissThreshold` (80 px) whether to call `onDismiss()`. Inline transform is cleared so the CSS transition takes over for the snap.
+- `pointercancel` → reset state but never dismiss. OS / browser interruption isn't a deliberate release; let the snap spring the sheet back to fully open.
+- `click` (in capture phase) → suppressed if `lastDelta` exceeded `tapMovementThreshold` (6 px) so a real drag doesn't double-fire as a tap.
+
+**`frontend/__tests__/sheet-drag.test.js`** — 8 vitest cases:
+
+| Case | Verifies |
+| --- | --- |
+| `does nothing while the sheet is collapsed` | drag is a no-op when `panel.classList.contains('hidden')` |
+| `translates the panel during drag and clears on release below threshold` | live transform follows finger; sub-threshold release springs back |
+| `calls onDismiss when release passes the threshold` | over-threshold release fires the callback |
+| `rubber-bands drag-up to zero` | upward drag produces `translateY(0px)`, not negative |
+| `pointercancel resets state without firing onDismiss` | system-interrupted gesture is not a dismiss (caught a real bug — initial impl fired `onDismiss` from a shared `release()`; refactored to split `reset()` from the dismiss-firing `pointerup` path) |
+| `suppresses the post-drag click` | a real drag (>6 px) doesn't trigger the handle's click listener |
+| `lets a clean tap reach the click handler` | no movement → click fires normally → `togglePanel()` runs |
+| `detach() removes every listener and clears state` | hot-reload / cleanup contract |
+
+**`frontend/main.js`** — wired the drag attach beside the existing click listener:
+
+```js
+attachSheetDrag({
+    handle: sheetHandle,
+    panel: state.els.infoPanel,
+    onDismiss: togglePanel,
+});
+```
+
+Two affordances now toggle the sheet: tap ≡ at top-right, tap or drag-down the in-sheet handle. Drag-up does nothing visible (resists at 0).
+
+### 2.3 — Floating card style
+
+The previous mobile sheet was edge-flush (`bottom: 0`, `left: 0`, `right: 0`, top corners rounded only) — looked stuck against the viewport edges. User wanted true floating: gaps on all four sides + all four corners rounded.
+
+Changes inside `@media (max-width: 600px)`:
+
+```diff
+-    bottom: 0;
+-    left: 0;
+-    right: 0;
+-    width: 100%;
+-    border-radius: 14px 14px 0 0;
++    bottom: max(12px, env(safe-area-inset-bottom));
++    left: 12px;
++    right: 12px;
++    width: auto;
++    border-radius: 18px;
+```
+
+- 12 px gap on left and right.
+- Bottom gap is `max(12px, env(safe-area-inset-bottom))` — the larger of "12 px aesthetic gap" or "iPhone home-indicator safe area", so on notched devices the sheet sits above the gesture zone naturally.
+- All four corners 18 px (was 14 px on top-only) — slightly more pronounced curve to match the floating affordance.
+- `width: auto` so left/right offsets actually take effect (was `width: 100%` overriding them).
+
+The hidden-state translate also moved from `translateY(100%)` to `translateY(calc(100% + 24px))` — without the overshoot, the rounded bottom corners would peek back into the safe-area gap when the sheet was supposed to be off-screen.
+
+### Iteration 2 verification
+
+DevTools, port 57183, mobile 375×812:
+
+- Floating card geometry: `panelLeft: 12, panelRightGap: 12, panelBottomGap: 12, borderRadius: 18px` ✅
+- Audio section hidden: `audioSectionDisplay: 'none'` ✅
+- Drag 30 px → release → panel still expanded (springback) ✅
+- Drag 50, 120 px → live `translateY(N px)` updates ✅
+- Drag 120 px → release → panel collapsed (over-threshold dismiss) ✅
+- Tap ≡ to re-expand → works (sheet-drag's click suppression doesn't interfere with the hamburger) ✅
+
+Desktop 1280×800:
+
+- `audioSectionDisplay: 'block'` ✅ (visible as before)
+- `statsDisplay: 'block'` ✅
+- `sheetHandleDisplay: 'none'` ✅
+- `borderRadius: '12px'` ✅ (desktop's original 12 px, mobile-only `18 px` did not bleed)
+
+Gates: lint clean, format clean, vitest **71 → 79** (+8 sheet-drag cases), smoke ok.
+
+### Iteration 2 files
+
+- **Modified** `frontend/style.css` — floating card layout + `.audio-section` hidden + drag-state CSS class for transition suppression.
+- **Added** `frontend/sheet-drag.js` — pointer-event drag handler module (~110 LOC including JSDoc).
+- **Added** `frontend/__tests__/sheet-drag.test.js` — 8 vitest cases (~160 LOC).
+- **Modified** `frontend/main.js` — import + `attachSheetDrag` wiring (3 LOC net).
+- **Modified** `docs/devlog/2026-04-28-mobile-bottom-sheet.md` — this iteration section.

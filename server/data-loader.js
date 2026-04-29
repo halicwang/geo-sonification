@@ -25,7 +25,30 @@ const {
     GRID_SIZE,
 } = require('./config');
 
-const CACHE_SCHEMA_VERSION = 3; // bump when cache format changes (v3: nightlight -1 sentinel)
+/**
+ * Cache schema version. Mismatched on read → cache invalidated and
+ * rebuilt from the source CSV (see the "Schema version mismatch"
+ * branch at line ~482).
+ *
+ * **Bump protocol.** Every change to the persisted shape — the cell
+ * record fields, the wrapper envelope (`grids`, `csvFingerprint`,
+ * `schemaVersion`, …), the value semantics of any field, or the
+ * normalization output — requires bumping this constant by one and
+ * adding a row in the version history below. Old caches are then
+ * invalidated on the next process start (logged as a "Schema version
+ * mismatch" warning), forcing a one-time rebuild.
+ *
+ * **Version history.**
+ *
+ * | Version | Change | Source |
+ * | --- | --- | --- |
+ * | v1 | initial format | pre-repo |
+ * | v2 | pre-repo (no diff captured) | pre-repo |
+ * | v3 | `nightlight: -1` sentinel for cells with no VIIRS data (replaces the earlier 0-fallback that conflated "dark" with "missing") | initial repo commit `b9239a0` |
+ *
+ * Closes M3 tech-debt audit D.4 (M5 stage 3).
+ */
+const CACHE_SCHEMA_VERSION = 3;
 const GRID_SIZE_EPS = 1e-6;
 const NIGHTLIGHT_NO_DATA = -1; // sentinel: no VIIRS data for this cell
 

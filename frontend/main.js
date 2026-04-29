@@ -27,6 +27,7 @@ import { connectWebSocket } from './websocket.js';
 import { engine } from './audio/engine.js';
 import { announcer } from './city-announcer.js';
 import { attachProgressBar } from './progress.js';
+import { triggerInitialViewportPush } from './initial-viewport-push.js';
 
 // Build-tag banner (M4 P0-2, rule 2.F): identifies which commit served
 // the current page so an open DevTools session attributes regressions
@@ -103,9 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         onOpen: async () => {
             await refreshServerConfig();
             updateConnectionStatus(true);
-            if (state.runtime.map) {
-                onViewportChange();
-            }
+            triggerInitialViewportPush(state.runtime.map, onViewportChange);
         },
         onStats: (data) => {
             updateUI(data);

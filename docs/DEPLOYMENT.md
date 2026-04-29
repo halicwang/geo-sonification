@@ -239,41 +239,74 @@ to know exist:
 
 ---
 
-## Known issues (as of 2026-04-24)
+## Known issues (as of 2026-04-28)
 
-1. **Cache Rule is too broad** — the `Cache R2 assets` rule currently
-   matches `hostname == assets.placeecho.com`. Cloudflare's default
-   behavior for files under 512 MB is to prefetch the _entire_ object
-   on the first Range request before returning a slice. For the 177 MB
-   PMTiles this means the first viewport request on a cold edge pulls
-   177 MB from R2 into cache, starving concurrent audio/asset fetches.
-   **Fix**: narrow the filter to `hostname == assets.placeecho.com AND
-starts_with(path, "/audio/")`. PMTiles then bypass cache and Range
-   requests go straight to R2 (~50 ms/tile, acceptable); audio still
-   hits cache after first fetch.
+1.  **Edge caching for R2 assets never actually enabled** — corrected
+    2026-04-28 after a direct dashboard inspection during M5 (the
+    pre-2026-04-28 wording in this doc was based on a theoretical
+    prefetch hazard that never materialized).
 
-2. **First-load audio is 328 MB** — seven ambience WAVs at 46.8 MB
-   each, served as uncompressed 48 kHz stereo. On a US residential
-   100 Mbps link this is ~25-30 s; on college/hotel WiFi it can
-   approach a minute. Compressing to Opus 128 kbps should land under
-   ~4 MB per file (~28 MB total, ~10× reduction) without audibly
-   degrading the ambient textures. Requires re-encoding via ffmpeg,
-   updating `frontend/audio/buffer-cache.js` to request `.opus` (or
-   transparently content-negotiate), re-uploading to R2.
+        **Actual state.** The dashboard's only Cache Rule, "Cache R2
+        assets", is **Disabled** (`Cache Rules: 0 active` on the list view).
+        Inside it: filter expression set, but `Cache eligibility` (a
+        required field) was never selected, and none of the Edge TTL /
+        Browser TTL mode radios were checked — only the TTL value
+        dropdowns are populated, so the rule never produced an Action.
 
-3. **Grid tiles still noticeably slower than localhost** — even with
-   the cache rule narrowed, Range requests to R2 cost 40-80 ms at a US
-   edge (vs. ~0 ms on localhost). Stalls are most visible when
-   switching between globe and mercator projections (Mapbox refetches
-   the full tile set). Potential mitigations: Cloudflare Worker that
-   proxies PMTiles requests and caches individual Ranges via the
-   Workers Cache API (avoids the 512 MB full-file prefetch behavior);
-   or a smaller PMTiles (rebuild at coarser zoom) if the project can
-   tolerate less detail.
+        **Live measurement.** `curl -I -H "Range: bytes=0-1023"` against
+        both `assets.placeecho.com/tiles/grids.pmtiles` and
+        `assets.placeecho.com/audio/ambience/forest.opus` returns
+        `cf-cache-status: DYNAMIC` (= "this URL is not cacheable per
+        current configuration"). Range requests bypass any CF edge layer
+        and go straight to R2. BOS-edge round trip ~74–78 ms either way
+        (cold and warm); no 10–30 s prefetch, ever.
 
-4. **Globe → mercator switch stutter** — unrelated to network; see
-   `frontend/map.js` `GLOBE_ZOOM_CUTOFF`. Mapbox rebuilds tile
-   coverage on projection change.
+        **Why it works fine even without edge cache.** The Standard
+        caching level only auto-caches a small set of file extensions
+        (HTML/CSS/JS/images); `.pmtiles` and `.opus` aren't on that list.
+        Origin sends `Cache-Control: public, max-age=31536000, immutable`
+        but CF ignores it for non-default extensions absent an explicit
+        Cache Rule. R2 → CF egress is free, so DYNAMIC isn't a cost
+        problem either; only a latency one.
+
+        **Open M6+ optimization (not a bug).** Enable the rule properly
+        for `/audio/*`: filter `(http.host eq "assets.placeecho.com" and
+
+    starts_with(http.request.uri.path, "/audio/"))`, set Cache
+    eligibility = "Eligible for cache", Edge TTL mode = "Use cache-control
+    header if present" (or override 1 month), then enable the rule. After
+    that, second-and-later visitors get edge HIT for the seven Opus
+    files (~5–10 ms vs the current ~80–200 ms direct-from-R2 fetch).
+    PMTiles edge caching is more delicate (Range alignment, 185 MB total
+    per edge); leave PMTiles on DYNAMIC unless we measure a problem.
+
+        The original "the rule is too broad and prefetches 177 MB on first
+        Range" wording was a guess that survived from M3-era audit notes
+        and was never verified against the actual dashboard or live HTTP
+        responses. M5 dashboard inspection corrected it.
+
+2.  **First-load audio is 328 MB** — seven ambience WAVs at 46.8 MB
+    each, served as uncompressed 48 kHz stereo. On a US residential
+    100 Mbps link this is ~25-30 s; on college/hotel WiFi it can
+    approach a minute. Compressing to Opus 128 kbps should land under
+    ~4 MB per file (~28 MB total, ~10× reduction) without audibly
+    degrading the ambient textures. Requires re-encoding via ffmpeg,
+    updating `frontend/audio/buffer-cache.js` to request `.opus` (or
+    transparently content-negotiate), re-uploading to R2.
+
+3.  **Grid tiles still noticeably slower than localhost** — even with
+    the cache rule narrowed, Range requests to R2 cost 40-80 ms at a US
+    edge (vs. ~0 ms on localhost). Stalls are most visible when
+    switching between globe and mercator projections (Mapbox refetches
+    the full tile set). Potential mitigations: Cloudflare Worker that
+    proxies PMTiles requests and caches individual Ranges via the
+    Workers Cache API (avoids the 512 MB full-file prefetch behavior);
+    or a smaller PMTiles (rebuild at coarser zoom) if the project can
+    tolerate less detail.
+
+4.  **Globe → mercator switch stutter** — unrelated to network; see
+    `frontend/map.js` `GLOBE_ZOOM_CUTOFF`. Mapbox rebuilds tile
+    coverage on projection change.
 
 ---
 

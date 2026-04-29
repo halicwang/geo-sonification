@@ -32,10 +32,14 @@ export function connectWebSocket(callbacks) {
         reconnectTimerId = null;
     }
 
-    // Close previous socket if still open (prevents connection leak)
+    // Close previous socket if still open (prevents connection leak).
+    // Null both onclose and onmessage so the old socket cannot trigger a
+    // recursive reconnect or deliver an in-flight stats frame to the new
+    // engine state during the close handshake.
     if (state.runtime.ws) {
         try {
-            state.runtime.ws.onclose = null; // prevent triggering reconnect
+            state.runtime.ws.onclose = null;
+            state.runtime.ws.onmessage = null;
             state.runtime.ws.close();
         } catch {
             // ignore — socket may already be closing

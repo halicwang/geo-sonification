@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-28 | Fix        | [Null Stale WebSocket `onmessage` During Reconnect](devlog/M5/2026-04-28-M5-ws-reconnect-null-stale-onmessage.md)                                                                             |
 | 2026-04-28 | Feature    | [Mobile UX Redesign — Info Panel as Bottom Sheet](devlog/2026-04-28-mobile-bottom-sheet.md)                                                                                                   |
 | 2026-04-28 | Fix        | [Single-Port Smoke Script Drift](devlog/M5/2026-04-28-M5-single-port-smoke-fix.md)                                                                                                            |
 | 2026-04-28 | Milestone  | [M5 Quick Wins (Pack A) — single growing entry across stages](devlog/M5/2026-04-28-M5-quick-wins.md)                                                                                          |

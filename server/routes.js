@@ -23,7 +23,6 @@ const { GRID_SIZE, PROXIMITY_ZOOM_LOW, PROXIMITY_ZOOM_HIGH } = require('./config
 const { LANDCOVER_META } = require('./landcover');
 const { getHttpClientState, saveHttpClientState, getHttpClientKey } = require('./client-state');
 const { processViewport } = require('./viewport-processor');
-const { parseViewportBounds } = require('./parse-bounds');
 
 /**
  * @typedef {Object} RouteDeps
@@ -73,13 +72,14 @@ function attachRoutes(app, deps) {
         const clientKey = getHttpClientKey(req);
         const { state, previousMode } = getHttpClientState(clientKey);
         const body = req.body && typeof req.body === 'object' ? req.body : {};
-        const parsedBounds = parseViewportBounds(body.bounds, 'HTTP');
-        if (parsedBounds.error) {
-            return res.status(400).json({ error: parsedBounds.error });
+        if (!Array.isArray(body.bounds) || body.bounds.length !== 4) {
+            return res.status(400).json({
+                error: 'HTTP bounds must be an array: [west, south, east, north]',
+            });
         }
 
         const zoom = Number.isFinite(body.zoom) ? body.zoom : undefined;
-        const result = processViewport(parsedBounds.bounds, state, zoom);
+        const result = processViewport(body.bounds, state, zoom);
         if (result.error) {
             return res.status(400).json({ error: result.error });
         }

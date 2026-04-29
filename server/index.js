@@ -46,15 +46,6 @@ const PMTILES_PATH = path.join(__dirname, '../data/tiles/grids.pmtiles');
 // ============ State ============
 let dataLoaded = false;
 
-/**
- * @internal @test-only
- * Allow tests to toggle the dataLoaded flag without calling startServer().
- * @param {boolean} value
- */
-function _setDataLoaded(value) {
-    dataLoaded = value;
-}
-
 let httpServer = null;
 let wssServer = null;
 
@@ -264,19 +255,11 @@ async function startServer() {
     } catch (err) {
         dataLoaded = false;
         if (wssServer) {
-            try {
-                wssServer.close();
-            } catch (closeErr) {
-                console.error('Failed to close WebSocket server after startup error:', closeErr);
-            }
+            wssServer.close();
             wssServer = null;
         }
         if (httpServer) {
-            try {
-                httpServer.close();
-            } catch (closeErr) {
-                console.error('Failed to close HTTP server after startup error:', closeErr);
-            }
+            httpServer.close();
             httpServer = null;
         }
         console.error('Failed to start server:', err);
@@ -312,5 +295,4 @@ module.exports = {
     attachWsServer,
     startServer,
     gracefulShutdown,
-    _setDataLoaded,
 };

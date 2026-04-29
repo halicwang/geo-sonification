@@ -29,7 +29,6 @@ const WebSocket = require('ws');
 const { BROADCAST_STATS } = require('./config');
 const { createClientState } = require('./client-state');
 const { processViewport } = require('./viewport-processor');
-const { parseViewportBounds } = require('./parse-bounds');
 
 /** Interval between WebSocket ping probes; clients that don't respond are terminated. */
 const WS_PING_INTERVAL_MS = 30000; // 30 seconds
@@ -98,9 +97,13 @@ function attachWsHandler(wss, deps) {
                 const data = JSON.parse(message);
 
                 if (data.type === 'viewport') {
-                    const parsedBounds = parseViewportBounds(data.bounds, 'WebSocket');
-                    if (parsedBounds.error) {
-                        ws.send(JSON.stringify({ type: 'error', error: parsedBounds.error }));
+                    if (!Array.isArray(data.bounds) || data.bounds.length !== 4) {
+                        ws.send(
+                            JSON.stringify({
+                                type: 'error',
+                                error: 'WebSocket bounds must be an array: [west, south, east, north]',
+                            })
+                        );
                         return;
                     }
 
@@ -116,7 +119,7 @@ function attachWsHandler(wss, deps) {
                     }
 
                     const zoom = Number.isFinite(data.zoom) ? data.zoom : undefined;
-                    const result = processViewport(parsedBounds.bounds, clientState, zoom);
+                    const result = processViewport(data.bounds, clientState, zoom);
                     if (result.error) {
                         ws.send(JSON.stringify({ type: 'error', error: result.error }));
                         return;

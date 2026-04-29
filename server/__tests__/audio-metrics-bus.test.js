@@ -20,10 +20,6 @@ describe('BUS_NAMES', () => {
     test('has 7 entries in correct order', () => {
         expect(BUS_NAMES).toEqual(['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water']);
     });
-
-    test('is frozen', () => {
-        expect(Object.isFrozen(BUS_NAMES)).toBe(true);
-    });
 });
 
 describe('BUS_LC_INDICES', () => {

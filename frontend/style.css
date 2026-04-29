@@ -716,16 +716,11 @@ body {
         display: none;
     }
 
-    /* Tighten branding spacing now that subtitle is gone */
-    #info-panel .brand-mark {
-        margin-bottom: 2px;
-    }
-    #info-panel h2 {
-        margin-bottom: 4px;
-    }
-    #info-panel .vintage {
-        margin-bottom: 14px;
-    }
+    /* Branding spacing inherits desktop values (.brand-mark 6 px,
+       h2 4 px, .vintage 14 px + border) — overriding them tighter on
+       mobile made PLACEECHO sit right on top of Geo-Sonification,
+       which the user flagged as visually cramped relative to the
+       desktop layout. */
 
     /* Let landcover list take whatever it needs (sheet itself scrolls) */
     .landcover-list {

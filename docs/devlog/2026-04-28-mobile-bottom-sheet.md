@@ -292,3 +292,42 @@ After the boot-collapse, tapping ≡ to expand still triggers the normal 280 ms 
 - **Modified** `docs/devlog/2026-04-28-mobile-bottom-sheet.md` — this iteration section.
 
 The redundant `matchMedia` check in `main.js` is **kept on purpose** for defense in depth — the inline script can vanish through a future HTML rewrite, and the JS-side check survives that.
+
+---
+
+## Iteration 4 — restore desktop branding spacing on mobile
+
+User feedback after iteration 3 reload: "PLACEECHO 和 Geo-Sonification 这个空隙更紧凑了…不要这样子紧凑".
+
+### Diagnosis
+
+Iteration 2's mobile media block had explicitly tightened branding spacing on the theory that removing the subtitle left the title-block looking too airy:
+
+```css
+@media (max-width: 600px) {
+    #info-panel .brand-mark { margin-bottom: 2px; }   /* desktop: 6px */
+    #info-panel h2          { margin-bottom: 4px; }   /* same as desktop */
+    #info-panel .vintage    { margin-bottom: 14px; }  /* same as desktop */
+}
+```
+
+The 2 px override on `.brand-mark` collapsed the gap between the all-caps "PLACEECHO" tag and the "Geo-Sonification" title to almost zero, which read as cramped in side-by-side comparison with the desktop's 6 px.
+
+### Fix
+
+Removed all three overrides. Mobile now inherits the desktop values verbatim:
+
+- `.brand-mark` → 6 px
+- `h2` → 4 px
+- `.vintage` → 14 px (with the existing border-bottom)
+
+Net visual change: roughly +4 px of breathing room between the brand mark and the title; rest of the panel unchanged. No HTML or JS edit.
+
+### Verification
+
+DevTools mobile 375 × 812: computed `brand-mark margin-bottom` is back to `6 px`, brand-block-bottom to title-top gap is `6 px` (was `2 px`). Screenshot shows the title block with the same proportions as the desktop right-sidebar version. ✅
+
+### Iteration 4 files
+
+- **Modified** `frontend/style.css` — deleted three `@media (max-width: 600px)` rules.
+- **Modified** `docs/devlog/2026-04-28-mobile-bottom-sheet.md` — this section.

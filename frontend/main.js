@@ -30,11 +30,11 @@ import { attachProgressBar } from './progress.js';
 import { triggerInitialViewportPush } from './initial-viewport-push.js';
 import { attachSheetDrag } from './sheet-drag.js';
 
-// Build-tag banner (M4 P0-2, rule 2.F): identifies which commit served
-// the current page so an open DevTools session attributes regressions
-// to a specific deploy. Build identity is injected by
-// scripts/build-pages.js into config.runtime.js at deploy time; in local
-// development the fields are empty and the banner is suppressed.
+// Build-tag banner: identifies which commit served the current page so
+// an open DevTools session attributes regressions to a specific deploy.
+// Build identity is injected by scripts/build-pages.js into
+// config.runtime.js at deploy time; in local development the fields
+// are empty and the banner is suppressed.
 {
     const cfg = window.GEO_SONIFICATION_CONFIG || {};
     if (cfg.buildHash) {

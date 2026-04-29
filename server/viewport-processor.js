@@ -46,14 +46,12 @@ const {
  * which together are the dominant cost (~0.3-1ms depending on viewport
  * size; the per-client tail is ~20µs).
  *
- * **Why bounds, not lcFractions.** The original M3 audit (D.2) flagged
- * "viewport-processor doesn't memoize lcFractions"; the M4 P1-2 spec
- * inherited that wording. But `lcFractions` is an *intermediate* output —
- * computing the cache key from it requires already running the full
- * spatial pipeline, which defeats the savings the proposal's DoD
- * (`elapsedMs ≈ 0` on hit) actually targets. Keying on the *input*
- * (bounds) lets a hit short-circuit the entire spatial call. See the
- * P1-2 devlog for the full reasoning.
+ * **Why bounds, not lcFractions.** An earlier proposal suggested
+ * memoizing on `lcFractions`, but `lcFractions` is an *intermediate*
+ * output — computing the cache key from it requires already running
+ * the full spatial pipeline, which defeats the savings (the DoD was
+ * `elapsedMs ≈ 0` on hit). Keying on the *input* (bounds) lets a hit
+ * short-circuit the entire spatial call.
  *
  * @type {{ key: string, gridsInView: import('./types').GridCell[], lcFractions: number[], baseStats: object } | null}
  */

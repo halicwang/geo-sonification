@@ -14,9 +14,9 @@
  * user never actually sees. The visible symptom is an empty grid +
  * stale audio for one viewport-debounce window until the user pans.
  *
- * Pre-existing bug, unmasked by M4 P5-1's idle suspend (the
- * always-running rAF used to paper over it on the next frame after
- * the map finally rendered). M5 stage 2 fix.
+ * Pre-existing bug, unmasked by the idle suspend — the always-running
+ * rAF used to paper over it on the next frame after the map finally
+ * rendered.
  *
  * @param {mapboxgl.Map|null} map - the Mapbox instance, or null if
  *     `initMap()` has not run yet.

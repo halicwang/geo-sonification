@@ -4,11 +4,9 @@
 /**
  * Loop-progress bar — pointer-driven seek + rAF-driven visual fill.
  *
- * Pure code-move from `frontend/main.js:225-303` (M4 P2-2). No
- * behavior change. Polling-based fill (rAF reading
- * `engine.getLoopProgress()`) is preserved as-is — the post-pivot
- * proposal dropped the event-bus rewrite that would have replaced
- * polling with subscription.
+ * Polling-based fill (rAF reading `engine.getLoopProgress()`) is
+ * intentional — a subscription-based variant was considered and
+ * deferred.
  *
  * Usage:
  *   const bar = attachProgressBar({ progressEl, fillEl, handleEl, engine });

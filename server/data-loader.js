@@ -45,8 +45,6 @@ const {
  * | v1 | initial format | pre-repo |
  * | v2 | pre-repo (no diff captured) | pre-repo |
  * | v3 | `nightlight: -1` sentinel for cells with no VIIRS data (replaces the earlier 0-fallback that conflated "dark" with "missing") | initial repo commit `b9239a0` |
- *
- * Closes M3 tech-debt audit D.4 (M5 stage 3).
  */
 const CACHE_SCHEMA_VERSION = 3;
 const GRID_SIZE_EPS = 1e-6;

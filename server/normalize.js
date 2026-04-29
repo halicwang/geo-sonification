@@ -36,8 +36,8 @@ function calcPercentiles(data, field) {
         .sort((a, b) => a - b);
     if (positive.length === 0) return { p1: 0, p99: 1 };
     return {
-        p1: positive[Math.floor((positive.length - 1) * 0.01)] ?? positive[0],
-        p99: positive[Math.floor((positive.length - 1) * 0.99)] ?? positive[positive.length - 1],
+        p1: positive[Math.floor((positive.length - 1) * 0.01)],
+        p99: positive[Math.floor((positive.length - 1) * 0.99)],
     };
 }
 

@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-28 | Refactor   | [Occam's Razor Sweep (Group A)](devlog/M5/2026-04-28-M5-occam-razor-group-a.md)                                                                                                               |
 | 2026-04-28 | Refactor   | [Prune Dead Code and Over-Modularization](devlog/M5/2026-04-28-M5-prune-dead-code.md)                                                                                                         |
 | 2026-04-28 | Fix        | [Inline Minimal Basemap to Drop Cold-Load Navy Flash](devlog/M5/2026-04-28-M5-inline-minimal-basemap.md)                                                                                      |
 | 2026-04-28 | Refactor   | [Drive Proximity Locally from Live Zoom](devlog/M5/2026-04-28-M5-proximity-local-direct.md)                                                                                                   |

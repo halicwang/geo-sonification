@@ -9,9 +9,6 @@
  * properties baked into the PMTiles vector layer.
  * On hover: switches the cursor to a pointer over the dot layer.
  *
- * Pure code-move from `frontend/map.js:340-394` (M4 P2-1). No
- * behavior change.
- *
  * @module frontend/popup
  */
 

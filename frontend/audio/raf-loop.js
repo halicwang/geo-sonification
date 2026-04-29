@@ -43,9 +43,9 @@
  */
 
 /**
- * Initialize an EMA state. Defaults match the audio engine's pre-P3-3
- * module-level initial values: every field zeroed except `coverage*`
- * which starts at 1 (the engine's neutral "full land" default).
+ * Initialize an EMA state. Defaults: every field zeroed except
+ * `coverage*` which starts at 1 (the engine's neutral "full land"
+ * default).
  *
  * @param {{ numBuses: number }} opts
  * @returns {EmaState}
@@ -137,11 +137,11 @@ export function snapEmaToTargets(state) {
 
 /**
  * Test whether every smoothed value is within `threshold` of its target.
- * Used by the audio engine's rAF callback (M4 P5-1) to suspend the loop
- * after EMA convergence — a tick that produces no observable change is
- * pure overhead, so we skip it and re-arm rAF only when a target moves
- * (or when buffers finish loading and the gain writes finally have
- * something to flow into — see engine.js `start()`).
+ * Used by the audio engine's rAF callback to suspend the loop after EMA
+ * convergence — a tick that produces no observable change is pure
+ * overhead, so we skip it and re-arm rAF only when a target moves (or
+ * when buffers finish loading and the gain writes finally have something
+ * to flow into — see engine.js `start()`).
  *
  * Uniform threshold across all four EMAs (buses, coverage, proximity,
  * velocity). The proposal's "velocity = 0" wording maps to the same

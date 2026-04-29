@@ -53,11 +53,11 @@ let wssServer = null;
 let _statsCounter = { viewports: 0, totalMs: 0 };
 const STATS_LOG_INTERVAL_MS = 30000;
 const _statsTimer = setInterval(() => {
-    // Skip while CSV ingestion is still running. Pre-existing inner
-    // counter guard already produces no log under this condition (no
-    // viewports get processed before dataLoaded flips), but stating
-    // it explicitly closes M3 audit D.1 and protects against any
-    // future caller that might bump _statsCounter prematurely.
+    // Skip while CSV ingestion is still running. The inner counter
+    // guard already produces no log under this condition (no viewports
+    // get processed before dataLoaded flips), but stating it explicitly
+    // protects against any future caller that might bump _statsCounter
+    // prematurely.
     if (!dataLoaded) return;
     if (_statsCounter.viewports > 0) {
         const avgMs = (_statsCounter.totalMs / _statsCounter.viewports).toFixed(1);

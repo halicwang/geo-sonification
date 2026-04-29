@@ -175,11 +175,11 @@ const EMA_TICK_OPTS = Object.freeze({
 /**
  * Per-channel `|smoothed - target|` tolerance below which a tick is treated
  * as fully converged. The rAF callback suspends itself when every EMA
- * channel is under this threshold (M4 P5-1; M3 audit B.6 fix). Wakes via
- * `update()`, `updateMotion()`, `handleVisibilityChange()`, and the
- * post-`bufferCache.loadAll()` arm in `start()` (the missing path that
- * caused the original P5-1 to dropout silently — see devlog
- * 2026-04-27-M4-raf-idle-detection-redo.md).
+ * channel is under this threshold. Wakes via `update()`, `updateMotion()`,
+ * `handleVisibilityChange()`, and the post-`bufferCache.loadAll()` arm
+ * in `start()` — the latter is the path whose absence caused an earlier
+ * idle-detection attempt to drop out silently; see devlog
+ * 2026-04-27-M4-raf-idle-detection-redo.md.
  */
 const IDLE_THRESHOLD = 0.001;
 
@@ -201,8 +201,7 @@ let pendingParams = null;
 // ── Buffer cache ──
 //
 // Tree and water first (most common biomes), then crop / urban / bare /
-// the two grasslands as a parallel second wave. Same priority order as
-// the pre-P3-2 PRIORITY_FIRST / PRIORITY_SECOND constants.
+// the two grasslands as a parallel second wave.
 const bufferCache = createBufferCache({
     busNames: ['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water'],
     assetBase: ASSET_BASE,
@@ -554,7 +553,7 @@ function update(audioParams) {
     // backslide mid-animation when a stale-zoom server frame arrives
     // after a fresher local update).
 
-    // Wake rAF if it suspended itself after the last convergence (P5-1).
+    // Wake rAF if it suspended itself after the last convergence.
     // No-op when already running. One frame of overhead at most if the new
     // targets equal the smoothed values — the next idle check re-suspends.
     startRaf();
@@ -680,9 +679,9 @@ function rafLoop() {
     // values — pure waste. Suspend `requestAnimationFrame` until update()
     // / updateMotion() / handleVisibilityChange() / startAllSources()
     // wakes us. The startAllSources wake (re-armed via start()'s
-    // post-loadAll startRaf) is what kept the original P5-1 from working:
-    // without it, a fresh-load convergence-before-buffers race left the
-    // gain.value writes gated out forever.
+    // post-loadAll startRaf) is essential: without it, a fresh-load
+    // convergence-before-buffers race leaves the gain.value writes
+    // gated out forever.
     if (isEmaIdle(ema, IDLE_THRESHOLD)) {
         rafId = null;
         return;
@@ -750,9 +749,9 @@ function handleVisibilityChange() {
  * without rebuilding the graph. Must be invoked from a user gesture
  * on first call (browser autoplay policy).
  *
- * Sibling modules under `frontend/audio/` (added in P3-1..P3-4) call
- * this helper to obtain the singleton AudioContext, which is what makes
- * the graph-build a single point of truth across the package.
+ * Sibling modules under `frontend/audio/` call this helper to obtain
+ * the singleton AudioContext, which is what makes the graph-build a
+ * single point of truth across the package.
  *
  * @returns {AudioContext}
  */
@@ -837,8 +836,7 @@ async function start() {
     // to busGains, so a single wake tick will write the converged
     // gain.value through and audio becomes audible. Without this line,
     // gain.value stays at the initial 0 forever and the seven ambience
-    // buses are silent until the user moves the map (the production bug
-    // the original P5-1 hit; see devlog 2026-04-27-M4-revert-p5-1-raf-idle).
+    // buses are silent until the user moves the map.
     startRaf();
 }
 

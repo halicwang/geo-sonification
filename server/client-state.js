@@ -4,12 +4,11 @@
 /**
  * Per-client state for the geo-sonification server.
  *
- * Merges the pre-M4-P4-3 `mode-manager.js` (hysteresis + per-IP HTTP
- * mode persistence) and `delta-state.js` (per-client delta snapshots)
- * into one module with one shared TTL timer (M3 audit D.5 fix). One
- * entry per HTTP client now carries both the hysteresis mode and the
- * delta snapshot, so a client's mode and delta state can never drift
- * across separate Map entries.
+ * Merges hysteresis + per-IP HTTP mode persistence and per-client delta
+ * snapshots into one module with one shared TTL timer. One entry per
+ * HTTP client carries both the hysteresis mode and the delta snapshot,
+ * so a client's mode and delta state can never drift across separate
+ * Map entries.
  *
  * Per-client state shape: `{ currentMode, previousSnapshot }`.
  *
@@ -159,7 +158,7 @@ function normalizeClientId(value) {
 
 /**
  * Derive a unique key for an HTTP request. Both mode and delta state
- * persist under this single key (P4-3 merger).
+ * persist under this single key.
  *
  * Priority:
  *   1. body.clientId        → `client:${id}`

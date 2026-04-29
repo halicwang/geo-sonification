@@ -19,6 +19,9 @@ let reconnectTimerId = null;
 /**
  * Connect to the server WebSocket and auto-reconnect on close.
  *
+ * All four callbacks are required; callers should pass no-op functions
+ * for events they want to ignore.
+ *
  * @param {Object} callbacks
  * @param {function(): Promise<void>} callbacks.onOpen    — called after WS opens
  * @param {function(Object): void}    callbacks.onStats   — called with parsed stats data
@@ -53,12 +56,10 @@ export function connectWebSocket(callbacks) {
         console.log('WebSocket connected');
         state.runtime.wsReconnectDelay = 1000; // reset backoff on successful connection
 
-        if (callbacks.onOpen) {
-            try {
-                await callbacks.onOpen();
-            } catch (err) {
-                console.error('WebSocket onOpen callback failed:', err);
-            }
+        try {
+            await callbacks.onOpen();
+        } catch (err) {
+            console.error('WebSocket onOpen callback failed:', err);
         }
     };
 
@@ -66,10 +67,10 @@ export function connectWebSocket(callbacks) {
         try {
             const data = JSON.parse(event.data);
             if (data.type === 'stats') {
-                if (callbacks.onStats) callbacks.onStats(data);
+                callbacks.onStats(data);
             } else if (data.type === 'error') {
                 console.error('Server error:', data.error);
-                if (callbacks.onError) callbacks.onError(data.error);
+                callbacks.onError(data.error);
             }
         } catch (err) {
             console.error('WebSocket message parse error:', err);
@@ -85,7 +86,7 @@ export function connectWebSocket(callbacks) {
             `WebSocket disconnected, reconnecting in ${state.runtime.wsReconnectDelay / 1000}s...`
         );
 
-        if (callbacks.onDisconnect) callbacks.onDisconnect();
+        callbacks.onDisconnect();
 
         // Reconnect with exponential backoff (store timer so it can be cancelled)
         reconnectTimerId = setTimeout(() => {

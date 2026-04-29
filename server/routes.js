@@ -63,8 +63,7 @@ function attachRoutes(app, deps) {
     });
 
     // API: Calculate viewport stats. Per-client hysteresis mode + delta
-    // snapshot share a single Map entry keyed by getHttpClientKey() (M4 P4-3
-    // merger; M3 audit D.5 fix).
+    // snapshot share a single Map entry keyed by getHttpClientKey().
     app.post('/api/viewport', (req, res) => {
         if (!getDataLoaded()) {
             return res.status(503).json({ error: 'Data not loaded yet', dataLoaded: false });

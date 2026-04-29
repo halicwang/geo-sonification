@@ -156,7 +156,7 @@ export async function loadServerConfig() {
             return;
         }
         const config = await response.json();
-        if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
+        if (Number.isFinite(config.gridSize) && config.gridSize > 0) {
             state.config.gridSize = config.gridSize;
         }
         if (config.landcoverMeta) {

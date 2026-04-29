@@ -15,6 +15,16 @@ loadEnvFile();
 // ---- Env helpers ----
 
 /**
+ * Read an env var, returning `undefined` for both unset and empty-string.
+ * @param {string} name
+ * @returns {string|undefined}
+ */
+function readEnv(name) {
+    const v = process.env[name];
+    return v === undefined || v === '' ? undefined : v;
+}
+
+/**
  * Parse an env var as a valid TCP/UDP port (1-65535), exit on invalid.
  * @param {string} envVar - Environment variable name
  * @param {number} defaultPort - Fallback value
@@ -22,10 +32,8 @@ loadEnvFile();
  * @returns {number}
  */
 function parsePort(envVar, defaultPort, name) {
-    const value = process.env[envVar];
-    if (value === undefined || value === '') {
-        return defaultPort;
-    }
+    const value = readEnv(envVar);
+    if (value === undefined) return defaultPort;
     const port = parseInt(value, 10);
     if (isNaN(port) || port < 1 || port > 65535) {
         console.error(
@@ -44,8 +52,8 @@ function parsePort(envVar, defaultPort, name) {
  * @returns {number}
  */
 function parseNonNegativeFloat(envVar, defaultValue, name) {
-    const value = process.env[envVar];
-    if (value === undefined || value === '') return defaultValue;
+    const value = readEnv(envVar);
+    if (value === undefined) return defaultValue;
     const parsed = Number.parseFloat(value);
     if (!Number.isFinite(parsed) || parsed < 0) {
         console.error(`ERROR: Invalid ${name} "${value}". Must be a non-negative number.`);
@@ -62,8 +70,8 @@ function parseNonNegativeFloat(envVar, defaultValue, name) {
  * @returns {number}
  */
 function parseNonNegativeInt(envVar, defaultValue, name) {
-    const value = process.env[envVar];
-    if (value === undefined || value === '') return defaultValue;
+    const value = readEnv(envVar);
+    if (value === undefined) return defaultValue;
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed < 0) {
         console.error(`ERROR: Invalid ${name} "${value}". Must be a non-negative integer.`);
@@ -79,12 +87,10 @@ function parseNonNegativeInt(envVar, defaultValue, name) {
 // is the canonical env var (Fly.io, most PaaS providers set it for you);
 // `HTTP_PORT` is accepted as a legacy alias for existing local dev setups.
 
-const HTTP_PORT = (() => {
-    if (process.env.PORT !== undefined && process.env.PORT !== '') {
-        return parsePort('PORT', 3000, 'PORT');
-    }
-    return parsePort('HTTP_PORT', 3000, 'HTTP');
-})();
+const HTTP_PORT =
+    readEnv('PORT') !== undefined
+        ? parsePort('PORT', 3000, 'PORT')
+        : parsePort('HTTP_PORT', 3000, 'HTTP');
 
 // ---- Aggregation ----
 // Two modes: "legacy" (simple grid-count average) vs "v2_area_weighted" (land-area weighted).
@@ -167,8 +173,8 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 // Size of each grid cell in degrees. Must divide evenly into 360 (lon) and 180 (lat).
 // Default 0.5 matches GEE-exported data (0.5° × 0.5° cells).
 const GRID_SIZE = (() => {
-    const raw = process.env.GRID_SIZE;
-    if (raw === undefined || raw === '') return 0.5;
+    const raw = readEnv('GRID_SIZE');
+    if (raw === undefined) return 0.5;
     const val = Number.parseFloat(raw);
     if (!Number.isFinite(val) || val <= 0) {
         console.error(`ERROR: Invalid GRID_SIZE "${raw}". Must be a positive number.`);
@@ -201,21 +207,15 @@ const PER_GRID_THRESHOLD_CENTER = parseNonNegativeInt(
 );
 const PER_GRID_HYSTERESIS = parseNonNegativeInt('PER_GRID_HYSTERESIS', 0, 'PER_GRID_HYSTERESIS');
 
-const PER_GRID_THRESHOLD_ENTER = (() => {
-    const explicit = process.env.PER_GRID_THRESHOLD_ENTER;
-    if (explicit !== undefined && explicit !== '') {
-        return parseNonNegativeInt('PER_GRID_THRESHOLD_ENTER', 0, 'PER_GRID_THRESHOLD_ENTER');
-    }
-    return Math.max(0, PER_GRID_THRESHOLD_CENTER - PER_GRID_HYSTERESIS);
-})();
+const PER_GRID_THRESHOLD_ENTER =
+    readEnv('PER_GRID_THRESHOLD_ENTER') !== undefined
+        ? parseNonNegativeInt('PER_GRID_THRESHOLD_ENTER', 0, 'PER_GRID_THRESHOLD_ENTER')
+        : Math.max(0, PER_GRID_THRESHOLD_CENTER - PER_GRID_HYSTERESIS);
 
-const PER_GRID_THRESHOLD_EXIT = (() => {
-    const explicit = process.env.PER_GRID_THRESHOLD_EXIT;
-    if (explicit !== undefined && explicit !== '') {
-        return parseNonNegativeInt('PER_GRID_THRESHOLD_EXIT', 0, 'PER_GRID_THRESHOLD_EXIT');
-    }
-    return PER_GRID_THRESHOLD_CENTER + PER_GRID_HYSTERESIS;
-})();
+const PER_GRID_THRESHOLD_EXIT =
+    readEnv('PER_GRID_THRESHOLD_EXIT') !== undefined
+        ? parseNonNegativeInt('PER_GRID_THRESHOLD_EXIT', 0, 'PER_GRID_THRESHOLD_EXIT')
+        : PER_GRID_THRESHOLD_CENTER + PER_GRID_HYSTERESIS;
 
 if (PER_GRID_THRESHOLD_ENTER > PER_GRID_THRESHOLD_EXIT) {
     console.error(

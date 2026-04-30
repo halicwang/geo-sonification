@@ -41,6 +41,8 @@
 
 import {
     ASSET_BASE,
+    GRID_FEATURE_STATE_SOURCE,
+    GRID_FEATURE_STATE_SOURCE_LAYER,
     HOVER_GLOW_R_KM_BY_ZOOM,
     HOVER_GLOW_BORDER_FALLOFF,
     HOVER_GLOW_MAX_GLOWING,
@@ -117,10 +119,6 @@ let mapRef = null;
  * compound during a sustained drag.
  */
 let dragging = false;
-
-/** Cached source-layer descriptor for setFeatureState. */
-const FEATURE_STATE_SOURCE = 'grid-source';
-const FEATURE_STATE_SOURCE_LAYER = 'grids';
 
 // ============ Sidecar parsing ============
 
@@ -354,7 +352,6 @@ export function borderFactor(dKm, table = tunables.borderFalloff) {
             return hermiteBlend(dKm, x0, x1, y0, y1);
         }
     }
-    return 0; // unreachable
 }
 
 /**
@@ -376,7 +373,6 @@ export function rByZoom(zoom, table = tunables.rByZoom) {
             return r0 + (r1 - r0) * t;
         }
     }
-    return table[table.length - 1][1];
 }
 
 // ============ Sidecar fetch ============
@@ -425,7 +421,7 @@ function tick() {
     // (not just in event handlers) so a mousemove-queued RAF tick that
     // happens to fire mid-drag also honors the pause.
     if (dragging) return;
-    if (!cursor || !gridIndex || !gridIndex.spatialIndex || !mapRef) return;
+    if (!cursor || !gridIndex || !mapRef) return;
     if (!mapRef.isStyleLoaded()) return;
     if (!mapRef.getLayer('grid-dots')) return;
 
@@ -513,7 +509,11 @@ function tick() {
     for (const c of candidates) {
         currentGlowingFids.add(c.fid);
         mapRef.setFeatureState(
-            { source: FEATURE_STATE_SOURCE, sourceLayer: FEATURE_STATE_SOURCE_LAYER, id: c.fid },
+            {
+                source: GRID_FEATURE_STATE_SOURCE,
+                sourceLayer: GRID_FEATURE_STATE_SOURCE_LAYER,
+                id: c.fid,
+            },
             { glow: c.glow }
         );
     }
@@ -524,8 +524,8 @@ function tick() {
             if (!currentGlowingFids.has(fid)) {
                 mapRef.setFeatureState(
                     {
-                        source: FEATURE_STATE_SOURCE,
-                        sourceLayer: FEATURE_STATE_SOURCE_LAYER,
+                        source: GRID_FEATURE_STATE_SOURCE,
+                        sourceLayer: GRID_FEATURE_STATE_SOURCE_LAYER,
                         id: fid,
                     },
                     { glow: 0 }
@@ -601,7 +601,11 @@ function clearAllGlow() {
     if (!mapRef || prevGlowingFids.size === 0) return;
     for (const fid of prevGlowingFids) {
         mapRef.setFeatureState(
-            { source: FEATURE_STATE_SOURCE, sourceLayer: FEATURE_STATE_SOURCE_LAYER, id: fid },
+            {
+                source: GRID_FEATURE_STATE_SOURCE,
+                sourceLayer: GRID_FEATURE_STATE_SOURCE_LAYER,
+                id: fid,
+            },
             { glow: 0 }
         );
     }

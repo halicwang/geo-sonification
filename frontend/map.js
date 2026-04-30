@@ -10,7 +10,14 @@
  * @module frontend/map
  */
 
-import { state, ASSET_BASE, VIEWPORT_DEBOUNCE, getClientId } from './config.js';
+import {
+    state,
+    ASSET_BASE,
+    VIEWPORT_DEBOUNCE,
+    getClientId,
+    GRID_FEATURE_STATE_SOURCE,
+    GRID_FEATURE_STATE_SOURCE_LAYER,
+} from './config.js';
 import { updateUI, showToast } from './ui.js';
 import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
@@ -66,7 +73,7 @@ async function addGridLayer() {
 
     const header = await mapboxPmTiles.PmTilesSource.getHeader(PMTILES_URL);
 
-    state.runtime.map.addSource('grid-source', {
+    state.runtime.map.addSource(GRID_FEATURE_STATE_SOURCE, {
         type: mapboxPmTiles.PmTilesSource.SOURCE_TYPE,
         url: PMTILES_URL,
         minzoom: header.minZoom,
@@ -80,8 +87,8 @@ async function addGridLayer() {
     state.runtime.map.addLayer({
         id: GRID_DOT_LAYER,
         type: 'circle',
-        source: 'grid-source',
-        'source-layer': 'grids',
+        source: GRID_FEATURE_STATE_SOURCE,
+        'source-layer': GRID_FEATURE_STATE_SOURCE_LAYER,
         paint: {
             // circle-color interpolates between the rest grey and pure
             // white based on a per-feature `glow` state value in [0,1]

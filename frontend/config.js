@@ -135,6 +135,21 @@ export const WS_RECONNECT_MAX = 30000;
  */
 export const STALE_GRACE_MS = 5000;
 
+// ============ Grid layer identifiers ============
+//
+// Source id and source-layer name for the PMTiles grid dot layer.
+// frontend/map.js declares the source/layer with these names, and
+// frontend/hover-glow.js writes feature-state against the same pair.
+// Keeping them in one place avoids the silent-failure mode where the
+// pair drifts between the two files and setFeatureState targets a
+// non-existent layer.
+
+/** Mapbox source id for the PMTiles grid dot layer. */
+export const GRID_FEATURE_STATE_SOURCE = 'grid-source';
+
+/** Vector tile layer name inside the PMTiles archive. */
+export const GRID_FEATURE_STATE_SOURCE_LAYER = 'grids';
+
 // ============ Hover-glow tunables ============
 //
 // Consumed by frontend/hover-glow.js. Live-overridable in DevTools via

@@ -9,11 +9,11 @@
  * iy = floor((lat+90)/GRID_SIZE), compositeKey = ix * LAT_BUCKETS + iy.
  * This avoids floating-point string issues and gives O(1) lookups.
  *
- * Two aggregation strategies:
- *   - Legacy:        simple average across grid count
- *   - Area-weighted: weighted by land_area_km2 * landFractionWeight()
- *
- * The final stats are used for sonification via the Web Audio engine.
+ * Aggregation: each cell's contribution to viewport stats is weighted
+ * by `land_area_km2 * landFractionWeight(land_fraction)`, so larger /
+ * more-land cells dominate proportionally and tiny coastal slivers
+ * don't bias the mean. The final stats are used for sonification via
+ * the Web Audio engine.
  */
 
 const { normalizeValues } = require('./normalize');
@@ -24,7 +24,6 @@ const {
     getCellLcDistribution,
 } = require('./landcover');
 const {
-    USE_LEGACY_AGGREGATION,
     MIN_LAND_AREA_KM2,
     landFractionWeight,
     GRID_SIZE,
@@ -336,73 +335,6 @@ function buildLandcoverBreakdown(lcCounts, totalWeight) {
 }
 
 /**
- * Calculate viewport stats (legacy aggregation: simple average / grid-count).
- *
- * @param {import('./types').GridCell[]} gridsInView
- * @returns {import('./types').ViewportStats}
- */
-function calculateLegacyStats(gridsInView) {
-    const n = gridsInView.length;
-    const avgForest = n > 0 ? gridsInView.reduce((s, g) => s + (g.forest_pct ?? 0), 0) / n : 0;
-    const avgPopulation =
-        n > 0 ? gridsInView.reduce((s, g) => s + (g.population_density ?? 0), 0) / n : 0;
-    // Exclude NIGHTLIGHT_NO_DATA sentinel (no VIIRS data) from nightlight averages
-    const nlP90Cells = gridsInView.filter((g) => (g.nightlight_p90 ?? NIGHTLIGHT_NO_DATA) >= 0);
-    const nlMeanCells = gridsInView.filter((g) => (g.nightlight_mean ?? NIGHTLIGHT_NO_DATA) >= 0);
-    const avgNightlightP90 =
-        nlP90Cells.length > 0
-            ? nlP90Cells.reduce((s, g) => s + g.nightlight_p90, 0) / nlP90Cells.length
-            : 0;
-    const avgNightlightMean =
-        nlMeanCells.length > 0
-            ? nlMeanCells.reduce((s, g) => s + g.nightlight_mean, 0) / nlMeanCells.length
-            : 0;
-
-    const lcCounts = {};
-    let validCount = 0;
-    gridsInView.forEach((g) => {
-        const cellDist = getCellLcDistribution(g);
-        const pctSum = Object.values(cellDist).reduce((s, v) => s + v, 0);
-        if (pctSum > 0) {
-            for (const [cls, pct] of Object.entries(cellDist)) {
-                lcCounts[cls] = (lcCounts[cls] || 0) + pct / pctSum;
-            }
-            validCount += 1;
-        } else {
-            const lc = getValidLandcover(g);
-            if (lc == null || lc === WATER_CLASS) return;
-            lcCounts[lc] = (lcCounts[lc] || 0) + 1;
-            validCount += 1;
-        }
-    });
-
-    const { displayItems, dominantLandcover } = buildLandcoverBreakdown(
-        lcCounts,
-        validCount > 0 ? validCount : 1
-    );
-    const { nightlightNorm, populationNorm, forestNorm } = normalizeValues(
-        avgNightlightP90,
-        avgPopulation,
-        avgForest,
-        normalizeParams
-    );
-
-    return buildStatsResult({
-        dominantLandcover,
-        nightlightNorm,
-        populationNorm,
-        forestNorm,
-        avgForestPct: avgForest,
-        avgPopulationDensity: avgPopulation,
-        avgNightlightMean,
-        avgNightlightP90,
-        gridCount: gridsInView.length,
-        lcCounts,
-        displayItems,
-    });
-}
-
-/**
  * Calculate viewport stats using area-weighted aggregation (v2).
  *
  * Each cell's contribution is weighted by:
@@ -546,9 +478,7 @@ function calculateViewportStats(bounds) {
         return { ...emptyStats(0), theoreticalGridCount, landCoverageRatio, gridsInView };
     }
 
-    const stats = USE_LEGACY_AGGREGATION
-        ? calculateLegacyStats(gridsInView)
-        : calculateAreaWeightedStats(gridsInView);
+    const stats = calculateAreaWeightedStats(gridsInView);
 
     return { ...stats, theoreticalGridCount, landCoverageRatio, gridsInView };
 }

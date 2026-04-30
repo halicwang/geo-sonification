@@ -88,14 +88,12 @@ const HTTP_PORT =
     readEnv('PORT') !== undefined ? parsePort('PORT', 3000) : parsePort('HTTP_PORT', 3000);
 
 // ---- Aggregation ----
-// Two modes: "legacy" (simple grid-count average) vs "v2_area_weighted" (land-area weighted).
-// Switch with USE_LEGACY_AGGREGATION=1. Cache keys include the version to avoid mixing.
+// Land-area weighted across the viewport: each cell contributes
+// `land_area_km2 * landFractionWeight(land_fraction)`. The config
+// object below is hashed into the normalize-cache key so any tunable
+// change here forces a percentile recompute.
 
-const USE_LEGACY_AGGREGATION =
-    process.env.USE_LEGACY_AGGREGATION === '1' || process.env.USE_LEGACY_AGGREGATION === 'true';
-const AGGREGATION_VERSION = USE_LEGACY_AGGREGATION ? 'legacy' : 'v2_area_weighted';
-
-// Controls how coastal cells (partial land) are down-weighted in v2 aggregation.
+// Controls how coastal cells (partial land) are down-weighted.
 // 'identity' = no downweight, 'linear' = proportional, 'sqrt'/'pow' = non-linear.
 const LAND_FRACTION_WEIGHT_MODE = String(
     process.env.LAND_FRACTION_WEIGHT_MODE || 'identity'
@@ -114,17 +112,13 @@ if (!LAND_FRACTION_WEIGHT_MODES.has(LAND_FRACTION_WEIGHT_MODE)) {
 }
 
 /** @type {Readonly<Record<string, string|number|boolean>>} */
-const AGGREGATION_CONFIG = USE_LEGACY_AGGREGATION
-    ? { legacy: true }
-    : {
-          weight_base: 'land_area_km2',
-          land_fraction_weight_mode: LAND_FRACTION_WEIGHT_MODE,
-          land_fraction_weight_exponent: LAND_FRACTION_WEIGHT_EXP,
-          min_land_area_km2: MIN_LAND_AREA_KM2,
-      };
-console.log(
-    `[Aggregation] version=${AGGREGATION_VERSION} config=${JSON.stringify(AGGREGATION_CONFIG)}`
-);
+const AGGREGATION_CONFIG = {
+    weight_base: 'land_area_km2',
+    land_fraction_weight_mode: LAND_FRACTION_WEIGHT_MODE,
+    land_fraction_weight_exponent: LAND_FRACTION_WEIGHT_EXP,
+    min_land_area_km2: MIN_LAND_AREA_KM2,
+};
+console.log(`[Aggregation] config=${JSON.stringify(AGGREGATION_CONFIG)}`);
 
 /**
  * Compute a multiplier [0,1] for a cell based on its land fraction.
@@ -233,8 +227,6 @@ const BROADCAST_STATS =
 
 module.exports = {
     HTTP_PORT,
-    USE_LEGACY_AGGREGATION,
-    AGGREGATION_VERSION,
     AGGREGATION_CONFIG,
     MIN_LAND_AREA_KM2,
     landFractionWeight,

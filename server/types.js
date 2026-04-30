@@ -66,7 +66,6 @@
  * Normalization parameters computed from data percentiles.
  * @typedef {Object} NormalizeParams
  * @property {string} csv_fingerprint - Hash of source CSV files
- * @property {string} aggregation_version - Version of aggregation config
  * @property {Object} aggregation_config - Aggregation settings
  * @property {Object} vintage - Data vintage years
  * @property {string} generated_at - ISO timestamp of generation

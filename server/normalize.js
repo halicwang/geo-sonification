@@ -120,19 +120,12 @@ function calcCsvFingerprint(csvPaths) {
  * Check if a cached normalize params object matches current expectations.
  * @param {object} cached - Parsed cache JSON
  * @param {string} expectedFingerprint - CSV fingerprint to match
- * @param {string} expectedAggregationVersion
  * @param {object} expectedAggregationConfig
  * @returns {boolean}
  */
-function isValidNormalizeCache(
-    cached,
-    expectedFingerprint,
-    expectedAggregationVersion,
-    expectedAggregationConfig
-) {
+function isValidNormalizeCache(cached, expectedFingerprint, expectedAggregationConfig) {
     if (!cached || typeof cached !== 'object') return false;
     if (cached.csv_fingerprint !== expectedFingerprint) return false;
-    if (cached.aggregation_version !== expectedAggregationVersion) return false;
     const cachedConfig = cached.aggregation_config ?? {};
     const expectedConfig = expectedAggregationConfig ?? {};
     if (stableStringify(cachedConfig) !== stableStringify(expectedConfig)) return false;
@@ -147,23 +140,18 @@ function isValidNormalizeCache(
  * Load normalization params from cache, or compute from data if cache is stale/missing.
  * @param {import('./types').GridCell[]} data
  * @param {string[]} csvPaths - Absolute paths to source CSV files
- * @param {{ aggregationVersion?: string, aggregationConfig?: object }} [options]
+ * @param {{ aggregationConfig?: object }} [options]
  * @returns {Promise<import('./types').NormalizeParams>}
  */
 async function loadOrCalcNormalize(data, csvPaths, options = {}) {
     const currentFingerprint = calcCsvFingerprint(csvPaths || []);
-    const aggregationVersion = options.aggregationVersion || 'unknown';
     const aggregationConfig = options.aggregationConfig || {};
 
     try {
         await fsPromises.access(NORMALIZE_FILE);
         const cached = JSON.parse(await fsPromises.readFile(NORMALIZE_FILE, 'utf-8'));
-        if (
-            isValidNormalizeCache(cached, currentFingerprint, aggregationVersion, aggregationConfig)
-        ) {
-            console.log(
-                `[Normalize] Loaded params (fingerprint+aggregation matched) v=${aggregationVersion}`
-            );
+        if (isValidNormalizeCache(cached, currentFingerprint, aggregationConfig)) {
+            console.log('[Normalize] Loaded params (fingerprint+aggregation matched)');
             return cached;
         }
         console.log('[Normalize] Cache invalid or CSV changed, recalculating...');
@@ -175,7 +163,6 @@ async function loadOrCalcNormalize(data, csvPaths, options = {}) {
 
     const params = {
         csv_fingerprint: currentFingerprint,
-        aggregation_version: aggregationVersion,
         aggregation_config: aggregationConfig,
         vintage: { worldcover: 2021, viirs: 2021, worldpop: 2020 },
         generated_at: new Date().toISOString(),

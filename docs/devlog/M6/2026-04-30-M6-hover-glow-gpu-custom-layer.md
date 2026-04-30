@@ -190,6 +190,40 @@ Kept (curve definitions still live in JS as the GLSL spec):
 WebGL-bound, untestable in happy-dom (same rationale as
 `frontend/map.js` and `frontend/popup.js`).
 
+## Landed in two commits
+
+Originally planned as five staged commits, then consolidated to two
+to satisfy the project's commit-msg hook (`feat`/`fix`/`refactor`
+commits touching `frontend/server/scripts` must include a
+`docs/devlog/` change in the same commit) and the
+`feedback_occam_single_commit` memory ("bundle all sub-items into
+one commit + one devlog"):
+
+1. **`feat(frontend): add hover-glow custom WebGL layer skeleton`** —
+   landed the new `HoverGlowLayer` class with a `discard`
+   placeholder fragment shader + the new shader module + this
+   devlog. Layer registered above `grid-dots` but invisible; CPU
+   tick still drove the visible glow. Verified zero behavioral drift
+   in dev preview at zoom 4 globe.
+2. **`refactor(frontend): land hover-glow GPU math, drop CPU tick`** —
+   filled in the fragment shader (cursorFactor × min(1, borderFactor
+   + cursorFloor) + soft round disc), wired mousemove ↔
+   `setCursorLngLat`, simplified `grid-dots` `circle-color` to fixed
+   grey, deleted the entire CPU tick path (~600 lines), trimmed
+   `hover-glow.test.js` of distKm / spatial-bucket cases, and added
+   `packBorderFalloff` + `HoverGlowLayer` plumbing tests.
+   `frontend/hover-glow.js` shrank from 819 → ~250 lines.
+
+Verified live in dev preview after commit 2:
+
+- Halo tracks cursor at zoom 3 globe / zoom 4 globe / zoom 6
+  mercator with no setFeatureState writes (`getGlowingFids` no
+  longer exposed; drag-pause flag gone).
+- `__hg.tune({ cursorFloor: 0.6 })` immediately brightened the halo
+  on the next render — no reload, no rebuild.
+- Border-near cells visibly brighter than open-ocean cells
+  (cursorFloor + borderFactor still composing as expected).
+
 ## Risk and rollback
 
 Each of the 5 stages leaves the app working:

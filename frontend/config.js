@@ -210,17 +210,8 @@ export const HOVER_GLOW_BORDER_FALLOFF = [
 ];
 
 /**
- * Hard cap on cells writing setFeatureState per frame. Defense in
- * depth — realistic counts even at maximum overlap (Europe at zoom 7)
- * are 200–800. Truncating affects only the dimmest cells (sorted by
- * glow desc).
- */
-export const HOVER_GLOW_MAX_GLOWING = 1500;
-
-/**
- * Minimum glow value to bother writing feature-state. Below this the
- * pixel difference is invisible. Also serves as the threshold for
- * declaring a cell "in the active set" for the cleanup-diff.
+ * Minimum glow value to bother painting. Below this the pixel
+ * difference is invisible; the GPU fragment shader `discard`s.
  */
 export const HOVER_GLOW_EPS = 0.005;
 

@@ -63,10 +63,22 @@ void main() {
 `;
 
 /**
- * Skeleton fragment shader: discard every fragment. The layer is
- * registered and the GL pipeline runs end-to-end, but nothing is drawn.
- * Keeps the existing CPU hover-glow path solely responsible for the
- * visible glow until the next commit lands the math.
+ * Fragment shader: paints an additive white halo at every cell whose
+ * (cursorFactor × min(1, borderFactor + cursorFloor)) glow exceeds
+ * uEps, with a soft round disc shape via gl_PointCoord.
+ *
+ * Reproduces the JS reference math (`distKm`, `cursorFactor`,
+ * `borderFactor`, `glowFor`) bit-for-bit:
+ *
+ *   - distKmToCursor: equirectangular, antimeridian-safe (dLon ±360 wrap).
+ *   - cursorFactor:   smoothstep falloff t² × (3 - 2t) over [0, R].
+ *   - borderFactor:   piecewise Hermite over MAX_FALLOFF_STOPS stops.
+ *   - glow:           cf × min(1, bf + cursorFloor).
+ *
+ * Output uses premultiplied alpha (vec4(a, a, a, a)) so Mapbox's
+ * default custom-layer blendFunc (ONE, ONE_MINUS_SRC_ALPHA) lays the
+ * additive white over whatever the grid-dots circle layer painted
+ * underneath.
  */
 export const FRAGMENT_SHADER_SRC = `#version 300 es
 precision highp float;
@@ -74,11 +86,61 @@ precision highp float;
 in vec2 vLngLat;
 in float vBorderDist;
 
+uniform vec2 uCursorLngLat;
+uniform float uR;
+uniform float uCursorFloor;
+uniform float uEps;
+uniform vec2 uFalloff[4];
+
 out vec4 fragColor;
 
+const float DEG_TO_RAD = 0.01745329251994329;
+const float EARTH_KM = 6371.0;
+
+float distKmToCursor(vec2 cursor, vec2 cell) {
+    float dLon = cell.x - cursor.x;
+    if (dLon > 180.0) dLon -= 360.0;
+    else if (dLon < -180.0) dLon += 360.0;
+    float cosLat = cos((cursor.y + cell.y) * 0.5 * DEG_TO_RAD);
+    float x = dLon * DEG_TO_RAD * cosLat;
+    float y = (cell.y - cursor.y) * DEG_TO_RAD;
+    return EARTH_KM * sqrt(x * x + y * y);
+}
+
+float cursorFactor(float d, float R) {
+    float t = clamp(1.0 - d / R, 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+float borderFactor(float d) {
+    if (d <= uFalloff[0].x) return uFalloff[0].y;
+    for (int i = 0; i < 3; i++) {
+        float xLo = uFalloff[i].x;
+        float xHi = uFalloff[i + 1].x;
+        if (d >= xLo && d < xHi) {
+            float t = (d - xLo) / (xHi - xLo);
+            float s = t * t * (3.0 - 2.0 * t);
+            return mix(uFalloff[i].y, uFalloff[i + 1].y, s);
+        }
+    }
+    return uFalloff[3].y;
+}
+
 void main() {
-    fragColor = vec4(0.0);
-    discard;
+    float d = distKmToCursor(uCursorLngLat, vLngLat);
+    float cf = cursorFactor(d, uR);
+    if (cf < uEps) discard;
+
+    float bf = borderFactor(vBorderDist);
+    float g = cf * min(1.0, bf + uCursorFloor);
+    if (g < uEps) discard;
+
+    vec2 q = gl_PointCoord - vec2(0.5);
+    float rad = length(q) * 2.0;
+    float discMask = smoothstep(1.0, 0.6, rad);
+    float a = g * discMask;
+
+    fragColor = vec4(a, a, a, a);
 }
 `;
 

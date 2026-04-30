@@ -22,6 +22,13 @@ import { updateUI, showToast } from './ui.js';
 import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
 import { initHoverGlow } from './hover-glow.js';
+import { initHoverGlowSpike } from './hover-glow-spike.js';
+
+/** Spike toggle: ?spike=gpu replaces the CPU setFeatureState path with a
+ *  paint-expression cursor distance. Off by default. */
+const SPIKE_MODE_GPU =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('spike') === 'gpu';
 
 // ============ Motion Tracking ============
 
@@ -90,26 +97,12 @@ async function addGridLayer() {
         source: GRID_FEATURE_STATE_SOURCE,
         'source-layer': GRID_FEATURE_STATE_SOURCE_LAYER,
         paint: {
-            // circle-color interpolates between the rest grey and pure
-            // white based on a per-feature `glow` state value in [0,1]
-            // written by frontend/hover-glow.js on each render tick.
-            // The `coalesce → 0` is load-bearing — features whose state
-            // has never been written would otherwise render
-            // indeterminately on Mapbox v3.x. Cubic-bezier produces a
-            // perceptually smoother color ramp than linear.
-            //
-            // Deliberately NOT interpolating circle-radius with glow:
-            // radius changes triggered the previous attempt's
-            // progressive-degradation regression. Color-only.
-            'circle-color': [
-                'interpolate',
-                ['cubic-bezier', 0.4, 0.0, 0.2, 1.0],
-                ['coalesce', ['feature-state', 'glow'], 0],
-                0,
-                DOT_COLOR,
-                1,
-                '#FFFFFF',
-            ],
+            // Fixed grey baseline. The cursor halo is painted as an
+            // additive white overlay by the hover-glow custom WebGL
+            // layer (frontend/hover-glow-layer.js) above this layer
+            // — circle-color no longer reads feature-state, and
+            // hover-glow.js no longer writes setFeatureState.
+            'circle-color': DOT_COLOR,
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
             'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
             'circle-stroke-color': 'rgba(255, 255, 255, 0.18)',
@@ -336,7 +329,12 @@ export function initMap() {
         // its rest grey. Wired here (after addGridLayer) so the source
         // and layer exist by the time runtime ticks (P1-2) start
         // calling setFeatureState.
-        initHoverGlow(state.runtime.map);
+        if (SPIKE_MODE_GPU) {
+            console.log('[map] ?spike=gpu active \u2014 using GPU-driven hover glow');
+            initHoverGlowSpike(state.runtime.map);
+        } else {
+            initHoverGlow(state.runtime.map);
+        }
 
         state.runtime.map.on('move', () => {
             const zoom = state.runtime.map.getZoom();

@@ -46,6 +46,7 @@
 
 import {
     ASSET_BASE,
+    GRID_DOT_RADIUS_BY_ZOOM,
     GRID_FEATURE_STATE_SOURCE,
     GRID_FEATURE_STATE_SOURCE_LAYER,
     HOVER_GLOW_R_KM_BY_ZOOM,
@@ -53,7 +54,9 @@ import {
     HOVER_GLOW_MAX_GLOWING,
     HOVER_GLOW_EPS,
     HOVER_GLOW_CURSOR_FLOOR,
+    HOVER_GLOW_HALO_SCALE,
 } from './config.js';
+import { HoverGlowLayer } from './hover-glow-layer.js';
 
 // ============ Tunable runtime constants ============
 //
@@ -68,7 +71,13 @@ const tunables = {
     maxGlowing: HOVER_GLOW_MAX_GLOWING,
     eps: HOVER_GLOW_EPS,
     cursorFloor: HOVER_GLOW_CURSOR_FLOOR,
+    haloScale: HOVER_GLOW_HALO_SCALE,
 };
+
+/** GPU custom layer instance, populated by initHoverGlow once the
+ *  sidecar resolves. Stays null until then so the CPU tick has full
+ *  responsibility for any cursor halo during init. */
+let glowLayer = null;
 
 /** Earth radius for the equirectangular distance approximation. */
 const EARTH_RADIUS_KM = 6371;
@@ -736,6 +745,24 @@ export async function initHoverGlow(map) {
         return;
     }
 
+    // Register the GPU custom layer above grid-dots. The fragment shader
+    // is currently a `discard` placeholder — the layer compiles, runs
+    // its vertex pass, then emits no fragments. Visible glow is still
+    // produced exclusively by the CPU tick + setFeatureState path
+    // below; the next commit lands the glow math in the shader and
+    // makes this layer the visible source.
+    try {
+        glowLayer = new HoverGlowLayer({
+            gridIndex,
+            tunables,
+            dotRadiusStops: GRID_DOT_RADIUS_BY_ZOOM,
+        });
+        map.addLayer(glowLayer);
+    } catch (err) {
+        console.warn('[hover-glow] custom layer registration failed:', err);
+        glowLayer = null;
+    }
+
     const canvas = map.getCanvas();
     canvas.addEventListener('mousemove', (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -803,6 +830,8 @@ export async function initHoverGlow(map) {
                 if (typeof patch.maxGlowing === 'number') tunables.maxGlowing = patch.maxGlowing;
                 if (typeof patch.eps === 'number') tunables.eps = patch.eps;
                 if (typeof patch.cursorFloor === 'number') tunables.cursorFloor = patch.cursorFloor;
+                if (typeof patch.haloScale === 'number') tunables.haloScale = patch.haloScale;
+                if (glowLayer) glowLayer.setTunables(patch);
                 if (mapRef) mapRef.triggerRepaint();
                 return { ...tunables };
             },

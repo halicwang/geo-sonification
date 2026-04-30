@@ -150,6 +150,20 @@ export const GRID_FEATURE_STATE_SOURCE = 'grid-source';
 /** Vector tile layer name inside the PMTiles archive. */
 export const GRID_FEATURE_STATE_SOURCE_LAYER = 'grids';
 
+/**
+ * Per-zoom dot radius in CSS pixels for the grey grid-dots circle layer
+ * and the hover-glow GPU overlay. The custom WebGL layer multiplies
+ * this by `2 × HOVER_GLOW_HALO_SCALE × devicePixelRatio` to derive
+ * `gl_PointSize` for the additive halo. Kept in lockstep with the
+ * `circle-radius` paint stops in `frontend/map.js`.
+ */
+export const GRID_DOT_RADIUS_BY_ZOOM = [
+    [2, 1.1],
+    [5, 2.8],
+    [8, 4.9],
+    [12, 8.2],
+];
+
 // ============ Hover-glow tunables ============
 //
 // Consumed by frontend/hover-glow.js. Live-overridable in DevTools via
@@ -232,6 +246,18 @@ export const HOVER_GLOW_EPS = 0.005;
  * cursor halo and recover legacy "border-only" behavior.
  */
 export const HOVER_GLOW_CURSOR_FLOOR = 0.25;
+
+/**
+ * Multiplier on the dot radius to derive the glow halo footprint
+ * (`gl_PointSize` in CSS pixels, before DPR scaling). The shader
+ * fades the sprite-square corners to invisible via a soft round
+ * `gl_PointCoord` mask, so this controls how far the halo extends
+ * past the rim of the underlying grey dot. `3.0` reads as a soft
+ * lift that's clearly visible but not blown out at any zoom level.
+ *
+ * Live-tunable in DevTools via `__hg.tune({ haloScale: 4.0 })`.
+ */
+export const HOVER_GLOW_HALO_SCALE = 3.0;
 
 const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 

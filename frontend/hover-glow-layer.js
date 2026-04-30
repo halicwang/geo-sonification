@@ -300,7 +300,10 @@ export class HoverGlowLayer {
         if (Array.isArray(patch.borderFalloff)) this._tunables.borderFalloff = patch.borderFalloff;
         if (typeof patch.cursorFloor === 'number') this._tunables.cursorFloor = patch.cursorFloor;
         if (typeof patch.eps === 'number') this._tunables.eps = patch.eps;
-        if (typeof patch.haloScale === 'number') this._tunables.haloScale = patch.haloScale;
+        // haloScale accepts a number (constant multiplier) OR a
+        // [[zoom, multiplier], ...] table for a zoom-aware curve.
+        if (typeof patch.haloScale === 'number' || Array.isArray(patch.haloScale))
+            this._tunables.haloScale = patch.haloScale;
         if (this._map) this._map.triggerRepaint();
     }
 
@@ -308,6 +311,9 @@ export class HoverGlowLayer {
         const zoom = this._map.getZoom();
         const dotRadius = lerpStops(zoom, this._dotRadiusStops);
         const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
-        return dotRadius * 2 * this._tunables.haloScale * dpr;
+        const haloScale = Array.isArray(this._tunables.haloScale)
+            ? lerpStops(zoom, this._tunables.haloScale)
+            : this._tunables.haloScale;
+        return dotRadius * 2 * haloScale * dpr;
     }
 }

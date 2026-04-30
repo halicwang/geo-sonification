@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-30 | Fix        | [Hover-glow Halo Zoom Curve — tame thickness at low zoom](devlog/M6/2026-04-30-M6-hover-glow-halo-zoom-curve.md)                                                                              |
 | 2026-04-30 | Fix        | [Hover-glow Globe Projection — ECEF radius + mix() order](devlog/M6/2026-04-30-M6-hover-glow-globe-projection-fix.md)                                                                         |
 | 2026-04-30 | Refactor   | [Hover-glow GPU Custom-Layer Rewrite](devlog/M6/2026-04-30-M6-hover-glow-gpu-custom-layer.md)                                                                                                 |
 | 2026-04-30 | Refactor   | [Drop Legacy Aggregation Path](devlog/M6/2026-04-30-M6-drop-legacy-aggregation.md)                                                                                                            |

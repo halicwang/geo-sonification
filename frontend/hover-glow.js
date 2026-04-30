@@ -32,7 +32,7 @@ import {
     HOVER_GLOW_BORDER_FALLOFF,
     HOVER_GLOW_EPS,
     HOVER_GLOW_CURSOR_FLOOR,
-    HOVER_GLOW_HALO_SCALE,
+    HOVER_GLOW_HALO_SCALE_BY_ZOOM,
 } from './config.js';
 import { HoverGlowLayer } from './hover-glow-layer.js';
 
@@ -43,7 +43,7 @@ const tunables = {
     borderFalloff: HOVER_GLOW_BORDER_FALLOFF,
     eps: HOVER_GLOW_EPS,
     cursorFloor: HOVER_GLOW_CURSOR_FLOOR,
-    haloScale: HOVER_GLOW_HALO_SCALE,
+    haloScale: HOVER_GLOW_HALO_SCALE_BY_ZOOM,
 };
 
 // ============ Sidecar format constants ============
@@ -276,7 +276,8 @@ export async function initHoverGlow(map) {
                     tunables.borderFalloff = patch.borderFalloff;
                 if (typeof patch.eps === 'number') tunables.eps = patch.eps;
                 if (typeof patch.cursorFloor === 'number') tunables.cursorFloor = patch.cursorFloor;
-                if (typeof patch.haloScale === 'number') tunables.haloScale = patch.haloScale;
+                if (typeof patch.haloScale === 'number' || Array.isArray(patch.haloScale))
+                    tunables.haloScale = patch.haloScale;
                 if (glowLayer) glowLayer.setTunables(patch);
                 return { ...tunables };
             },

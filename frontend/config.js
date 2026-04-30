@@ -239,16 +239,28 @@ export const HOVER_GLOW_EPS = 0.005;
 export const HOVER_GLOW_CURSOR_FLOOR = 0.25;
 
 /**
- * Multiplier on the dot radius to derive the glow halo footprint
- * (`gl_PointSize` in CSS pixels, before DPR scaling). The shader
- * fades the sprite-square corners to invisible via a soft round
- * `gl_PointCoord` mask, so this controls how far the halo extends
- * past the rim of the underlying grey dot. `3.0` reads as a soft
- * lift that's clearly visible but not blown out at any zoom level.
+ * Per-zoom multiplier on the dot radius to derive the glow halo
+ * footprint (`gl_PointSize` in CSS pixels, before DPR scaling).
+ * Linear-interpolated between breakpoints by the GPU layer.
  *
- * Live-tunable in DevTools via `__hg.tune({ haloScale: 4.0 })`.
+ * A constant multiplier across zooms looks "thick" at low zoom: the
+ * halo grows linearly with the dot, but the dot **spacing** in
+ * screen pixels collapses much faster than the dot grows, so each
+ * cell's halo overlaps several neighbours and the cursor area
+ * becomes a uniform fog. Conversely at high zoom the dots are far
+ * apart and a wide halo per dot reads as a soft, well-defined
+ * glow. A small zoom curve keeps the halo dot-hugging when zoomed
+ * out and lets it bloom when zoomed in.
+ *
+ * Live-tunable in DevTools via `__hg.tune({ haloScale: [...] })`,
+ * either as a number (legacy single multiplier) or a stops table.
  */
-export const HOVER_GLOW_HALO_SCALE = 3.0;
+export const HOVER_GLOW_HALO_SCALE_BY_ZOOM = [
+    [2, 1.5],
+    [5, 1.8],
+    [8, 2.2],
+    [12, 2.8],
+];
 
 const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 

@@ -6,6 +6,7 @@ import {
     distKm,
     cursorFactor,
     borderFactor,
+    glowFor,
     rByZoom,
     parseGridIndex,
     buildSpatialIndex,
@@ -291,5 +292,58 @@ describe('buildSpatialIndex / enumerateNearbyEntries', () => {
                 expect(candidates.has(i)).toBe(true);
             }
         }
+    });
+});
+
+describe('glowFor', () => {
+    it('with cursorFloor=0 reproduces the legacy cf*bf formula', () => {
+        // No floor — the new formula must match the M6 P1 baseline so
+        // setting cursorFloor=0 from DevTools recovers prior behavior.
+        for (const cf of [0.1, 0.5, 0.9]) {
+            for (const bf of [0, 0.3, 1.0]) {
+                expect(glowFor(cf, bf, 0)).toBeCloseTo(cf * bf, 10);
+            }
+        }
+    });
+
+    it('with bf=0 returns cf*cursorFloor (deep-interior soft glow)', () => {
+        // The whole point of the change: a cell far from any border
+        // (bf=0) under the cursor still glows at cursorFloor strength.
+        expect(glowFor(1.0, 0, 0.25)).toBeCloseTo(0.25, 10);
+        expect(glowFor(0.5, 0, 0.25)).toBeCloseTo(0.125, 10);
+        expect(glowFor(0.8, 0, 0.4)).toBeCloseTo(0.32, 10);
+    });
+
+    it('with bf=1 clamps the additive blend to cf (no over-bright)', () => {
+        // Border-center cells already glow at the cap; the floor must
+        // not push them past 1 or the paint expression's [0,1] domain
+        // would break.
+        expect(glowFor(1.0, 1.0, 0.25)).toBe(1.0);
+        expect(glowFor(0.7, 1.0, 0.4)).toBeCloseTo(0.7, 10);
+        expect(glowFor(1.0, 1.0, 0.5)).toBe(1.0);
+    });
+
+    it('produces a monotonically non-increasing glow as borderDist grows', () => {
+        // Continuity guard: an earlier draft used max(bf, floor) which
+        // introduces a visible kink at the bf/floor crossover (~30 km
+        // for the default border curve). Additive blending keeps the
+        // glow Hermite-smooth — sample across the crossover and assert
+        // the sequence never increases.
+        const cf = 1.0;
+        const cursorFloor = 0.25;
+        const samples = [0, 5, 15, 25, 29, 30, 31, 35, 40, 41, 60, 100];
+        const glows = samples.map((d) => glowFor(cf, borderFactor(d), cursorFloor));
+        for (let i = 1; i < glows.length; i++) {
+            expect(glows[i]).toBeLessThanOrEqual(glows[i - 1] + 1e-12);
+        }
+    });
+
+    it('returns 0 when cf=0 regardless of bf and cursorFloor', () => {
+        // cf=0 means the cell is outside the cursor radius — no halo
+        // should leak in via cursorFloor. The factor is a hard product,
+        // so this is just a sanity assertion on the structure.
+        expect(glowFor(0, 0, 0.25)).toBe(0);
+        expect(glowFor(0, 0.5, 0.25)).toBe(0);
+        expect(glowFor(0, 1.0, 0.5)).toBe(0);
     });
 });

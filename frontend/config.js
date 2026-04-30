@@ -210,6 +210,29 @@ export const HOVER_GLOW_MAX_GLOWING = 1500;
  */
 export const HOVER_GLOW_EPS = 0.005;
 
+/**
+ * Cursor-only floor on the border-distance penalty. Cells inside the
+ * cursor radius but far from any border still receive `cursorFactor *
+ * cursorFloor` instead of zero, so the cursor leaves a soft white trail
+ * even over the open ocean or a deep continental interior. Border-near
+ * cells continue to ride `borderFactor` up to its cap; the per-cell
+ * formula is `cursorFactor × min(1, borderFactor + cursorFloor)`.
+ *
+ * Additive (not max) blending keeps the Hermite border curve
+ * C¹-continuous — `max(bf, floor)` would introduce a visible kink at
+ * the crossover point (~30 km from a border), which the M6 P1 design
+ * explicitly avoids.
+ *
+ * The dot color paint expression in `frontend/map.js` interpolates
+ * `#606060 → #FFFFFF` via `cubic-bezier(0.4, 0, 0.2, 1)`. The bezier
+ * starts shallow, so linear changes in `cursorFloor` produce non-linear
+ * visual changes — `0.25` lifts brightness ≈13%, `0.40` ≈25%.
+ *
+ * Recommended live-tune range `[0, 0.5]`. Set to `0` to disable the
+ * cursor halo and recover legacy "border-only" behavior.
+ */
+export const HOVER_GLOW_CURSOR_FLOOR = 0.25;
+
 const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 
 // ============ Mapbox Token ============

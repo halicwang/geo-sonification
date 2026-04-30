@@ -61,8 +61,10 @@ Callers (`main.js`, `map.js`, `city-announcer.js`) `import { engine } from './au
 
 ### Hover glow (`frontend/hover-glow.js`)
 
-Brightens the existing `grid-dots` near both the cursor AND a country
-border or coastline, on a smooth radial falloff. M6.
+Brightens the existing `grid-dots` under the cursor on a smooth radial
+falloff. Cells near a country border or coastline glow brightest (the
+"tube" along the coast); cells far from any border still glow softly
+via the `cursorFloor` floor on the border-distance penalty. M6.
 
 ```
 frontend/hover-glow.js
@@ -72,7 +74,8 @@ frontend/hover-glow.js
 │
 ├── tick()                 Per-`render`-event:
 │   ├── unproject cursor   via *current* transform — drag-lag fix
-│   ├── linear scan 67k    dSq < R² early-skip → cursorFactor × borderFactor
+│   ├── linear scan 67k    dSq < R² early-skip → glowFor(cf, bf, cursorFloor)
+│   │                      = cursorFactor × min(1, borderFactor + cursorFloor)
 │   ├── candidates sorted  desc by glow, sliced to MAX_GLOWING (1500)
 │   ├── setFeatureState    {glow:x} for each newGlowingFid
 │   └── cleanup diff       prevGlowingFids \ newGlowingFids → {glow:0}
@@ -83,9 +86,11 @@ frontend/hover-glow.js
 ```
 
 Constants (`HOVER_GLOW_R_KM_BY_ZOOM`, `HOVER_GLOW_BORDER_FALLOFF`,
-`HOVER_GLOW_MAX_GLOWING`, `HOVER_GLOW_EPS`) live in
-`frontend/config.js` and overlay onto a mutable `tunables` object the
-runtime reads each frame; `__hg.tune({...})` patches them live.
+`HOVER_GLOW_MAX_GLOWING`, `HOVER_GLOW_EPS`, `HOVER_GLOW_CURSOR_FLOOR`)
+live in `frontend/config.js` and overlay onto a mutable `tunables`
+object the runtime reads each frame; `__hg.tune({...})` patches them
+live. Setting `cursorFloor: 0` from DevTools recovers the M6 P1
+border-only baseline.
 
 The data is baked offline by `scripts/compute-border-distance.js`
 (Natural Earth coastline + boundary GeoJSON → per-cell `border_dist_km`)

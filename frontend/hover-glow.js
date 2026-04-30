@@ -2,8 +2,12 @@
 // Copyright (C) 2026 Zixiao Wang
 
 /**
- * Hover glow — brightens existing grid dots near both the cursor AND a
- * country border or coastline, on a smooth radial falloff.
+ * Hover glow — brightens existing grid dots near the cursor on a smooth
+ * radial falloff. Cells that also lie near a country border or
+ * coastline glow brighter (the bright "tube" along the coast); cells
+ * far from any border still glow softly via a `cursorFloor` floor on
+ * the border-distance penalty, so the cursor leaves a subtle white
+ * trail anywhere it hovers.
  *
  * Architecture:
  *   1. Load `/tiles/grid_index.bin` once on init — a packed binary
@@ -25,16 +29,17 @@
  *   5. On `map.on('move')` outside a drag bracket, tick synchronously
  *      so feature-state writes land in the same frame's render.
  *   6. Per tick: walk only buckets within the cursor's bbox, compute
- *      glow as `cursorFactor(d) × borderFactor(borderDistKm)`, batch
- *      `setFeatureState({glow})` for cells above EPS, and zero out any
- *      cell from the previous frame's set that didn't make this one's
- *      (the anti-progressive-degradation invariant). The two glowing
- *      Sets are double-buffered (swap+clear), no per-frame allocation.
+ *      glow as `cursorFactor(d) × min(1, borderFactor(borderDistKm) +
+ *      cursorFloor)`, batch `setFeatureState({glow})` for cells above
+ *      EPS, and zero out any cell from the previous frame's set that
+ *      didn't make this one's (the anti-progressive-degradation
+ *      invariant). The two glowing Sets are double-buffered
+ *      (swap+clear), no per-frame allocation.
  *
  * Runtime constants live in `frontend/config.js` (HOVER_GLOW_*).
- * `window.__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })`
- * patches them live in DevTools — change takes effect on the next
- * render tick, no reload.
+ * `window.__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps,
+ * cursorFloor })` patches them live in DevTools — change takes effect
+ * on the next render tick, no reload.
  *
  * @module frontend/hover-glow
  */
@@ -47,6 +52,7 @@ import {
     HOVER_GLOW_BORDER_FALLOFF,
     HOVER_GLOW_MAX_GLOWING,
     HOVER_GLOW_EPS,
+    HOVER_GLOW_CURSOR_FLOOR,
 } from './config.js';
 
 // ============ Tunable runtime constants ============
@@ -61,6 +67,7 @@ const tunables = {
     borderFalloff: HOVER_GLOW_BORDER_FALLOFF,
     maxGlowing: HOVER_GLOW_MAX_GLOWING,
     eps: HOVER_GLOW_EPS,
+    cursorFloor: HOVER_GLOW_CURSOR_FLOOR,
 };
 
 /** Earth radius for the equirectangular distance approximation. */
@@ -355,6 +362,25 @@ export function borderFactor(dKm, table = tunables.borderFalloff) {
 }
 
 /**
+ * Per-cell glow value: cursor-radial factor times a border-distance
+ * factor lifted by `cursorFloor`. Additive blend with a `min(1, …)`
+ * clamp keeps the Hermite border curve C¹-continuous (a `max(bf,
+ * floor)` form would introduce a visible kink at the crossover).
+ *
+ * Setting `cursorFloor=0` recovers the legacy border-only behavior;
+ * raising it lets cells far from any border still glow softly under
+ * the cursor.
+ *
+ * @param {number} cf            cursor radial factor in [0, 1]
+ * @param {number} bf            border-distance factor in [0, 1]
+ * @param {number} cursorFloor   in [0, 1]
+ * @returns {number}             [0, 1]
+ */
+export function glowFor(cf, bf, cursorFloor) {
+    return cf * Math.min(1, bf + cursorFloor);
+}
+
+/**
  * Linear interpolation over the zoom→radius table. Overridable via
  * `__hg.tune({ rByZoom: [...] })`.
  *
@@ -432,6 +458,7 @@ function tick() {
     const eps = tunables.eps;
     const maxGlowing = tunables.maxGlowing;
     const borderTable = tunables.borderFalloff;
+    const cursorFloor = tunables.cursorFloor;
     const RSqGuess = R * R; // for early-skip (no sqrt) on cells obviously too far
 
     const u32 = gridIndex.u32;
@@ -485,9 +512,8 @@ function tick() {
 
                 const borderDist = f32[off + 3];
                 const bf = borderFactor(borderDist, borderTable);
-                if (bf <= 0) continue;
 
-                const g = cf * bf;
+                const g = glowFor(cf, bf, cursorFloor);
                 if (g < eps) continue;
 
                 candidates.push({ fid: u32[off], glow: g });
@@ -690,9 +716,10 @@ export async function initHoverGlow(map) {
     });
 
     // Debug surface for DevTools introspection + live tuning. Patch
-    // `__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })` to
-    // override defaults from frontend/config.js. The change takes
-    // effect on the very next render tick — no reload, no rebuild.
+    // `__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps,
+    // cursorFloor })` to override defaults from frontend/config.js.
+    // The change takes effect on the very next render tick — no reload,
+    // no rebuild.
     if (typeof window !== 'undefined') {
         window.__hg = {
             map,
@@ -708,6 +735,7 @@ export async function initHoverGlow(map) {
                     tunables.borderFalloff = patch.borderFalloff;
                 if (typeof patch.maxGlowing === 'number') tunables.maxGlowing = patch.maxGlowing;
                 if (typeof patch.eps === 'number') tunables.eps = patch.eps;
+                if (typeof patch.cursorFloor === 'number') tunables.cursorFloor = patch.cursorFloor;
                 if (mapRef) mapRef.triggerRepaint();
                 return { ...tunables };
             },

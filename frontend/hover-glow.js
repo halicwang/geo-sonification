@@ -4,23 +4,23 @@
 /**
  * Hover glow — entry point.
  *
- * Loads the `/tiles/grid_index.bin` sidecar once, registers a
- * Mapbox custom WebGL layer above `grid-dots`, and forwards the
- * cursor's lng/lat into the layer's `uCursorLngLat` uniform on every
+ * Loads the `/tiles/grid_index.bin` sidecar once, registers a Mapbox
+ * custom WebGL layer above `grid-dots`, and forwards the cursor's
+ * lng/lat into the layer's `uCursorLngLat` uniform on every
  * `mousemove`. The visible glow (cursorFactor × min(1, borderFactor +
  * cursorFloor), additive premultiplied white) is painted entirely on
- * the GPU by `frontend/hover-glow-layer.js` — this module only
+ * the GPU by `frontend/hover-glow-layer.js`; this module only
  * orchestrates loading, event plumbing, and the live-tune surface.
  *
- * Exports `cursorFactor`, `borderFactor`, `glowFor`, `rByZoom`, and
- * `parseGridIndex` as the JS-side specification of the curves the
- * fragment shader replicates. The unit tests against these functions
- * lock the curve shape; the GLSL replication is integration-tested
- * via screenshots.
+ * On `mouseleave` / `window.blur` the cursor is pushed to a sentinel
+ * lng/lat far outside any valid coordinate, so the fragment shader's
+ * cursorFactor returns 0 everywhere and discards every fragment — no
+ * separate "hidden" flag needed.
  *
  * Live tuning at `window.__hg.tune({ rByZoom, borderFalloff,
- * cursorFloor, eps, haloScale })` patches the runtime in place; the
- * change takes effect on the next render.
+ * cursorFloor, eps, haloScale })` patches the runtime in place via
+ * `HoverGlowLayer.setTunables`; the change takes effect on the next
+ * render. `parseGridIndex` is also exported for unit tests.
  *
  * @module frontend/hover-glow
  */
@@ -36,16 +36,6 @@ import {
 } from './config.js';
 import { HoverGlowLayer } from './hover-glow-layer.js';
 
-// ============ Tunable runtime constants ============
-
-const tunables = {
-    rByZoom: HOVER_GLOW_R_KM_BY_ZOOM,
-    borderFalloff: HOVER_GLOW_BORDER_FALLOFF,
-    eps: HOVER_GLOW_EPS,
-    cursorFloor: HOVER_GLOW_CURSOR_FLOOR,
-    haloScale: HOVER_GLOW_HALO_SCALE_BY_ZOOM,
-};
-
 // ============ Sidecar format constants ============
 //
 // Must match scripts/build-grid-index.js exactly. The header is 16
@@ -57,7 +47,11 @@ const GRID_INDEX_HEADER_BYTES = 16;
 const GRID_INDEX_ENTRY_BYTES = 16;
 const GRID_INDEX_FIELDS_PER_ENTRY = 4;
 
-// ============ Module state ============
+// Sentinel cursor position used when the pointer leaves the canvas:
+// far outside any valid lng/lat, so distKmToCursor in the shader
+// produces a huge value and cursorFactor returns 0 everywhere.
+const CURSOR_OFFSCREEN_LNG = 999;
+const CURSOR_OFFSCREEN_LAT = 999;
 
 /**
  * @typedef {object} GridIndex
@@ -68,14 +62,6 @@ const GRID_INDEX_FIELDS_PER_ENTRY = 4;
  *                                                          lat at f32[4i+2],
  *                                                          dist at f32[4i+3]
  */
-
-/** @type {GridIndex|null} */
-let gridIndex = null;
-
-/** @type {HoverGlowLayer|null} */
-let glowLayer = null;
-
-// ============ Sidecar parsing ============
 
 /**
  * Parse a `grid_index.bin` ArrayBuffer into typed-array views.
@@ -112,89 +98,6 @@ export function parseGridIndex(buffer) {
     };
 }
 
-// ============ Curve helpers (JS reference; replicated in GLSL) ============
-
-/**
- * Smoothstep-based radial falloff. C¹-continuous at both endpoints.
- * Mirrored in `cursorFactor()` of frontend/hover-glow-shaders.js.
- *
- * @param {number} dKm
- * @param {number} R    radius in km
- * @returns {number} [0, 1]
- */
-export function cursorFactor(dKm, R) {
-    if (dKm >= R) return 0;
-    if (dKm <= 0) return 1;
-    const t = 1 - dKm / R;
-    return t * t * (3 - 2 * t);
-}
-
-/** Hermite blend between two stops; smooth at both ends, monotonic. */
-function hermiteBlend(x, x0, x1, y0, y1) {
-    const t = (x - x0) / (x1 - x0);
-    const s = t * t * (3 - 2 * t);
-    return y0 + (y1 - y0) * s;
-}
-
-/**
- * Border-distance penalty: cells far from any border return ~0,
- * cells right on a border return 1. Piecewise Hermite over the
- * `tunables.borderFalloff` table (overridable via `__hg.tune`).
- * Mirrored in `borderFactor()` of frontend/hover-glow-shaders.js.
- *
- * @param {number} dKm
- * @param {Array<[number, number]>} [table=tunables.borderFalloff]
- * @returns {number} [0, 1]
- */
-export function borderFactor(dKm, table = tunables.borderFalloff) {
-    if (dKm <= table[0][0]) return table[0][1];
-    if (dKm >= table[table.length - 1][0]) return table[table.length - 1][1];
-    for (let i = 0; i < table.length - 1; i++) {
-        const a = table[i];
-        const b = table[i + 1];
-        if (dKm >= a[0] && dKm < b[0]) {
-            return hermiteBlend(dKm, a[0], b[0], a[1], b[1]);
-        }
-    }
-}
-
-/**
- * Per-cell glow value: cursor-radial factor times a border-distance
- * factor lifted by `cursorFloor`. Additive blend with `min(1, …)`
- * keeps the Hermite border curve C¹-continuous.
- *
- * @param {number} cf            cursor radial factor in [0, 1]
- * @param {number} bf            border-distance factor in [0, 1]
- * @param {number} cursorFloor   in [0, 1]
- * @returns {number}             [0, 1]
- */
-export function glowFor(cf, bf, cursorFloor) {
-    return cf * Math.min(1, bf + cursorFloor);
-}
-
-/**
- * Linear interpolation over the zoom→radius table. Overridable via
- * `__hg.tune({ rByZoom: [...] })`.
- *
- * @param {number} zoom
- * @param {Array<[number, number]>} [table=tunables.rByZoom]
- * @returns {number} R in km
- */
-export function rByZoom(zoom, table = tunables.rByZoom) {
-    if (zoom <= table[0][0]) return table[0][1];
-    if (zoom >= table[table.length - 1][0]) return table[table.length - 1][1];
-    for (let i = 0; i < table.length - 1; i++) {
-        const a = table[i];
-        const b = table[i + 1];
-        if (zoom >= a[0] && zoom < b[0]) {
-            const t = (zoom - a[0]) / (b[0] - a[0]);
-            return a[1] + (b[1] - a[1]) * t;
-        }
-    }
-}
-
-// ============ Sidecar fetch ============
-
 async function fetchGridIndex() {
     const url = ASSET_BASE
         ? `${ASSET_BASE}/tiles/grid_index.bin`
@@ -207,18 +110,17 @@ async function fetchGridIndex() {
     return parseGridIndex(buf);
 }
 
-// ============ Public API ============
-
 /**
  * Initialize the hover-glow runtime: load the sidecar, register the
  * GPU custom layer above `grid-dots`, and forward cursor mousemove
- * into its uniform. Failure to load the sidecar is non-fatal: the
+ * into its uniform. Failure to load the sidecar is non-fatal — the
  * dot layer keeps rendering at its rest grey, with no halo.
  *
  * @param {mapboxgl.Map} map
  * @returns {Promise<void>}
  */
 export async function initHoverGlow(map) {
+    let gridIndex;
     try {
         gridIndex = await fetchGridIndex();
         console.log(
@@ -229,36 +131,33 @@ export async function initHoverGlow(map) {
             '[hover-glow] grid_index.bin failed to load — hover glow disabled. Run npm --prefix server run build:tiles to regenerate.',
             err
         );
-        gridIndex = null;
         return;
     }
 
-    try {
-        glowLayer = new HoverGlowLayer({
-            gridIndex,
-            tunables,
-            dotRadiusStops: GRID_DOT_RADIUS_BY_ZOOM,
-        });
-        map.addLayer(glowLayer);
-    } catch (err) {
-        console.warn('[hover-glow] custom layer registration failed:', err);
-        glowLayer = null;
-        return;
-    }
+    const tunables = {
+        rByZoom: HOVER_GLOW_R_KM_BY_ZOOM,
+        borderFalloff: HOVER_GLOW_BORDER_FALLOFF,
+        eps: HOVER_GLOW_EPS,
+        cursorFloor: HOVER_GLOW_CURSOR_FLOOR,
+        haloScale: HOVER_GLOW_HALO_SCALE_BY_ZOOM,
+    };
+
+    const glowLayer = new HoverGlowLayer({
+        gridIndex,
+        tunables,
+        dotRadiusStops: GRID_DOT_RADIUS_BY_ZOOM,
+    });
+    map.addLayer(glowLayer);
 
     const canvas = map.getCanvas();
     canvas.addEventListener('mousemove', (e) => {
-        if (!glowLayer) return;
         const rect = canvas.getBoundingClientRect();
         const lngLat = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
         glowLayer.setCursorLngLat(lngLat.lng, lngLat.lat);
     });
-    canvas.addEventListener('mouseleave', () => {
-        if (glowLayer) glowLayer.setVisible(false);
-    });
-    window.addEventListener('blur', () => {
-        if (glowLayer) glowLayer.setVisible(false);
-    });
+    const hideHalo = () => glowLayer.setCursorLngLat(CURSOR_OFFSCREEN_LNG, CURSOR_OFFSCREEN_LAT);
+    canvas.addEventListener('mouseleave', hideHalo);
+    window.addEventListener('blur', hideHalo);
 
     // Debug surface for DevTools introspection + live tuning. Patch
     // `__hg.tune({ rByZoom, borderFalloff, cursorFloor, eps,
@@ -270,25 +169,9 @@ export async function initHoverGlow(map) {
             getGridIndex: () => gridIndex,
             getTunables: () => ({ ...tunables }),
             tune: (patch) => {
-                if (!patch || typeof patch !== 'object') return tunables;
-                if (Array.isArray(patch.rByZoom)) tunables.rByZoom = patch.rByZoom;
-                if (Array.isArray(patch.borderFalloff))
-                    tunables.borderFalloff = patch.borderFalloff;
-                if (typeof patch.eps === 'number') tunables.eps = patch.eps;
-                if (typeof patch.cursorFloor === 'number') tunables.cursorFloor = patch.cursorFloor;
-                if (typeof patch.haloScale === 'number' || Array.isArray(patch.haloScale))
-                    tunables.haloScale = patch.haloScale;
-                if (glowLayer) glowLayer.setTunables(patch);
+                glowLayer.setTunables(patch);
                 return { ...tunables };
             },
         };
     }
-}
-
-/**
- * Read-only accessor for tests and DevTools introspection.
- * @returns {GridIndex|null}
- */
-export function getGridIndex() {
-    return gridIndex;
 }

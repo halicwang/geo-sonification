@@ -2,121 +2,17 @@
 // Copyright (C) 2026 Zixiao Wang
 
 import { describe, it, expect, vi } from 'vitest';
-import { cursorFactor, borderFactor, glowFor, rByZoom, parseGridIndex } from '../hover-glow.js';
+import { parseGridIndex } from '../hover-glow.js';
 import { packBorderFalloff, MAX_FALLOFF_STOPS } from '../hover-glow-shaders.js';
 import { HoverGlowLayer } from '../hover-glow-layer.js';
 
-// Curve helpers (cursorFactor, borderFactor, glowFor, rByZoom) define
-// the spec the GLSL fragment shader replicates. The `distKm`,
-// `buildSpatialIndex`, and `enumerateNearbyEntries` tests that used to
-// live here were removed alongside their JS implementations — distance
-// math now lives only in the GLSL `distKmToCursor`, and the
-// per-frame spatial walk is gone (the GPU draws all 67k vertices and
-// fragment-shader-discards out-of-radius cells).
-
-describe('cursorFactor', () => {
-    it('returns 1 at d=0', () => {
-        expect(cursorFactor(0, 250)).toBe(1);
-    });
-
-    it('returns 0 at d=R', () => {
-        expect(cursorFactor(250, 250)).toBe(0);
-    });
-
-    it('returns 0 beyond R', () => {
-        expect(cursorFactor(300, 250)).toBe(0);
-    });
-
-    it('is exactly 0.5 at d=R/2 (smoothstep midpoint)', () => {
-        // smoothstep(0.5) = 3*0.25 - 2*0.125 = 0.75 - 0.25 = 0.5
-        expect(cursorFactor(125, 250)).toBeCloseTo(0.5, 5);
-    });
-
-    it('is C¹-continuous at the inner endpoint (no jump near 0)', () => {
-        const a = cursorFactor(0.001, 250);
-        const b = cursorFactor(0, 250);
-        expect(Math.abs(a - b)).toBeLessThan(1e-4);
-    });
-
-    it('is C¹-continuous at the outer endpoint (no jump near R)', () => {
-        const a = cursorFactor(249.999, 250);
-        const b = cursorFactor(250, 250);
-        expect(Math.abs(a - b)).toBeLessThan(1e-4);
-    });
-
-    it('is monotonically decreasing on [0, R]', () => {
-        let prev = Infinity;
-        for (let d = 0; d <= 250; d += 5) {
-            const v = cursorFactor(d, 250);
-            expect(v).toBeLessThanOrEqual(prev);
-            prev = v;
-        }
-    });
-});
-
-describe('borderFactor', () => {
-    it('returns 1.0 at the leading breakpoint (0 km)', () => {
-        expect(borderFactor(0)).toBeCloseTo(1.0, 5);
-    });
-
-    it('returns 0 at and beyond the trailing breakpoint (40 km)', () => {
-        expect(borderFactor(40)).toBeCloseTo(0, 5);
-        expect(borderFactor(100)).toBe(0);
-        expect(borderFactor(500)).toBe(0);
-    });
-
-    it('matches table values at intermediate breakpoints', () => {
-        // Breakpoints: 0→1.0, 15→0.7, 30→0.1, 40→0
-        expect(borderFactor(15)).toBeCloseTo(0.7, 5);
-        expect(borderFactor(30)).toBeCloseTo(0.1, 5);
-    });
-
-    it('is monotonically decreasing on [0, 40]', () => {
-        let prev = Infinity;
-        for (let d = 0; d <= 40; d += 1) {
-            const v = borderFactor(d);
-            expect(v).toBeLessThanOrEqual(prev + 1e-9);
-            prev = v;
-        }
-    });
-
-    it('accepts a custom table for live-tuning', () => {
-        const customTable = [
-            [0, 1.0],
-            [100, 0],
-        ];
-        expect(borderFactor(0, customTable)).toBeCloseTo(1.0);
-        expect(borderFactor(100, customTable)).toBeCloseTo(0);
-        expect(borderFactor(50, customTable)).toBeCloseTo(0.5, 1); // smoothstep midpoint
-    });
-});
-
-describe('rByZoom', () => {
-    it('returns the first stop for zoom <= min', () => {
-        expect(rByZoom(0)).toBe(1000);
-        expect(rByZoom(2)).toBe(1000);
-    });
-
-    it('returns the last stop for zoom >= max', () => {
-        expect(rByZoom(10)).toBe(320);
-        expect(rByZoom(15)).toBe(320);
-    });
-
-    it('linearly interpolates between stops', () => {
-        // Default table includes [5, 600], [7, 450]; midpoint zoom 6 → 525
-        expect(rByZoom(6)).toBeCloseTo(525, 0);
-    });
-
-    it('accepts a custom table', () => {
-        const t = [
-            [3, 100],
-            [10, 800],
-        ];
-        expect(rByZoom(3, t)).toBe(100);
-        expect(rByZoom(10, t)).toBe(800);
-        expect(rByZoom(6.5, t)).toBeCloseTo(450); // midpoint of [100, 800]
-    });
-});
+// The glow curves (cursorFactor, borderFactor, glowFor, rByZoom) live
+// only in the GLSL fragment shader now — the JS reference helpers and
+// their unit tests were removed. They duplicated the GPU code without
+// any cross-check, so they "locked" only themselves. A puppeteer
+// screenshot test is the right place to lock the curve shape end-to-
+// end; until that lands, the tunables tables in frontend/config.js
+// are the spec.
 
 describe('parseGridIndex', () => {
     /** Build a minimal grid_index.bin payload with N entries. */
@@ -176,44 +72,6 @@ describe('parseGridIndex', () => {
     });
 });
 
-describe('glowFor', () => {
-    it('with cursorFloor=0 reproduces the legacy cf*bf formula', () => {
-        for (const cf of [0.1, 0.5, 0.9]) {
-            for (const bf of [0, 0.3, 1.0]) {
-                expect(glowFor(cf, bf, 0)).toBeCloseTo(cf * bf, 10);
-            }
-        }
-    });
-
-    it('with bf=0 returns cf*cursorFloor (deep-interior soft glow)', () => {
-        expect(glowFor(1.0, 0, 0.25)).toBeCloseTo(0.25, 10);
-        expect(glowFor(0.5, 0, 0.25)).toBeCloseTo(0.125, 10);
-        expect(glowFor(0.8, 0, 0.4)).toBeCloseTo(0.32, 10);
-    });
-
-    it('with bf=1 clamps the additive blend to cf (no over-bright)', () => {
-        expect(glowFor(1.0, 1.0, 0.25)).toBe(1.0);
-        expect(glowFor(0.7, 1.0, 0.4)).toBeCloseTo(0.7, 10);
-        expect(glowFor(1.0, 1.0, 0.5)).toBe(1.0);
-    });
-
-    it('produces a monotonically non-increasing glow as borderDist grows', () => {
-        const cf = 1.0;
-        const cursorFloor = 0.25;
-        const samples = [0, 5, 15, 25, 29, 30, 31, 35, 40, 41, 60, 100];
-        const glows = samples.map((d) => glowFor(cf, borderFactor(d), cursorFloor));
-        for (let i = 1; i < glows.length; i++) {
-            expect(glows[i]).toBeLessThanOrEqual(glows[i - 1] + 1e-12);
-        }
-    });
-
-    it('returns 0 when cf=0 regardless of bf and cursorFloor', () => {
-        expect(glowFor(0, 0, 0.25)).toBe(0);
-        expect(glowFor(0, 0.5, 0.25)).toBe(0);
-        expect(glowFor(0, 1.0, 0.5)).toBe(0);
-    });
-});
-
 describe('packBorderFalloff', () => {
     it('returns a Float32Array of length 2 × MAX_FALLOFF_STOPS', () => {
         const out = packBorderFalloff([
@@ -250,28 +108,16 @@ describe('packBorderFalloff', () => {
         }
     });
 
-    it('truncates tables longer than MAX_FALLOFF_STOPS', () => {
-        const out = packBorderFalloff([
+    it('throws on tables longer than MAX_FALLOFF_STOPS', () => {
+        const tooMany = [
             [0, 1.0],
             [10, 0.8],
             [20, 0.6],
             [30, 0.4],
             [40, 0.2],
             [50, 0],
-        ]);
-        // First MAX_FALLOFF_STOPS stops kept; last two dropped.
-        const expected = [0, 1.0, 10, 0.8, 20, 0.6, 30, 0.4];
-        for (let i = 0; i < expected.length; i++) {
-            expect(out[i]).toBeCloseTo(expected[i], 5);
-        }
-    });
-
-    it('handles empty input by emitting an all-zero falloff', () => {
-        const out = packBorderFalloff([]);
-        // y=0 at every stop → borderFactor returns 0 everywhere.
-        for (let i = 0; i < MAX_FALLOFF_STOPS; i++) {
-            expect(out[i * 2 + 1]).toBe(0);
-        }
+        ];
+        expect(() => packBorderFalloff(tooMany)).toThrow(/exceed cap/);
     });
 });
 
@@ -298,8 +144,8 @@ describe('HoverGlowLayer', () => {
         };
     }
 
-    it('exposes the CustomLayerInterface shape', () => {
-        const layer = new HoverGlowLayer({
+    function makeLayer() {
+        return new HoverGlowLayer({
             gridIndex: fakeGridIndex(),
             tunables: fakeTunables(),
             dotRadiusStops: [
@@ -307,6 +153,10 @@ describe('HoverGlowLayer', () => {
                 [10, 8],
             ],
         });
+    }
+
+    it('exposes the CustomLayerInterface shape', () => {
+        const layer = makeLayer();
         expect(layer.id).toBe('hover-glow');
         expect(layer.type).toBe('custom');
         expect(layer.renderingMode).toBe('2d');
@@ -315,38 +165,19 @@ describe('HoverGlowLayer', () => {
         expect(typeof layer.onRemove).toBe('function');
     });
 
+    it('initial cursor sits at the off-screen sentinel so no halo paints before mousemove', () => {
+        const layer = makeLayer();
+        expect(layer._cursorLng).toBe(999);
+        expect(layer._cursorLat).toBe(999);
+    });
+
     it('setCursorLngLat stashes coords and triggers repaint when map is attached', () => {
-        const layer = new HoverGlowLayer({
-            gridIndex: fakeGridIndex(),
-            tunables: fakeTunables(),
-            dotRadiusStops: [
-                [2, 1.1],
-                [10, 8],
-            ],
-        });
+        const layer = makeLayer();
         const triggerRepaint = vi.fn();
         layer._map = { triggerRepaint };
         layer.setCursorLngLat(-55, -10);
         expect(layer._cursorLng).toBe(-55);
         expect(layer._cursorLat).toBe(-10);
-        expect(layer._visible).toBe(true);
-        expect(triggerRepaint).toHaveBeenCalledOnce();
-    });
-
-    it('setVisible(false) flips the flag and triggers repaint', () => {
-        const layer = new HoverGlowLayer({
-            gridIndex: fakeGridIndex(),
-            tunables: fakeTunables(),
-            dotRadiusStops: [
-                [2, 1.1],
-                [10, 8],
-            ],
-        });
-        layer._visible = true;
-        const triggerRepaint = vi.fn();
-        layer._map = { triggerRepaint };
-        layer.setVisible(false);
-        expect(layer._visible).toBe(false);
         expect(triggerRepaint).toHaveBeenCalledOnce();
     });
 

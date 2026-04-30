@@ -26,13 +26,9 @@
  *   mercator: render(gl, customLayerMatrix)
  *
  * The vertex shader handles both via `mix(mercatorPos, ecefViaG2M,
- * uTransition)`. Mercator mode → uTransition=0 + uGlobeToMercator=I
- * makes the globe branch contribute nothing.
- *
- * Skeleton stage (this commit): the fragment shader is a `discard`
- * placeholder, so the GL pipeline runs end-to-end without drawing
- * anything visible. The next commit lands the glow math without
- * touching this file's plumbing.
+ * uTransition)`. Mercator mode → uTransition=1 + uGlobeToMercator=I
+ * collapses the globe branch to identity-mapped ECEF coords that the
+ * mix() then weights at zero.
  *
  * @module frontend/hover-glow-layer
  */
@@ -124,9 +120,10 @@ function linkProgram(gl, vert, frag) {
 }
 
 /**
- * Linear-interpolate a (zoom, value) stops table at `x`. Used both
- * for `R` (km) and the dot-radius footprint. Mirrors `rByZoom` in
- * hover-glow.js — kept inline here to avoid a circular import.
+ * Linear-interpolate a (zoom, value) stops table at `x`. Used for `R`
+ * (km), the dot-radius footprint, and the halo-scale curve. Stops
+ * must be sorted strictly increasing in x; the two endpoint clamps
+ * plus the loop cover every input.
  */
 function lerpStops(x, stops) {
     if (x <= stops[0][0]) return stops[0][1];
@@ -139,7 +136,6 @@ function lerpStops(x, stops) {
             return a[1] + (b[1] - a[1]) * t;
         }
     }
-    return stops[stops.length - 1][1];
 }
 
 /**
@@ -167,9 +163,11 @@ export class HoverGlowLayer {
         this._tunables = tunables;
         this._dotRadiusStops = dotRadiusStops;
 
-        this._cursorLng = 0;
-        this._cursorLat = 0;
-        this._visible = false;
+        // Initial cursor position is the off-screen sentinel used by
+        // hover-glow.js on mouseleave / window blur. Keeps the halo
+        // hidden between layer registration and the first mousemove.
+        this._cursorLng = 999;
+        this._cursorLat = 999;
 
         this._gl = null;
         this._map = null;
@@ -272,7 +270,7 @@ export class HoverGlowLayer {
 
         gl.uniform2f(u.uCursorLngLat, this._cursorLng, this._cursorLat);
         gl.uniform1f(u.uR, lerpStops(this._map.getZoom(), this._tunables.rByZoom));
-        gl.uniform1f(u.uCursorFloor, this._visible ? this._tunables.cursorFloor : 0);
+        gl.uniform1f(u.uCursorFloor, this._tunables.cursorFloor);
         gl.uniform1f(u.uEps, this._tunables.eps);
         gl.uniform2fv(u.uFalloff, packBorderFalloff(this._tunables.borderFalloff));
 
@@ -285,12 +283,6 @@ export class HoverGlowLayer {
     setCursorLngLat(lng, lat) {
         this._cursorLng = lng;
         this._cursorLat = lat;
-        this._visible = true;
-        if (this._map) this._map.triggerRepaint();
-    }
-
-    setVisible(visible) {
-        this._visible = visible;
         if (this._map) this._map.triggerRepaint();
     }
 

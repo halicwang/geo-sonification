@@ -52,9 +52,13 @@ out vec2 vLngLat;
 out float vBorderDist;
 
 void main() {
+    // uTransition follows Mapbox's globeToMercatorTransition(zoom):
+    // 0 in pure globe mode (zoom < 5), 1 in pure mercator (zoom > 6),
+    // smooth ramp in between. So at t=0 the vertex must be the
+    // globe-via-G2M position; at t=1 it's the mercator world position.
     vec4 mercatorPos = vec4(aMerc, 0.0, 1.0);
     vec4 globeAsMerc = uGlobeToMercator * vec4(aEcef, 1.0);
-    vec4 worldPos = mix(mercatorPos, globeAsMerc, uTransition);
+    vec4 worldPos = mix(globeAsMerc, mercatorPos, uTransition);
     gl_Position = uMatrix * worldPos;
     gl_PointSize = uPointSize;
     vLngLat = aLngLat;

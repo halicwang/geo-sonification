@@ -22,13 +22,6 @@ import { updateUI, showToast } from './ui.js';
 import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
 import { initHoverGlow } from './hover-glow.js';
-import { initHoverGlowSpike } from './hover-glow-spike.js';
-
-/** Spike toggle: ?spike=gpu replaces the CPU setFeatureState path with a
- *  paint-expression cursor distance. Off by default. */
-const SPIKE_MODE_GPU =
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('spike') === 'gpu';
 
 // ============ Motion Tracking ============
 
@@ -327,14 +320,8 @@ export function initMap() {
         // Hover glow loads its own sidecar. Failure is non-fatal \u2014 the
         // module logs a warning and the dot layer keeps rendering at
         // its rest grey. Wired here (after addGridLayer) so the source
-        // and layer exist by the time runtime ticks (P1-2) start
-        // calling setFeatureState.
-        if (SPIKE_MODE_GPU) {
-            console.log('[map] ?spike=gpu active \u2014 using GPU-driven hover glow');
-            initHoverGlowSpike(state.runtime.map);
-        } else {
-            initHoverGlow(state.runtime.map);
-        }
+        // and layer exist by the time the GPU custom layer registers.
+        initHoverGlow(state.runtime.map);
 
         state.runtime.map.on('move', () => {
             const zoom = state.runtime.map.getZoom();

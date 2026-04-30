@@ -41,6 +41,19 @@ import { VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, packBorderFalloff } from './hov
 
 const DEG_TO_RAD = Math.PI / 180;
 
+/**
+ * Mapbox's ECEF coordinate space is scaled to GLOBE_RADIUS (not a
+ * unit sphere). `globeToMercatorMatrix()` is built as
+ * `(1 / worldSize) × globeMatrix`, where `globeMatrix` expects ECEF
+ * inputs at this radius — so our `aEcef` attribute must match or the
+ * mix() in the vertex shader maps points to (near-zero) mercator
+ * coords and the halo floats off-globe near the world origin.
+ *
+ * Mirror of `GLOBE_RADIUS = EXTENT / (2π)` from
+ * src/geo/projection/globe_constants.ts (EXTENT = 8192).
+ */
+const MAPBOX_GLOBE_RADIUS = 8192 / (2 * Math.PI);
+
 /** 8 floats per vertex: [lng, lat, mercX, mercY, ecefX, ecefY, ecefZ, borderDistKm]. */
 const FLOATS_PER_VERTEX = 8;
 const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
@@ -74,9 +87,12 @@ export function buildVertexBuffer(gridIndex) {
         out[off + 1] = lat;
         out[off + 2] = merc.x;
         out[off + 3] = merc.y;
-        out[off + 4] = cosLat * sinLon;
-        out[off + 5] = -sinLat;
-        out[off + 6] = cosLat * cosLon;
+        // ECEF in Mapbox's GLOBE_RADIUS-scaled space (not unit sphere).
+        // Axis convention matches src/geo/lng_lat.ts csLatLngToECEF:
+        // (cosLat·sinLng, -sinLat, cosLat·cosLng), all × GLOBE_RADIUS.
+        out[off + 4] = cosLat * sinLon * MAPBOX_GLOBE_RADIUS;
+        out[off + 5] = -sinLat * MAPBOX_GLOBE_RADIUS;
+        out[off + 6] = cosLat * cosLon * MAPBOX_GLOBE_RADIUS;
         out[off + 7] = dist;
     }
     return out;
@@ -214,9 +230,18 @@ export class HoverGlowLayer {
      * (gl, customLayerMatrix, projection, globeToMercatorMatrix,
      *  transition, [centerX, centerY], pixelsPerMeterRatio) in globe
      * mode. We only need matrix + globeToMercator + transition.
+     *
+     * `transition` is Mapbox's `globeToMercatorTransition(zoom)`:
+     * 0 in pure globe (z<5), 1 in pure mercator (z>6), smooth in
+     * between. In mercator mode mapbox passes neither g2m nor
+     * transition, but the shader still needs uTransition=1 so the
+     * mix() picks the mercator branch — defaulting to 0 there would
+     * route through the (now-identity) g2m and render off-globe.
      */
     render(gl, matrix, _projection, globeToMercator, transition) {
         if (!this._program || !this._vbo) return;
+        const inGlobeMode = !!globeToMercator;
+        const t = inGlobeMode ? transition || 0 : 1;
 
         gl.useProgram(this._program);
         gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
@@ -242,7 +267,7 @@ export class HoverGlowLayer {
         const u = this._uniformLocs;
         gl.uniformMatrix4fv(u.uMatrix, false, matrix);
         gl.uniformMatrix4fv(u.uGlobeToMercator, false, globeToMercator || IDENTITY4);
-        gl.uniform1f(u.uTransition, transition || 0);
+        gl.uniform1f(u.uTransition, t);
         gl.uniform1f(u.uPointSize, this._computePointSize());
 
         gl.uniform2f(u.uCursorLngLat, this._cursorLng, this._cursorLat);

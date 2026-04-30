@@ -157,13 +157,21 @@ export const HOVER_GLOW_R_KM_BY_ZOOM = [
  * Border-distance penalty curve: cells far from any border cap glow
  * to zero, regardless of how close the cursor is. Hermite-blended
  * between breakpoints (C¹-continuous, no sharp transitions).
- *   1.0 @ 0 km, 0.7 @ 50 km, 0.1 @ 150 km, 0 @ 250 km+
+ *
+ * GRID_SIZE = 0.5° ≈ 55 km cell spacing at the equator. Cells whose
+ * centroid is within ~28 km of a border are the ones the border line
+ * actually passes through; cells in the next ring out are 28-83 km
+ * away. To paint the border as a *single row of dots* (not a 3-row
+ * swath), the curve drops to ~0 by ~35 km — only the
+ * border-passing-through row qualifies.
+ *
+ *   1.0 @ 0 km, 0.7 @ 15 km, 0.1 @ 30 km, 0 @ 40 km+
  */
 export const HOVER_GLOW_BORDER_FALLOFF = [
     [0, 1.0],
-    [50, 0.7],
-    [150, 0.1],
-    [250, 0.0],
+    [15, 0.7],
+    [30, 0.1],
+    [40, 0.0],
 ];
 
 /**

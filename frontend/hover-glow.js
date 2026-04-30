@@ -361,6 +361,34 @@ function tick() {
     prevGlowingFids = newGlowingFids;
 }
 
+// ============ RAF-coalesced scheduler ============
+//
+// Tick is event-driven, not render-driven: the previous (render-driven)
+// version ran the 67k-cell scan on every frame Mapbox composited,
+// burning ~4M iterations/sec even when nothing changed and producing
+// a "flicker" feel as cells near EPS bounced in and out of the active
+// set. Now tick runs at most once per RAF, only when state has changed
+// (mousemove → cursor moved, or `map.on('move')` → transform changed).
+//
+// During drag/zoom, `map.on('move')` fires every frame, so we still
+// get full-FPS updates for the drag-lag fix. During idle hover we
+// only run when the cursor itself moves. During total idle (no
+// movement at all) we run zero ticks.
+
+let rafId = null;
+let dirty = false;
+
+function scheduleTick() {
+    dirty = true;
+    if (rafId !== null) return;
+    rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!dirty) return;
+        dirty = false;
+        tick();
+    });
+}
+
 /**
  * Force-clear all currently glowing cells. Called on mouseleave and
  * on tab blur to avoid leaving residual highlights.
@@ -410,6 +438,7 @@ export async function initHoverGlow(map) {
     canvas.addEventListener('mousemove', (e) => {
         const rect = canvas.getBoundingClientRect();
         cursor = { sx: e.clientX - rect.left, sy: e.clientY - rect.top };
+        scheduleTick();
     });
     canvas.addEventListener('mouseleave', () => {
         cursor = null;
@@ -423,11 +452,11 @@ export async function initHoverGlow(map) {
         clearAllGlow();
     });
 
-    // The render-tick handler. `render` fires every frame Mapbox
-    // composites — during drag, zoom animation, and idle hover. The
-    // per-render unproject uses the *current* transform, which is the
-    // drag-lag fix.
-    map.on('render', tick);
+    // Map-transform-driven tick. `move` fires once per frame during
+    // drag, zoom, and rotate animations — covers the drag-lag fix
+    // (re-`unproject` cursor via current transform) without needing
+    // `render`'s per-paint firing rate when nothing has changed.
+    map.on('move', scheduleTick);
 
     // Debug surface for DevTools introspection + live tuning. Patch
     // `__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })` to

@@ -79,20 +79,21 @@ describe('borderFactor', () => {
         expect(borderFactor(0)).toBeCloseTo(1.0, 5);
     });
 
-    it('returns 0 at and beyond the trailing breakpoint (250 km)', () => {
-        expect(borderFactor(250)).toBeCloseTo(0, 5);
+    it('returns 0 at and beyond the trailing breakpoint (40 km)', () => {
+        expect(borderFactor(40)).toBeCloseTo(0, 5);
+        expect(borderFactor(100)).toBe(0);
         expect(borderFactor(500)).toBe(0);
     });
 
     it('matches table values at intermediate breakpoints', () => {
-        // Breakpoints: 0→1.0, 50→0.7, 150→0.1, 250→0
-        expect(borderFactor(50)).toBeCloseTo(0.7, 5);
-        expect(borderFactor(150)).toBeCloseTo(0.1, 5);
+        // Breakpoints: 0→1.0, 15→0.7, 30→0.1, 40→0
+        expect(borderFactor(15)).toBeCloseTo(0.7, 5);
+        expect(borderFactor(30)).toBeCloseTo(0.1, 5);
     });
 
-    it('is monotonically decreasing on [0, 250]', () => {
+    it('is monotonically decreasing on [0, 40]', () => {
         let prev = Infinity;
-        for (let d = 0; d <= 250; d += 5) {
+        for (let d = 0; d <= 40; d += 1) {
             const v = borderFactor(d);
             expect(v).toBeLessThanOrEqual(prev + 1e-9);
             prev = v;

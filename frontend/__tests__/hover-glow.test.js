@@ -2,7 +2,15 @@
 // Copyright (C) 2026 Zixiao Wang
 
 import { describe, it, expect } from 'vitest';
-import { distKm, cursorFactor, borderFactor, rByZoom, parseGridIndex } from '../hover-glow.js';
+import {
+    distKm,
+    cursorFactor,
+    borderFactor,
+    rByZoom,
+    parseGridIndex,
+    buildSpatialIndex,
+    enumerateNearbyEntries,
+} from '../hover-glow.js';
 
 // 1° at the equator is ~111.32 km.
 const ONE_DEG_KM = 111.32;
@@ -113,18 +121,18 @@ describe('borderFactor', () => {
 
 describe('rByZoom', () => {
     it('returns the first stop for zoom <= min', () => {
-        expect(rByZoom(0)).toBe(600);
-        expect(rByZoom(2)).toBe(600);
+        expect(rByZoom(0)).toBe(1000);
+        expect(rByZoom(2)).toBe(1000);
     });
 
     it('returns the last stop for zoom >= max', () => {
-        expect(rByZoom(10)).toBe(180);
-        expect(rByZoom(15)).toBe(180);
+        expect(rByZoom(10)).toBe(320);
+        expect(rByZoom(15)).toBe(320);
     });
 
     it('linearly interpolates between stops', () => {
-        // Default table includes [5, 350], [7, 250]; midpoint zoom 6 → 300
-        expect(rByZoom(6)).toBeCloseTo(300, 0);
+        // Default table includes [5, 600], [7, 450]; midpoint zoom 6 → 525
+        expect(rByZoom(6)).toBeCloseTo(525, 0);
     });
 
     it('accepts a custom table', () => {
@@ -197,5 +205,91 @@ describe('parseGridIndex', () => {
         view.setUint32(8, 2, true); // count = 2 → expected 16 + 2*16 = 48 bytes
         view.setFloat32(12, 0.5, true);
         expect(() => parseGridIndex(buf)).toThrow(/length/i);
+    });
+});
+
+describe('buildSpatialIndex / enumerateNearbyEntries', () => {
+    /** Build a GridIndex from raw entries, mirroring the parseGridIndex test helper. */
+    function buildGridIndex(entries) {
+        const buf = new ArrayBuffer(16 + entries.length * 16);
+        const view = new DataView(buf);
+        const magic = 'GSIDX001';
+        for (let i = 0; i < 8; i++) view.setUint8(i, magic.charCodeAt(i));
+        view.setUint32(8, entries.length, true);
+        view.setFloat32(12, 0.5, true);
+        let off = 16;
+        for (const e of entries) {
+            view.setUint32(off, e.fid, true);
+            view.setFloat32(off + 4, e.lon, true);
+            view.setFloat32(off + 8, e.lat, true);
+            view.setFloat32(off + 12, e.dist, true);
+            off += 16;
+        }
+        return parseGridIndex(buf);
+    }
+
+    it('places every entry into exactly one bucket', () => {
+        const idx = buildGridIndex([
+            { fid: 1, lon: 0, lat: 0, dist: 0 },
+            { fid: 2, lon: 5, lat: 5, dist: 0 },
+            { fid: 3, lon: -178, lat: 0, dist: 0 },
+            { fid: 4, lon: 179.9, lat: 89.9, dist: 0 },
+            { fid: 5, lon: -179.9, lat: -89.9, dist: 0 },
+        ]);
+        const sIdx = buildSpatialIndex(idx);
+        let total = 0;
+        for (const arr of sIdx.buckets.values()) {
+            total += arr.length;
+        }
+        expect(total).toBe(5);
+        expect(sIdx.bucketDeg).toBe(5);
+    });
+
+    it('returns the entry near the cursor and excludes the far one', () => {
+        const idx = buildGridIndex([
+            { fid: 1, lon: 0, lat: 0, dist: 0 }, // entry index 0 — at cursor
+            { fid: 2, lon: 100, lat: 0, dist: 0 }, // entry index 1 — ~11000 km away
+        ]);
+        const sIdx = buildSpatialIndex(idx);
+        const found = enumerateNearbyEntries(sIdx, 0, 0, 200);
+        expect(found).toContain(0);
+        expect(found).not.toContain(1);
+    });
+
+    it('walks an antimeridian-wrapped query (cursor at lon=179, R=600 km)', () => {
+        const idx = buildGridIndex([
+            { fid: 1, lon: 179.5, lat: 0, dist: 0 }, // entry 0 — same side
+            { fid: 2, lon: -179.5, lat: 0, dist: 0 }, // entry 1 — wraps across the meridian
+            { fid: 3, lon: 0, lat: 0, dist: 0 }, // entry 2 — far hemisphere
+        ]);
+        const sIdx = buildSpatialIndex(idx);
+        const found = enumerateNearbyEntries(sIdx, 179, 0, 600);
+        expect(found).toContain(0);
+        expect(found).toContain(1);
+        expect(found).not.toContain(2);
+    });
+
+    it('returns a superset of the entries inside the exact range', () => {
+        // Sample 50 random points; verify that every entry within R of the
+        // cursor (by exact equirectangular distKm) appears in the bucket walk.
+        const entries = [];
+        for (let i = 0; i < 50; i++) {
+            const lon = ((i * 7.31) % 360) - 180;
+            const lat = ((i * 3.71) % 180) - 90;
+            entries.push({ fid: i + 1, lon, lat, dist: 0 });
+        }
+        const idx = buildGridIndex(entries);
+        const sIdx = buildSpatialIndex(idx);
+        const cLng = 10;
+        const cLat = 30;
+        const R = 800;
+        const candidates = new Set(enumerateNearbyEntries(sIdx, cLng, cLat, R));
+        // Anything within R must be in the candidate set
+        for (let i = 0; i < entries.length; i++) {
+            const d = distKm(cLat, cLng, entries[i].lat, entries[i].lon);
+            if (d <= R) {
+                expect(candidates.has(i)).toBe(true);
+            }
+        }
     });
 });

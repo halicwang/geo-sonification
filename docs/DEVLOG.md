@@ -23,6 +23,8 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-30 | Fix        | [Hover-glow Pause During Drag](devlog/M6/2026-04-30-M6-hover-glow-pause-during-drag.md)                                                                                                       |
+| 2026-04-29 | Fix        | [Hover-glow Synchronous Tick + Spatial Bucket + Wider Radius](devlog/M6/2026-04-29-M6-hover-glow-sync-spatial-radius.md)                                                                      |
 | 2026-04-29 | Fix        | [Hover-glow Single-Row Border + RAF Coalescing](devlog/M6/2026-04-29-M6-hover-glow-tighten-and-coalesce.md)                                                                                   |
 | 2026-04-29 | Docs       | [M6 README + ARCHITECTURE Updates](devlog/M6/2026-04-29-M6-docs-update.md)                                                                                                                    |
 | 2026-04-29 | Feature    | [Hover-glow Tunables + Tests (M6 P1-4/P1-5)](devlog/M6/2026-04-29-M6-hover-glow-tunables-tests.md)                                                                                            |

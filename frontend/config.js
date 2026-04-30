@@ -143,14 +143,20 @@ export const STALE_GRACE_MS = 5000;
 /**
  * Cursor falloff radius in km, by zoom level. Linear-interpolated
  * between breakpoints. Visual size on screen stays roughly constant
- * across zooms — at zoom 2 we paint ~600 km (small on screen), at
- * zoom 10 we paint ~180 km (large on screen).
+ * across zooms — at zoom 2 we paint ~1000 km (small on screen), at
+ * zoom 10 we paint ~320 km (large on screen).
+ *
+ * The curve was widened from `[600, 350, 250, 180]` after
+ * `HOVER_GLOW_BORDER_FALLOFF` tightened from 250 km to 40 km — with
+ * the narrower border band, the visible "presence" of the lit tube
+ * along a coast/border was much shorter than before, so the cursor
+ * radius needed to grow roughly to compensate.
  */
 export const HOVER_GLOW_R_KM_BY_ZOOM = [
-    [2, 600],
-    [5, 350],
-    [7, 250],
-    [10, 180],
+    [2, 1000],
+    [5, 600],
+    [7, 450],
+    [10, 320],
 ];
 
 /**

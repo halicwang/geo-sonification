@@ -5,21 +5,31 @@
  * Hover glow — brightens existing grid dots near both the cursor AND a
  * country border or coastline, on a smooth radial falloff.
  *
- * Architecture (the M6 plan, mirrored in code):
+ * Architecture:
  *   1. Load `/tiles/grid_index.bin` once on init — a packed binary
  *      sidecar with `{fid:u32, lon:f32, lat:f32, distKm:f32}` × N.
  *      The encoding mirrors `scripts/build-grid-index.js` exactly.
- *   2. Track screen-space cursor via `mousemove` only.
- *   3. Drive every per-frame update from `map.on('render')`. This is
- *      the drag-lag fix from the previous attempt — `mousemove`
- *      does not fire during drag, but `render` does, and re-projecting
- *      the cached screen-space cursor via `map.unproject` uses the
- *      *current* transform.
- *   4. Per tick: linear scan all entries, compute glow as
- *      `cursorFactor(d) × borderFactor(borderDistKm)`, batch
+ *   2. Build a 5° lon/lat bucket index over the entries so per-tick
+ *      work is bounded by cursor radius, not total cell count.
+ *   3. Track screen-space cursor via `mousemove` only — RAF-coalesced
+ *      because mousemove can fire faster than RAF and we don't need
+ *      same-frame freshness during pure hover.
+ *   4. Pause tick entirely between `movestart` and `moveend`. Even
+ *      though JS-side per-tick cost is sub-millisecond, the
+ *      `setFeatureState` calls queue tile vertex-buffer GPU uploads
+ *      that compound during a sustained drag and visibly stall on
+ *      lower-tier hardware. Pausing freezes the glow geographically
+ *      (cursor visually drifts from the lit cells during drag) but
+ *      eliminates the GPU side-effect entirely; one catchup tick on
+ *      `moveend` snaps the glow back to the cursor.
+ *   5. On `map.on('move')` outside a drag bracket, tick synchronously
+ *      so feature-state writes land in the same frame's render.
+ *   6. Per tick: walk only buckets within the cursor's bbox, compute
+ *      glow as `cursorFactor(d) × borderFactor(borderDistKm)`, batch
  *      `setFeatureState({glow})` for cells above EPS, and zero out any
  *      cell from the previous frame's set that didn't make this one's
- *      (the anti-progressive-degradation invariant).
+ *      (the anti-progressive-degradation invariant). The two glowing
+ *      Sets are double-buffered (swap+clear), no per-frame allocation.
  *
  * Runtime constants live in `frontend/config.js` (HOVER_GLOW_*).
  * `window.__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })`
@@ -89,11 +99,24 @@ let gridIndex = null;
 /** Screen-space cursor (CSS pixels) or null when outside the canvas. */
 let cursor = null;
 
-/** Set of fids currently glowing — diffed each tick to clean up stale state. */
+/**
+ * Set of fids currently glowing — diffed each tick to clean up stale
+ * state. Double-buffered with `currentGlowingFids` so we never
+ * allocate a new Set per frame; tick() swaps the two refs at the
+ * end and clears the new "current" on the next entry.
+ */
 let prevGlowingFids = new Set();
+let currentGlowingFids = new Set();
 
 /** Cached map ref for tick(). */
 let mapRef = null;
+
+/**
+ * True between `movestart` and `moveend`. tick() early-returns while
+ * this is set so per-frame setFeatureState GPU upload churn doesn't
+ * compound during a sustained drag.
+ */
+let dragging = false;
 
 /** Cached source-layer descriptor for setFeatureState. */
 const FEATURE_STATE_SOURCE = 'grid-source';
@@ -134,6 +157,132 @@ export function parseGridIndex(buffer) {
         u32: new Uint32Array(buffer, GRID_INDEX_HEADER_BYTES, fieldCount),
         f32: new Float32Array(buffer, GRID_INDEX_HEADER_BYTES, fieldCount),
     };
+}
+
+// ============ Spatial bucket index ============
+//
+// At sidecar load we bin entries into a 5° lon/lat grid so the
+// per-frame scan only walks cells whose bucket intersects the
+// cursor's km-radius bbox. With a 600 km radius (zoom 5 default)
+// that's at most a 3×3 bucket region near the equator, and the inner
+// loop sees a few hundred entries instead of all 67k.
+//
+// Buckets are keyed by a packed integer `lonIdx * 100 + latIdx`,
+// stored on a Map → `Uint32Array` of entry indices. The bucket size
+// is deliberately coarse (5°) so a single radius spans a small
+// constant number of buckets across the realistic radius range
+// (180–1000 km); finer bucketing would add Map.get overhead with no
+// inner-loop savings.
+
+/** Bucket size in degrees. 5° ≈ 555 km at the equator. */
+const SPATIAL_BUCKET_DEG = 5;
+
+/** Number of longitude buckets covering [-180, 180). */
+const LON_BUCKET_COUNT = Math.ceil(360 / SPATIAL_BUCKET_DEG);
+
+/** Number of latitude buckets covering [-90, 90]. */
+const LAT_BUCKET_COUNT = Math.ceil(180 / SPATIAL_BUCKET_DEG);
+
+/**
+ * Lon → [0, LON_BUCKET_COUNT) bucket index, antimeridian-wrapping.
+ * @param {number} lon
+ * @returns {number}
+ */
+function lonBucketIdx(lon) {
+    let b = Math.floor((lon + 180) / SPATIAL_BUCKET_DEG);
+    while (b < 0) b += LON_BUCKET_COUNT;
+    while (b >= LON_BUCKET_COUNT) b -= LON_BUCKET_COUNT;
+    return b;
+}
+
+/**
+ * Lat → [0, LAT_BUCKET_COUNT) bucket index, clamped at the poles.
+ * @param {number} lat
+ * @returns {number}
+ */
+function latBucketIdx(lat) {
+    let b = Math.floor((lat + 90) / SPATIAL_BUCKET_DEG);
+    if (b < 0) return 0;
+    if (b >= LAT_BUCKET_COUNT) return LAT_BUCKET_COUNT - 1;
+    return b;
+}
+
+/** Pack (lonIdx, latIdx) into a single Map key. latIdx < 100 so * 100 is safe. */
+function bucketKey(lonIdx, latIdx) {
+    return lonIdx * 100 + latIdx;
+}
+
+/**
+ * Build a 5°-bucket spatial index over the grid_index entries.
+ * Two passes: count → allocate exact-sized Uint32Arrays → fill. This
+ * avoids Array.push grow-in-place in the hot init path.
+ *
+ * @param {GridIndex} gridIndex
+ * @returns {{ bucketDeg: number, buckets: Map<number, Uint32Array> }}
+ */
+export function buildSpatialIndex(gridIndex) {
+    const f32 = gridIndex.f32;
+    const n = gridIndex.count;
+
+    const counts = new Map();
+    for (let i = 0; i < n; i++) {
+        const off = i * 4;
+        const k = bucketKey(lonBucketIdx(f32[off + 1]), latBucketIdx(f32[off + 2]));
+        counts.set(k, (counts.get(k) || 0) + 1);
+    }
+
+    const buckets = new Map();
+    const fillCursor = new Map();
+    for (const [k, c] of counts) {
+        buckets.set(k, new Uint32Array(c));
+        fillCursor.set(k, 0);
+    }
+
+    for (let i = 0; i < n; i++) {
+        const off = i * 4;
+        const k = bucketKey(lonBucketIdx(f32[off + 1]), latBucketIdx(f32[off + 2]));
+        const arr = buckets.get(k);
+        const cur = fillCursor.get(k);
+        arr[cur] = i;
+        fillCursor.set(k, cur + 1);
+    }
+
+    return { bucketDeg: SPATIAL_BUCKET_DEG, buckets };
+}
+
+/**
+ * Test-only helper: return entry indices in buckets that intersect
+ * the cursor's km-radius bbox. The result is a *superset* of the
+ * entries the per-tick math will actually accept; the bucket walk is
+ * a coarse pre-filter, not an exact range query.
+ *
+ * @param {{ buckets: Map<number, Uint32Array> }} spatialIndex
+ * @param {number} cLng
+ * @param {number} cLat
+ * @param {number} R   km
+ * @returns {number[]} entry indices
+ */
+export function enumerateNearbyEntries(spatialIndex, cLng, cLat, R) {
+    const buckets = spatialIndex.buckets;
+    const KM_PER_DEG = EARTH_RADIUS_KM * DEG_TO_RAD;
+    const latRange = R / KM_PER_DEG;
+    const cosLatClamped = Math.max(0.05, Math.abs(Math.cos(cLat * DEG_TO_RAD)));
+    const lonRange = R / (KM_PER_DEG * cosLatClamped);
+    const latLoIdx = latBucketIdx(cLat - latRange);
+    const latHiIdx = latBucketIdx(cLat + latRange);
+    const lonLoFloat = Math.floor((cLng - lonRange + 180) / SPATIAL_BUCKET_DEG);
+    const lonHiFloat = Math.floor((cLng + lonRange + 180) / SPATIAL_BUCKET_DEG);
+
+    const out = [];
+    for (let lonI = lonLoFloat; lonI <= lonHiFloat; lonI++) {
+        const lonIdx = ((lonI % LON_BUCKET_COUNT) + LON_BUCKET_COUNT) % LON_BUCKET_COUNT;
+        for (let latIdx = latLoIdx; latIdx <= latHiIdx; latIdx++) {
+            const arr = buckets.get(bucketKey(lonIdx, latIdx));
+            if (!arr) continue;
+            for (let j = 0, m = arr.length; j < m; j++) out.push(arr[j]);
+        }
+    }
+    return out;
 }
 
 // ============ Glow math ============
@@ -271,7 +420,12 @@ async function fetchGridIndex() {
  *    faster on a present-zero entry than on a re-walked absent one.
  */
 function tick() {
-    if (!cursor || !gridIndex || !mapRef) return;
+    // Pause during drag/zoom/rotate — the moveend handler will call
+    // tick() once with dragging=false to resume. The check lives here
+    // (not just in event handlers) so a mousemove-queued RAF tick that
+    // happens to fire mid-drag also honors the pause.
+    if (dragging) return;
+    if (!cursor || !gridIndex || !gridIndex.spatialIndex || !mapRef) return;
     if (!mapRef.isStyleLoaded()) return;
     if (!mapRef.getLayer('grid-dots')) return;
 
@@ -286,7 +440,7 @@ function tick() {
 
     const u32 = gridIndex.u32;
     const f32 = gridIndex.f32;
-    const n = gridIndex.count;
+    const buckets = gridIndex.spatialIndex.buckets;
 
     // Pre-compute scaling factors used per-iteration. We don't reuse
     // distKm() here because the inner loop wants to skip the sqrt for
@@ -296,34 +450,53 @@ function tick() {
     const factor = DEG_TO_RAD * EARTH_RADIUS_KM;
     const cosFactor = factor * cosLatMid;
 
+    // Cursor bbox in degrees → bucket range. Clamp cosLat near the
+    // poles so the lon range stays finite (at lat ±90 the bbox spans
+    // every longitude anyway).
+    const KM_PER_DEG = factor; // EARTH_RADIUS_KM * DEG_TO_RAD ≈ 111.195 km/°
+    const latRange = R / KM_PER_DEG;
+    const cosLatClamped = Math.max(0.05, Math.abs(cosLatMid));
+    const lonRange = R / (KM_PER_DEG * cosLatClamped);
+    const latLoIdx = latBucketIdx(cLat - latRange);
+    const latHiIdx = latBucketIdx(cLat + latRange);
+    const lonLoFloat = Math.floor((cLng - lonRange + 180) / SPATIAL_BUCKET_DEG);
+    const lonHiFloat = Math.floor((cLng + lonRange + 180) / SPATIAL_BUCKET_DEG);
+
     /** @type {Array<{fid:number, glow:number}>} */
     const candidates = [];
 
-    for (let i = 0; i < n; i++) {
-        const off = i * 4;
-        const lon = f32[off + 1];
-        const lat = f32[off + 2];
+    for (let lonI = lonLoFloat; lonI <= lonHiFloat; lonI++) {
+        const lonIdx = ((lonI % LON_BUCKET_COUNT) + LON_BUCKET_COUNT) % LON_BUCKET_COUNT;
+        for (let latIdx = latLoIdx; latIdx <= latHiIdx; latIdx++) {
+            const arr = buckets.get(bucketKey(lonIdx, latIdx));
+            if (!arr) continue;
+            for (let j = 0, m = arr.length; j < m; j++) {
+                const off = arr[j] * 4;
+                const lon = f32[off + 1];
+                const lat = f32[off + 2];
 
-        let dLon = lon - cLng;
-        if (dLon > 180) dLon -= 360;
-        else if (dLon < -180) dLon += 360;
-        const x = dLon * cosFactor;
-        const y = (lat - cLat) * factor;
-        const dSq = x * x + y * y;
-        if (dSq >= RSqGuess) continue; // ~95% of cells skip here without sqrt
+                let dLon = lon - cLng;
+                if (dLon > 180) dLon -= 360;
+                else if (dLon < -180) dLon += 360;
+                const x = dLon * cosFactor;
+                const y = (lat - cLat) * factor;
+                const dSq = x * x + y * y;
+                if (dSq >= RSqGuess) continue;
 
-        const dKm = Math.sqrt(dSq);
-        const cf = cursorFactor(dKm, R);
-        if (cf <= 0) continue;
+                const dKm = Math.sqrt(dSq);
+                const cf = cursorFactor(dKm, R);
+                if (cf <= 0) continue;
 
-        const borderDist = f32[off + 3];
-        const bf = borderFactor(borderDist, borderTable);
-        if (bf <= 0) continue;
+                const borderDist = f32[off + 3];
+                const bf = borderFactor(borderDist, borderTable);
+                if (bf <= 0) continue;
 
-        const g = cf * bf;
-        if (g < eps) continue;
+                const g = cf * bf;
+                if (g < eps) continue;
 
-        candidates.push({ fid: u32[off], glow: g });
+                candidates.push({ fid: u32[off], glow: g });
+            }
+        }
     }
 
     // Cap to maxGlowing by sorting on glow descending. Truncated cells
@@ -333,10 +506,12 @@ function tick() {
         candidates.length = maxGlowing;
     }
 
-    // Apply this frame's set.
-    const newGlowingFids = new Set();
+    // Apply this frame's set. `currentGlowingFids` is reused across
+    // ticks via clear()+swap, so this loop allocates nothing for the
+    // membership check or the diff cleanup below.
+    currentGlowingFids.clear();
     for (const c of candidates) {
-        newGlowingFids.add(c.fid);
+        currentGlowingFids.add(c.fid);
         mapRef.setFeatureState(
             { source: FEATURE_STATE_SOURCE, sourceLayer: FEATURE_STATE_SOURCE_LAYER, id: c.fid },
             { glow: c.glow }
@@ -346,7 +521,7 @@ function tick() {
     // Clean up stale glow from cells that left this frame's set.
     if (prevGlowingFids.size > 0) {
         for (const fid of prevGlowingFids) {
-            if (!newGlowingFids.has(fid)) {
+            if (!currentGlowingFids.has(fid)) {
                 mapRef.setFeatureState(
                     {
                         source: FEATURE_STATE_SOURCE,
@@ -358,35 +533,64 @@ function tick() {
             }
         }
     }
-    prevGlowingFids = newGlowingFids;
+
+    // Swap roles for next tick: today's `currentGlowingFids` becomes
+    // tomorrow's `prev`. The other Set is now stale; tick will clear
+    // it on entry next time round.
+    const tmp = prevGlowingFids;
+    prevGlowingFids = currentGlowingFids;
+    currentGlowingFids = tmp;
 }
 
-// ============ RAF-coalesced scheduler ============
+// ============ Tick scheduling ============
 //
-// Tick is event-driven, not render-driven: the previous (render-driven)
-// version ran the 67k-cell scan on every frame Mapbox composited,
-// burning ~4M iterations/sec even when nothing changed and producing
-// a "flicker" feel as cells near EPS bounced in and out of the active
-// set. Now tick runs at most once per RAF, only when state has changed
-// (mousemove → cursor moved, or `map.on('move')` → transform changed).
+// Three paths into tick():
 //
-// During drag/zoom, `map.on('move')` fires every frame, so we still
-// get full-FPS updates for the drag-lag fix. During idle hover we
-// only run when the cursor itself moves. During total idle (no
-// movement at all) we run zero ticks.
+//   * `mousemove` (idle hover) → `scheduleTick()`. Mousemove can fire
+//     faster than RAF, and during pure hover there is no map
+//     compositing to race against, so RAF coalescing is the right
+//     trade. Multiple events within one frame collapse to a single
+//     tick on the next animation frame.
+//
+//   * `map.on('move')` while NOT dragging → tick() *synchronously*.
+//     Covers programmatic camera changes between dispatched
+//     `movestart`/`moveend` events and small post-zoom settle moves.
+//     Mapbox runs `move` listeners before compositing the frame, so
+//     feature-state writes land in the same frame's render — no
+//     one-frame lag.
+//
+//   * `map.on('moveend')` → one tick to resume the glow at the new
+//     cursor position after a drag. The drag itself is paused
+//     (see below).
+//
+// During drag (`movestart` → `moveend`), tick is fully suppressed.
+// The previous frame's feature-state stays in place — visually the
+// glow freezes geographically while the map slides under it (cursor
+// drifts away from the lit cells), then snaps back to the cursor on
+// release. This is a deliberate trade: the user reported sustained
+// jank during drag, attributable to per-frame `setFeatureState` GPU
+// upload churn that JS-side timing cannot see. Pausing eliminates
+// that work entirely while preserving rest-state crispness.
+//
+// During total idle (no events firing) we run zero ticks.
 
 let rafId = null;
-let dirty = false;
 
 function scheduleTick() {
-    dirty = true;
     if (rafId !== null) return;
     rafId = requestAnimationFrame(() => {
         rafId = null;
-        if (!dirty) return;
-        dirty = false;
         tick();
     });
+}
+
+/** Cancel a pending RAF tick — called before a sync tick to avoid
+ *  a redundant tick on the very next frame. */
+function cancelScheduledTick() {
+    if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+    }
 }
 
 /**
@@ -401,7 +605,7 @@ function clearAllGlow() {
             { glow: 0 }
         );
     }
-    prevGlowingFids = new Set();
+    prevGlowingFids.clear();
 }
 
 // ============ Public API ============
@@ -422,8 +626,9 @@ export async function initHoverGlow(map) {
 
     try {
         gridIndex = await fetchGridIndex();
+        gridIndex.spatialIndex = buildSpatialIndex(gridIndex);
         console.log(
-            `[hover-glow] loaded grid_index.bin (${gridIndex.count} cells, gridSize=${gridIndex.gridSize})`
+            `[hover-glow] loaded grid_index.bin (${gridIndex.count} cells, gridSize=${gridIndex.gridSize}, ${gridIndex.spatialIndex.buckets.size} spatial buckets)`
         );
     } catch (err) {
         console.warn(
@@ -446,17 +651,39 @@ export async function initHoverGlow(map) {
     });
 
     // Tab blur — clear residual glow so a returning user doesn't see
-    // stale highlights at a position they're no longer hovering.
+    // stale highlights at a position they're no longer hovering. Also
+    // resets the drag flag in case a moveend never fired (the user
+    // alt-tabbed mid-drag).
     window.addEventListener('blur', () => {
         cursor = null;
+        dragging = false;
         clearAllGlow();
     });
 
-    // Map-transform-driven tick. `move` fires once per frame during
-    // drag, zoom, and rotate animations — covers the drag-lag fix
-    // (re-`unproject` cursor via current transform) without needing
-    // `render`'s per-paint firing rate when nothing has changed.
-    map.on('move', scheduleTick);
+    // Pause hover-glow during drag/zoom/rotate. The drag itself
+    // dispatches `movestart` then a stream of `move` events then
+    // `moveend`; we set a flag at start and skip every per-frame tick
+    // until end. Programmatic camera changes (jumpTo, fitBounds, etc.)
+    // also dispatch movestart/moveend, so they're paused too — the
+    // catchup tick on moveend is enough.
+    map.on('movestart', () => {
+        dragging = true;
+    });
+    map.on('moveend', () => {
+        dragging = false;
+        cancelScheduledTick();
+        tick();
+    });
+
+    // Map-transform-driven tick for the rare case where `move` fires
+    // outside a movestart/moveend bracket (some Mapbox internal paths
+    // do this for sub-pixel transform settles). We tick synchronously
+    // so feature-state writes land in the same frame's render.
+    map.on('move', () => {
+        if (dragging) return;
+        cancelScheduledTick();
+        tick();
+    });
 
     // Debug surface for DevTools introspection + live tuning. Patch
     // `__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })` to

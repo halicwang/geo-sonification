@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-30 | Refactor   | [Hover-glow Perf — SoA Candidates + KM_PER_DEG Hoist + Typedef](devlog/M6/2026-04-30-M6-hover-glow-perf-soa.md)                                                                               |
 | 2026-04-30 | Feature    | [Hover-glow Cursor-Floor Halo](devlog/M6/2026-04-30-M6-hover-glow-cursor-floor.md)                                                                                                            |
 | 2026-04-30 | Refactor   | [Hover-glow Cleanup Sweep](devlog/M6/2026-04-30-M6-hover-glow-cleanup-sweep.md)                                                                                                               |
 | 2026-04-30 | Fix        | [Hover-glow Pause During Drag](devlog/M6/2026-04-30-M6-hover-glow-pause-during-drag.md)                                                                                                       |

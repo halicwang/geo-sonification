@@ -74,6 +74,14 @@ const tunables = {
 const EARTH_RADIUS_KM = 6371;
 const DEG_TO_RAD = Math.PI / 180;
 
+/**
+ * Kilometers per degree at the equator (≈ 111.195). Multiplied by
+ * `cos(lat)` to scale longitudinal distance away from the equator. Used
+ * by tick() and enumerateNearbyEntries() to convert km radii into the
+ * lon/lat bbox the bucket walk consumes.
+ */
+const KM_PER_DEG = EARTH_RADIUS_KM * DEG_TO_RAD;
+
 // ============ Sidecar format constants ============
 //
 // Must match scripts/build-grid-index.js exactly. The header is 16
@@ -100,6 +108,9 @@ const GRID_INDEX_FIELDS_PER_ENTRY = 4; // fid, lon, lat, dist (each 4 bytes)
  * @property {Float32Array} f32  length = 4 × count; entry i lon at f32[4i+1],
  *                                                          lat at f32[4i+2],
  *                                                          dist at f32[4i+3]
+ * @property {{ bucketDeg: number, buckets: Map<number, Uint32Array> }} [spatialIndex]
+ *   Built by initHoverGlow() after fetch and read by tick(); absent only
+ *   in the brief window between sidecar parse and buildSpatialIndex().
  */
 
 /** @type {GridIndex|null} */
@@ -116,6 +127,44 @@ let cursor = null;
  */
 let prevGlowingFids = new Set();
 let currentGlowingFids = new Set();
+
+/**
+ * Per-frame candidate buffer in struct-of-arrays form. Filled by the
+ * tick()'s bucket-walk inner loop, then iterated to write
+ * setFeatureState. Module-level + reused across frames so the hot path
+ * allocates nothing — the prior AoS form (`candidates.push({fid,
+ * glow})`) churned 200–1500 short-lived objects per tick, breaking the
+ * "zero-allocation tick" invariant the rest of the module respects.
+ *
+ * `candIdx` is filled with `[0, 1, …, candLen-1]` and sorted indirectly
+ * by `candGlows[idx]` only on the rare frames where `candLen >
+ * maxGlowing`. `Uint32Array.subarray(0, candLen).sort(cb)` mutates the
+ * underlying buffer without allocating a new array.
+ *
+ * Initial capacity 4096 covers all observed cases (zoom-2 worst case
+ * ~1000 candidates inside a 1000 km cursor radius); ensureCandCapacity
+ * doubles on overflow so a future radius bump degrades gracefully
+ * without ever allocating mid-tick steady-state.
+ */
+const CANDIDATES_INITIAL_CAP = 4096;
+let candFids = new Uint32Array(CANDIDATES_INITIAL_CAP);
+let candGlows = new Float32Array(CANDIDATES_INITIAL_CAP);
+let candIdx = new Uint32Array(CANDIDATES_INITIAL_CAP);
+let candLen = 0;
+
+function ensureCandCapacity(n) {
+    if (n <= candFids.length) return;
+    const newCap = Math.max(n, candFids.length * 2);
+    const newFids = new Uint32Array(newCap);
+    const newGlows = new Float32Array(newCap);
+    const newIdx = new Uint32Array(newCap);
+    newFids.set(candFids);
+    newGlows.set(candGlows);
+    newIdx.set(candIdx);
+    candFids = newFids;
+    candGlows = newGlows;
+    candIdx = newIdx;
+}
 
 /** Cached map ref for tick(). */
 let mapRef = null;
@@ -269,7 +318,6 @@ export function buildSpatialIndex(gridIndex) {
  */
 export function enumerateNearbyEntries(spatialIndex, cLng, cLat, R) {
     const buckets = spatialIndex.buckets;
-    const KM_PER_DEG = EARTH_RADIUS_KM * DEG_TO_RAD;
     const latRange = R / KM_PER_DEG;
     const cosLatClamped = Math.max(0.05, Math.abs(Math.cos(cLat * DEG_TO_RAD)));
     const lonRange = R / (KM_PER_DEG * cosLatClamped);
@@ -353,10 +401,10 @@ export function borderFactor(dKm, table = tunables.borderFalloff) {
     if (dKm <= table[0][0]) return table[0][1];
     if (dKm >= table[table.length - 1][0]) return table[table.length - 1][1];
     for (let i = 0; i < table.length - 1; i++) {
-        const [x0, y0] = table[i];
-        const [x1, y1] = table[i + 1];
-        if (dKm >= x0 && dKm < x1) {
-            return hermiteBlend(dKm, x0, x1, y0, y1);
+        const a = table[i];
+        const b = table[i + 1];
+        if (dKm >= a[0] && dKm < b[0]) {
+            return hermiteBlend(dKm, a[0], b[0], a[1], b[1]);
         }
     }
 }
@@ -392,11 +440,11 @@ export function rByZoom(zoom, table = tunables.rByZoom) {
     if (zoom <= table[0][0]) return table[0][1];
     if (zoom >= table[table.length - 1][0]) return table[table.length - 1][1];
     for (let i = 0; i < table.length - 1; i++) {
-        const [z0, r0] = table[i];
-        const [z1, r1] = table[i + 1];
-        if (zoom >= z0 && zoom < z1) {
-            const t = (zoom - z0) / (z1 - z0);
-            return r0 + (r1 - r0) * t;
+        const a = table[i];
+        const b = table[i + 1];
+        if (zoom >= a[0] && zoom < b[0]) {
+            const t = (zoom - a[0]) / (b[0] - a[0]);
+            return a[1] + (b[1] - a[1]) * t;
         }
     }
 }
@@ -470,13 +518,11 @@ function tick() {
     // cells whose distance² already exceeds R² — saves ~30% on the
     // hot path.
     const cosLatMid = Math.cos(cLat * DEG_TO_RAD); // approximate mid-lat factor
-    const factor = DEG_TO_RAD * EARTH_RADIUS_KM;
-    const cosFactor = factor * cosLatMid;
+    const cosFactor = KM_PER_DEG * cosLatMid;
 
     // Cursor bbox in degrees → bucket range. Clamp cosLat near the
     // poles so the lon range stays finite (at lat ±90 the bbox spans
     // every longitude anyway).
-    const KM_PER_DEG = factor; // EARTH_RADIUS_KM * DEG_TO_RAD ≈ 111.195 km/°
     const latRange = R / KM_PER_DEG;
     const cosLatClamped = Math.max(0.05, Math.abs(cosLatMid));
     const lonRange = R / (KM_PER_DEG * cosLatClamped);
@@ -485,8 +531,7 @@ function tick() {
     const lonLoFloat = Math.floor((cLng - lonRange + 180) / SPATIAL_BUCKET_DEG);
     const lonHiFloat = Math.floor((cLng + lonRange + 180) / SPATIAL_BUCKET_DEG);
 
-    /** @type {Array<{fid:number, glow:number}>} */
-    const candidates = [];
+    candLen = 0;
 
     for (let lonI = lonLoFloat; lonI <= lonHiFloat; lonI++) {
         const lonIdx = ((lonI % LON_BUCKET_COUNT) + LON_BUCKET_COUNT) % LON_BUCKET_COUNT;
@@ -502,7 +547,7 @@ function tick() {
                 if (dLon > 180) dLon -= 360;
                 else if (dLon < -180) dLon += 360;
                 const x = dLon * cosFactor;
-                const y = (lat - cLat) * factor;
+                const y = (lat - cLat) * KM_PER_DEG;
                 const dSq = x * x + y * y;
                 if (dSq >= RSqGuess) continue;
 
@@ -516,32 +561,54 @@ function tick() {
                 const g = glowFor(cf, bf, cursorFloor);
                 if (g < eps) continue;
 
-                candidates.push({ fid: u32[off], glow: g });
+                if (candLen >= candFids.length) ensureCandCapacity(candLen + 1);
+                candFids[candLen] = u32[off];
+                candGlows[candLen] = g;
+                candLen++;
             }
         }
     }
 
-    // Cap to maxGlowing by sorting on glow descending. Truncated cells
-    // are the dimmest, so the visual loss is minimal.
-    if (candidates.length > maxGlowing) {
-        candidates.sort((a, b) => b.glow - a.glow);
-        candidates.length = maxGlowing;
-    }
-
     // Apply this frame's set. `currentGlowingFids` is reused across
-    // ticks via clear()+swap, so this loop allocates nothing for the
-    // membership check or the diff cleanup below.
+    // ticks via clear()+swap; the candidate buffers are reused via
+    // candLen=0 reset above. Two paths:
+    //
+    //   * candLen ≤ maxGlowing — write candidates in arrival order.
+    //   * candLen > maxGlowing — fill candIdx with [0..candLen) and
+    //     sort it indirectly by candGlows[idx] desc, then apply the
+    //     top maxGlowing. Truncated cells are the dimmest, so the
+    //     visual loss is minimal. `Uint32Array.subarray.sort(cb)`
+    //     mutates the underlying buffer without allocating.
     currentGlowingFids.clear();
-    for (const c of candidates) {
-        currentGlowingFids.add(c.fid);
-        mapRef.setFeatureState(
-            {
-                source: GRID_FEATURE_STATE_SOURCE,
-                sourceLayer: GRID_FEATURE_STATE_SOURCE_LAYER,
-                id: c.fid,
-            },
-            { glow: c.glow }
-        );
+    if (candLen > maxGlowing) {
+        for (let i = 0; i < candLen; i++) candIdx[i] = i;
+        candIdx.subarray(0, candLen).sort((a, b) => candGlows[b] - candGlows[a]);
+        for (let k = 0; k < maxGlowing; k++) {
+            const j = candIdx[k];
+            const fid = candFids[j];
+            currentGlowingFids.add(fid);
+            mapRef.setFeatureState(
+                {
+                    source: GRID_FEATURE_STATE_SOURCE,
+                    sourceLayer: GRID_FEATURE_STATE_SOURCE_LAYER,
+                    id: fid,
+                },
+                { glow: candGlows[j] }
+            );
+        }
+    } else {
+        for (let i = 0; i < candLen; i++) {
+            const fid = candFids[i];
+            currentGlowingFids.add(fid);
+            mapRef.setFeatureState(
+                {
+                    source: GRID_FEATURE_STATE_SOURCE,
+                    sourceLayer: GRID_FEATURE_STATE_SOURCE_LAYER,
+                    id: fid,
+                },
+                { glow: candGlows[i] }
+            );
+        }
     }
 
     // Clean up stale glow from cells that left this frame's set.

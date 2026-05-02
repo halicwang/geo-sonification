@@ -47,12 +47,13 @@ commands, credential map, and known production issues.
 - Node.js 18+
 - Mapbox account (for access token)
 - Tippecanoe CLI for PMTiles generation (`brew install tippecanoe` on macOS)
-- Seven ambience WAV files in `frontend/audio/ambience/` (gitignored; repository only includes `.gitkeep`):
-    - **Files**: `forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`
-    - **Format**: WAV, 48 kHz, stereo recommended (mono works — Web Audio upmixes automatically)
-    - **Duration**: any length, but the last 1.875 s must be an exact copy of the first 1.875 s. The engine crossfades outgoing/incoming voices over this overlap window — identical head and tail content is what makes the loop seamless. Total duration = desired cycle length + 1.875 s (e.g., 120 s cycle → 121.875 s file)
-    - **Source**: record your own or obtain ambient loops from sites like [Freesound](https://freesound.org/). Trim to your desired cycle length in a DAW, then copy the first 1.875 s and append it to the end
-    - **Setup**: copy all seven files into `frontend/audio/ambience/` before starting audio. Missing files leave their buses silent and surface as loading errors in the UI.
+- Seven ambience loops in `frontend/audio/ambience/` (gitignored; repository only includes `.gitkeep`):
+    - **Runtime files**: `forest.opus`, `shrub.opus`, `grass.opus`, `crop.opus`, `urban.opus`, `bare.opus`, `water.opus` — the audio engine fetches these directly via `frontend/audio/buffer-cache.js`.
+    - **Source files**: keep the matching `forest.wav`, `shrub.wav`, … alongside as the editing master; `scripts/encode-ambience-opus.sh` re-encodes them to 128 kbps Opus (~1/20th the size) whenever the loops change. Both `*.wav` and `*.opus` are gitignored.
+    - **Source format**: WAV, 48 kHz, stereo recommended (mono works — Web Audio upmixes automatically).
+    - **Duration**: any length, but the last 1.875 s must be an exact copy of the first 1.875 s. The engine crossfades outgoing/incoming voices over this overlap window — identical head and tail content is what makes the loop seamless. Total duration = desired cycle length + 1.875 s (e.g., 120 s cycle → 121.875 s file).
+    - **Source**: record your own or obtain ambient loops from sites like [Freesound](https://freesound.org/). Trim to your desired cycle length in a DAW, then copy the first 1.875 s and append it to the end.
+    - **Setup**: drop the seven WAVs into `frontend/audio/ambience/`, run `scripts/encode-ambience-opus.sh` to produce the matching `.opus` files, then start the server. Missing `.opus` files leave their buses silent and surface as loading errors in the UI.
 
 ### 2. Get Mapbox Token
 
@@ -86,9 +87,9 @@ npm --prefix server run build:tiles             # rebuilds grids.pmtiles + grid_
 
 When the cursor hovers over the map, grid dots near a country border or coastline brighten on a smooth radial falloff. The visual is fully data-driven:
 
-- Build time: `compute-border-distance.js` flattens Natural Earth coastline + country-boundary GeoJSONs into 476k segments and computes the minimum distance from each grid centroid to any segment using a 1° bbox-prefiltered point-to-segment scan. Distances are baked into PMTiles as a `border_dist_km` per-feature property and into a parallel `grid_index.bin` sidecar.
-- Run time: `frontend/hover-glow.js` loads the sidecar once, tracks the screen-space cursor on `mousemove`, and runs a per-frame tick from `map.on('render')` that re-`unproject`s the cursor via the _current_ transform (so the glow follows the cursor through pan and zoom without lag) and writes `circle-color` feature-state for the affected dots.
-- Live tunables in DevTools: `__hg.tune({ rByZoom, borderFalloff, maxGlowing, eps })` patches the runtime constants and triggers a repaint — the next render frame uses the new values, no reload.
+- Build time: `compute-border-distance.js` flattens Natural Earth coastline + country-boundary GeoJSONs into ~476k segments and computes the minimum distance from each grid centroid to any segment using a 1° bbox-prefiltered point-to-segment scan. Distances are baked into PMTiles as a `border_dist_km` per-feature property and into a parallel `grid_index.bin` sidecar.
+- Run time: `frontend/hover-glow.js` loads the sidecar once, registers a Mapbox custom WebGL layer (`frontend/hover-glow-layer.js`) above the grey `grid-dots` circle layer, and forwards the cursor's lng/lat into a `vec2` uniform on every `mousemove`. The layer uploads all 67k cell positions + border distances as a single static VBO at init; per frame, only the cursor uniform plus a few zoom-derived scalars change. The fragment shader computes the per-cell glow (`cursorFactor × min(1, borderFactor + cursorFloor)`) and emits an additive premultiplied-white point sprite — the grey base layer underneath is untouched.
+- Live tunables in DevTools: `__hg.tune({ rByZoom, borderFalloff, cursorFloor, eps, haloScale })` patches the runtime values in place; the layer triggers a repaint and the next frame picks them up — no reload. Setting `cursorFloor: 0` recovers the M6 P1 border-only baseline.
 
 ### 5. Start the System
 
@@ -158,27 +159,44 @@ geo-sonification/
 │   ├── normalize.js                      # p1/p99 percentile normalization
 │   ├── load-env.js                       # Minimal .env loader
 │   ├── types.js                          # JSDoc type definitions
-│   └── __tests__/                        # Jest test suite
+│   └── __tests__/                        # Jest test suite (server side)
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
 │   ├── main.js                           # Entry point — wires modules, DOMContentLoaded
-│   ├── config.js                         # Shared state, server config loading, client ID
+│   ├── config.js                         # Shared state, server config loading, hover-glow tunables
+│   ├── config.local.js.example           # Mapbox token template (copy to config.local.js)
+│   ├── config.runtime.example.js         # Production deploy config template (used by build-pages.js)
 │   ├── landcover.js                      # Landcover metadata lookups (name, color, XSS escape)
 │   ├── map.js                            # Mapbox init, grid overlay, viewport tracking, HTTP fallback
 │   ├── websocket.js                      # WebSocket connection with exponential-backoff reconnect
 │   ├── ui.js                             # DOM updates: stats panel, connection status, toast
+│   ├── popup.js                          # Per-dot click popup (M4 P3 extract from map.js)
+│   ├── progress.js                       # Loop-cycle progress bar (M4 P3 extract from main.js)
+│   ├── initial-viewport-push.js          # Pre-`load` bounds push so audio starts at the visible viewport
+│   ├── sheet-drag.js                     # Mobile bottom-sheet drag handler
+│   ├── city-announcer.js                 # City name voice announcement with stereo panning
+│   ├── hover-glow.js                     # M6: load grid_index.bin, register GPU layer, mousemove → uniform
+│   ├── hover-glow-layer.js               # M6: Mapbox custom WebGL layer, additive halo overlay
+│   ├── hover-glow-shaders.js             # M6: vertex + fragment shader sources, falloff packing
 │   ├── audio/engine.js                   # Web Audio engine: 7-bus EMA crossfade + ocean detector
 │   ├── audio/                            # context, buffer-cache, raf-loop, utils, constants (M4 P3)
-│   ├── city-announcer.js                 # City name voice announcement with stereo panning
-│   ├── audio/ambience/                   # Loopable stereo WAVs (one per bus)
+│   ├── audio/ambience/                   # Loopable Opus assets (.opus runtime + .wav source masters)
 │   ├── audio/cities/                     # Pre-generated TTS M4A clips (one per city)
-│   └── config.local.js.example           # Mapbox token template (copy to config.local.js)
+│   └── __tests__/                        # vitest + happy-dom (frontend side; runs via npm run test:frontend)
 ├── scripts/
 │   ├── check_csv_schema.js                # CSV schema validator
-│   ├── build-tiles.js                     # Tile builder
+│   ├── build-tiles.js                     # PMTiles builder (also chains build-grid-index.js)
+│   ├── build-grid-index.js                # M6: emit grid_index.bin sidecar (fid + lng/lat + border_dist_km)
+│   ├── compute-border-distance.js         # M6: per-cell distance to coastline + boundary, fingerprint-cached
+│   ├── download-natural-earth.js          # M6: idempotent fetch of Natural Earth GeoJSONs
+│   ├── encode-ambience-opus.sh            # ffmpeg WAV → 128 kbps Opus encoder for ambience loops
+│   ├── measure-loudness.js                # LUFS measurement to calibrate master makeup gain
 │   ├── benchmark-viewport.js              # Viewport processing benchmark
 │   ├── smoke-worldcover.js                # WorldCover smoke test
+│   ├── smoke-wire-format.js               # WS wire-format smoke (asserts against wire-format-baseline.json)
+│   ├── wire-format-baseline.json          # Frozen reference payloads for the wire-format smoke
+│   ├── build-pages.js                     # Cloudflare Pages build (frontend/ + cities.json + runtime config)
 │   ├── clean-cache.js                     # Cross-platform cache cleaner
 │   ├── generate-city-audio.js             # City TTS audio generator (macOS `say`)
 │   ├── setup-git-hooks.js                 # Cross-platform git hooks installer
@@ -204,7 +222,7 @@ Caches live in `data/cache/` and include aggregation version in their keys. Chan
 
 ## Sound Mapping
 
-Seven ambience WAV loops represent different land cover types. Land cover channels are folded into 7 audio buses:
+Seven ambience Opus loops represent different land cover types. Land cover channels are folded into 7 audio buses:
 
 - **Forest bus**: classes 10, 95 (tree/forest, mangrove)
 - **Shrub bus**: class 20 (shrubland)
@@ -216,7 +234,7 @@ Seven ambience WAV loops represent different land cover types. Land cover channe
 
 The audio engine uses `coverage` (fraction of viewport cells with land data) as a linear mix rule: `coverage=0%` maps to `land:ocean = 0:100`, `coverage=40%` maps to `100:0`, and values in between interpolate linearly (`land=coverage/0.4`, `ocean=1-land`). Above 40%, playback stays pure land. Ocean rides the Water bus while land buses are attenuated in low-coverage mode. EMA smoothing provides gradual transitions.
 
-Ambience WAV files are local assets and are not committed (`frontend/audio/ambience/*.wav` is ignored). If a file is missing, the corresponding bus shows a loading error and that bus remains silent.
+Ambience loops are local assets and are not committed (`frontend/audio/ambience/*.opus` and `*.wav` are both ignored). If an `.opus` file is missing, the corresponding bus shows a loading error and remains silent.
 
 ### Audio Controls and Lifecycle
 
@@ -236,6 +254,7 @@ Ambience WAV files are local assets and are not committed (`frontend/audio/ambie
 Drag-stop feedback latency on the grid overlay is dominated by `VIEWPORT_DEBOUNCE` (`frontend/config.js`, default 120 ms) plus the WebSocket round-trip; spatial-index queries themselves average 1–2 ms (visible in the server's `[Stats]` log every 30 s). Several layers reduce that loop without changing user-visible behavior:
 
 - **Server response compression** — `compression` middleware (gzip on HTTP) and `ws perMessageDeflate` (zlib level 1, threshold 256 B, no context takeover). Drops the ~1.5 KB stats frame to ~0.5 KB. Verify with `curl -sI --compressed http://localhost:3000/audio/engine.js`.
+- **Opus-encoded ambience** — runtime fetches `*.opus` (128 kbps, ~2 MB each) instead of the source `*.wav` (~46 MB each). Reduces first-load audio payload from ~328 MB to ~14 MB without audibly degrading the textures.
 - **Static-asset cache headers** — PMTiles 7 days, ambience 30 days. Repeat reloads skip the network entirely; in production, R2 + Cloudflare carries its own cache layer.
 - **Drag-state stroke suppression** — the per-grid dot stroke is set to width 0 during `movestart` and restored on `moveend`. Halves fragment-shader cost at low zoom on the 67k-feature dot layer; the resting visual is unchanged.
 
@@ -267,8 +286,9 @@ Drag-stop feedback latency on the grid overlay is dominated by `VIEWPORT_DEBOUNC
 
 ### No ambience audio
 
-- Copy `forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, and `water.wav` into `frontend/audio/ambience/`
-- Keep the files as loopable WAV assets; missing files make the corresponding buses silent
+- Drop the seven loopable WAVs (`forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`) into `frontend/audio/ambience/`
+- Run `scripts/encode-ambience-opus.sh` to produce the matching `forest.opus`, … files the runtime actually loads
+- Missing `.opus` files make the corresponding buses silent and surface as loading errors in the UI
 
 ## API Endpoints
 

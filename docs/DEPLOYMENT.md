@@ -31,8 +31,8 @@ Browser (at https://placeecho.com/geo-sonification/)
 │    → Worker "placeecho-geo-sonification-proxy"
 │      → Pages "placeecho-geo-sonification" (frontend/ + dist/data/cities.json)
 │
-├─ grids.pmtiles (177 MB, Range requests)
-├─ audio/ambience/*.wav (7 × 46 MB)
+├─ grids.pmtiles (~167 MB, Range requests)
+├─ audio/ambience/*.opus (7 × ~2 MB)
 │    → assets.placeecho.com → R2 bucket "placeecho-assets"
 │
 └─ /api/config, /api/viewport (HTTP), WebSocket (wss)
@@ -52,7 +52,7 @@ entirely (direct browser → fly.dev / assets.placeecho.com).
 | Concern                                                | Where it lives                  | Reason                                                                |
 | ------------------------------------------------------ | ------------------------------- | --------------------------------------------------------------------- |
 | Static HTML/JS/CSS (~5 MB)                             | Cloudflare Pages                | Free tier, fast edge, trivial deploys                                 |
-| PMTiles + ambience WAVs (~500 MB)                      | Cloudflare R2                   | Pages has a 25 MB per-file cap; R2 egress is free                     |
+| PMTiles + ambience Opus (~180 MB)                      | Cloudflare R2                   | Pages has a 25 MB per-file cap; R2 egress is free                     |
 | Node.js + WebSocket + 17k-grid in-memory spatial index | Fly.io (256→512 MB VM)          | Workers have a 128 MB isolate cap; `ws` package can't bind in isolate |
 | `/geo-sonification/*` path prefix on `placeecho.com`   | Cloudflare Worker reverse proxy | Pages custom domains don't support subpaths                           |
 
@@ -83,8 +83,17 @@ frontend/              ← static site (deployed to Pages)
   │                      raf-loop.js + utils.js + constants.js
   │                      (M4 P3 audio decomposition;
   │                      see docs/ARCHITECTURE.md "Audio subsystem")
+  ├── audio/ambience/  ← .wav source masters + .opus runtime files;
+  │                      both gitignored. build-pages.js excludes this
+  │                      directory from dist/ (R2 serves the .opus).
+  ├── audio/cities/    ← pre-generated TTS .m4a clips, ~8 KB × 555;
+  │                      stays in dist/ and is served by Pages.
+  ├── hover-glow.js, hover-glow-layer.js, hover-glow-shaders.js
+  │                    ← M6 GPU custom-layer halo over grid-dots;
+  │                      see docs/ARCHITECTURE.md "Hover glow".
   └── main.js, map.js, websocket.js, ui.js, popup.js, progress.js,
-      city-announcer.js, landcover.js, config.js
+      initial-viewport-push.js, sheet-drag.js, city-announcer.js,
+      landcover.js, config.js
 frontend/config.runtime.js  ← empty placeholder in repo; regenerated at build
 dist/                  ← gitignored build output (Pages deploy root)
 ```
@@ -155,7 +164,7 @@ new machine.
 
 Needed only when PMTiles rebuilt or ambience files change. Updates
 happen at most a handful of times per project lifetime; the
-185 MB PMTiles upload is heavy enough that automating it via a
+~167 MB PMTiles upload is heavy enough that automating it via a
 GitHub Action would burn runner minutes for negligible benefit.
 
 ```bash
@@ -277,7 +286,7 @@ to know exist:
     header if present" (or override 1 month), then enable the rule. After
     that, second-and-later visitors get edge HIT for the seven Opus
     files (~5–10 ms vs the current ~80–200 ms direct-from-R2 fetch).
-    PMTiles edge caching is more delicate (Range alignment, 185 MB total
+    PMTiles edge caching is more delicate (Range alignment, ~167 MB total
     per edge); leave PMTiles on DYNAMIC unless we measure a problem.
 
         The original "the rule is too broad and prefetches 177 MB on first
@@ -285,16 +294,7 @@ to know exist:
         and was never verified against the actual dashboard or live HTTP
         responses. M5 dashboard inspection corrected it.
 
-2.  **First-load audio is 328 MB** — seven ambience WAVs at 46.8 MB
-    each, served as uncompressed 48 kHz stereo. On a US residential
-    100 Mbps link this is ~25-30 s; on college/hotel WiFi it can
-    approach a minute. Compressing to Opus 128 kbps should land under
-    ~4 MB per file (~28 MB total, ~10× reduction) without audibly
-    degrading the ambient textures. Requires re-encoding via ffmpeg,
-    updating `frontend/audio/buffer-cache.js` to request `.opus` (or
-    transparently content-negotiate), re-uploading to R2.
-
-3.  **Grid tiles still noticeably slower than localhost** — even with
+2.  **Grid tiles still noticeably slower than localhost** — even with
     the cache rule narrowed, Range requests to R2 cost 40-80 ms at a US
     edge (vs. ~0 ms on localhost). Stalls are most visible when
     switching between globe and mercator projections (Mapbox refetches
@@ -304,7 +304,7 @@ to know exist:
     or a smaller PMTiles (rebuild at coarser zoom) if the project can
     tolerate less detail.
 
-4.  **Globe → mercator switch stutter** — unrelated to network; see
+3.  **Globe → mercator switch stutter** — unrelated to network; see
     `frontend/map.js` `GLOBE_ZOOM_CUTOFF`. Mapbox rebuilds tile
     coverage on projection change.
 
@@ -321,7 +321,7 @@ to know exist:
 --remote-only` on push to `main` for backend-relevant paths.
 - [x] ~~**Opus-encode ambience WAVs**~~ — done 2026-04-24, see
       `docs/devlog/M3/2026-04-24-M3-ambience-opus-encoding.md`.
-- [ ] **PMTiles Worker proxy** for per-Range caching (known issue #3 above).
+- [ ] **PMTiles Worker proxy** for per-Range caching (known issue #2 above).
 
 ---
 
@@ -337,10 +337,10 @@ curl -sS https://placeecho-geo-sonification.fly.dev/api/config
 
 # R2 (Range request support + CORS)
 curl -sS -I -H "Range: bytes=0-1023" https://assets.placeecho.com/tiles/grids.pmtiles
-# → HTTP/2 206, content-range: bytes 0-1023/185481683
+# → HTTP/2 206, content-range: bytes 0-1023/167652149  (size will drift on rebuilds)
 
 curl -sS -I -H "Origin: https://placeecho.com" \
-  https://assets.placeecho.com/audio/ambience/forest.wav
+  https://assets.placeecho.com/audio/ambience/forest.opus
 # → HTTP/2 200, access-control-allow-origin: https://placeecho.com
 
 # Worker proxy + Pages

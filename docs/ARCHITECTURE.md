@@ -59,47 +59,69 @@ frontend/audio/
 
 Callers (`main.js`, `map.js`, `city-announcer.js`) `import { engine } from './audio/engine.js'` directly. The M3-era `frontend/audio-engine.js` monolith was decomposed in P3 and the transitional re-export shim was deleted in P5-4.
 
-### Hover glow (`frontend/hover-glow.js`)
+### Hover glow (`frontend/hover-glow*.js`)
 
-Brightens the existing `grid-dots` under the cursor on a smooth radial
-falloff. Cells near a country border or coastline glow brightest (the
-"tube" along the coast); cells far from any border still glow softly
-via the `cursorFloor` floor on the border-distance penalty. M6.
+Paints an additive white halo above the grey `grid-dots` circle layer
+on a smooth radial falloff around the cursor. Cells near a country
+border or coastline glow brightest (the "tube" along the coast); cells
+far from any border still glow softly via the `cursorFloor` floor on
+the border-distance penalty. Implemented as a Mapbox custom WebGL
+layer — the 67k cell positions and per-cell `border_dist_km` are
+uploaded once as a single VBO at init, and per frame only a `vec2`
+cursor uniform plus a few zoom-derived scalars are touched. M6.
 
 ```
-frontend/hover-glow.js
-├── parseGridIndex(buf)    Validate magic + length on data/tiles/grid_index.bin
-│                          → { count, gridSize, u32, f32 } dual views
-│                          (single buffer slice, two typed-array views)
+frontend/
+├── hover-glow.js              ← entry point
+│   ├── parseGridIndex(buf)    Validate magic + length on data/tiles/grid_index.bin
+│   │                          → { count, gridSize, u32, f32 } dual views
+│   │                          (single buffer slice, two typed-array views)
+│   ├── initHoverGlow(map)     fetch sidecar, register HoverGlowLayer above grid-dots,
+│   │                          mousemove → setCursorLngLat(lng, lat),
+│   │                          mouseleave / window.blur → off-screen sentinel
+│   └── window.__hg            DevTools surface — map, getGridIndex, getTunables,
+│                              tune({...}) → forwards to HoverGlowLayer.setTunables
 │
-├── tick()                 Per-`render`-event:
-│   ├── unproject cursor   via *current* transform — drag-lag fix
-│   ├── linear scan 67k    dSq < R² early-skip → glowFor(cf, bf, cursorFloor)
-│   │                      = cursorFactor × min(1, borderFactor + cursorFloor)
-│   ├── candidates sorted  desc by glow, sliced to MAX_GLOWING (1500)
-│   ├── setFeatureState    {glow:x} for each newGlowingFid
-│   └── cleanup diff       prevGlowingFids \ newGlowingFids → {glow:0}
-│                          (anti-progressive-degradation invariant)
+├── hover-glow-layer.js        ← Mapbox CustomLayerInterface implementation
+│   ├── buildVertexBuffer()    once, on onAdd: lng/lat + mercator + ECEF (Mapbox
+│   │                          GLOBE_RADIUS-scaled) + border_dist_km, 8 floats
+│   │                          per vertex, STATIC_DRAW
+│   ├── render(gl, matrix, ...) per-frame: bind program + VBO, push 7 uniforms
+│   │                          (uMatrix, uGlobeToMercator, uTransition,
+│   │                           uPointSize, uCursorLngLat, uR, uCursorFloor,
+│   │                           uEps, uFalloff), gl.drawArrays(POINTS, 0, count)
+│   ├── setCursorLngLat()      writes the cursor uniform; triggerRepaint()
+│   └── setTunables(patch)     mutates shared tunables object; triggerRepaint()
 │
-└── window.__hg            DevTools surface — map ref, gridIndex, cursor,
-                           glowing fids, forceTick, getTunables, tune({...})
+└── hover-glow-shaders.js      ← VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC,
+                                 packBorderFalloff() (Hermite stops → vec2 array)
 ```
+
+The vertex shader handles globe ↔ mercator via
+`mix(mercatorPos, ecefViaG2M, uTransition)` so the same draw call
+covers both projections. Mercator mode collapses uTransition to 1 and
+uGlobeToMercator to identity, weighting the globe branch at zero.
+
+The fragment shader computes `cursorFactor × min(1, borderFactor +
+cursorFloor)` and emits premultiplied additive white; pixels below
+`uEps` `discard`. Blending is `gl.ONE / gl.ONE_MINUS_SRC_ALPHA`. The
+underlying `grid-dots` circle layer keeps its fixed `#606060` fill
+(`frontend/map.js`) — `circle-color` no longer reads
+`feature-state`, and `setFeatureState` is no longer called.
 
 Constants (`HOVER_GLOW_R_KM_BY_ZOOM`, `HOVER_GLOW_BORDER_FALLOFF`,
-`HOVER_GLOW_MAX_GLOWING`, `HOVER_GLOW_EPS`, `HOVER_GLOW_CURSOR_FLOOR`)
-live in `frontend/config.js` and overlay onto a mutable `tunables`
-object the runtime reads each frame; `__hg.tune({...})` patches them
-live. Setting `cursorFloor: 0` from DevTools recovers the M6 P1
-border-only baseline.
+`HOVER_GLOW_EPS`, `HOVER_GLOW_CURSOR_FLOOR`,
+`HOVER_GLOW_HALO_SCALE_BY_ZOOM`) live in `frontend/config.js` and
+seed a mutable `tunables` object the layer reads each frame;
+`__hg.tune({ rByZoom, borderFalloff, cursorFloor, eps, haloScale })`
+patches them live. Setting `cursorFloor: 0` from DevTools recovers
+the M6 P1 border-only baseline.
 
-The data is baked offline by `scripts/compute-border-distance.js`
-(Natural Earth coastline + boundary GeoJSON → per-cell `border_dist_km`)
-and emitted as both a PMTiles property and a `grid_index.bin`
-sidecar by `scripts/build-tiles.js` + `scripts/build-grid-index.js`.
-
-`frontend/map.js` provides the `circle-color` paint expression that
-interpolates from grey to white via cubic-bezier on
-`['coalesce', ['feature-state', 'glow'], 0]`.
+The sidecar data is baked offline by
+`scripts/compute-border-distance.js` (Natural Earth coastline +
+boundary GeoJSON → per-cell `border_dist_km`) and emitted as both a
+PMTiles property and a `grid_index.bin` sidecar by
+`scripts/build-tiles.js` + `scripts/build-grid-index.js`.
 
 ### Server subsystem (`server/`)
 
@@ -195,9 +217,9 @@ This fold-mapping is defined in `server/audio-metrics.js` (`BUS_LC_INDICES`, `co
 
 ---
 
-## WAV Loading
+## Ambience Loading
 
-Seven ambience WAVs are fetched from `/audio/ambience/<name>.wav` (`forest.wav`, `shrub.wav`, `grass.wav`, `crop.wav`, `urban.wav`, `bare.wav`, `water.wav`) with progress tracking via `ReadableStream`. Priority ordering: forest + water first (parallel), then shrub + grass + crop + urban + bare (parallel). Each bus uses double-buffered one-shot `AudioBufferSourceNode` voices with equal-power crossfade scheduling to eliminate loop-boundary clicks. A power curve (`exponent = 0.6`) is applied to smoothed bus values before gain assignment, stretching mid-high range differences for better perceptual contrast. A soft-limiter (`norm = max(shapedSum, 1.0)`) prevents clipping when multiple buses are active simultaneously. These WAV assets are local and gitignored (`frontend/audio/ambience/*.wav`), so a fresh clone must provide them manually; missing files surface as per-bus load errors in the UI.
+Seven ambience loops are fetched from `/audio/ambience/<name>.opus` (`forest.opus`, `shrub.opus`, `grass.opus`, `crop.opus`, `urban.opus`, `bare.opus`, `water.opus`) with progress tracking via `ReadableStream`. The `.opus` files are 128 kbps re-encodings produced offline by `scripts/encode-ambience-opus.sh` from local WAV masters (~46 MB each → ~2 MB each); the runtime never touches the WAVs directly. Priority ordering: forest + water first (parallel), then shrub + grass + crop + urban + bare (parallel). Each bus uses double-buffered one-shot `AudioBufferSourceNode` voices with equal-power crossfade scheduling to eliminate loop-boundary clicks. A power curve (`exponent = 0.6`) is applied to smoothed bus values before gain assignment, stretching mid-high range differences for better perceptual contrast. A soft-limiter (`norm = max(shapedSum, 1.0)`) prevents clipping when multiple buses are active simultaneously. Both source and runtime assets are gitignored (`frontend/audio/ambience/*.wav` and `*.opus`), so a fresh clone must provide them manually; missing `.opus` files surface as per-bus load errors in the UI.
 
 ---
 

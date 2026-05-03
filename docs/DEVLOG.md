@@ -5,9 +5,9 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 ## Recording Guide
 
 - **Order**: Reverse chronological — newest entry first, oldest last.
-- **Location**: Each entry is a standalone file under `docs/devlog/M*/` (for example `docs/devlog/M2/`). Deprecated milestone entries are in `docs/devlog/deprecated/`.
-- **Milestone folder**: Put each new entry in the active milestone folder (`M1`, `M2`, ...).
-- **File naming (new entries)**: `YYYY-MM-DD-M*-kebab-case-title.md` (for example `2026-02-21-M2-jsdoc-annotations.md`).
+- **Location**: Most entries live in their milestone folder under `docs/devlog/M*/` (for example `docs/devlog/M2/`). Deprecated milestone entries are in `docs/devlog/deprecated/`. Independent post-milestone tasks (no milestone framing) may sit at the root of `docs/devlog/` directly; the pre-commit hook regex `^docs/devlog/` accepts both locations.
+- **Milestone folder**: Put each new milestone-scoped entry in the active milestone folder (`M1`, `M2`, ...). Default to a milestone folder unless the work is genuinely independent.
+- **File naming (new entries)**: `YYYY-MM-DD-M*-kebab-case-title.md` for milestone entries (for example `2026-02-21-M2-jsdoc-annotations.md`); `YYYY-MM-DD-kebab-case-title.md` for root-level independent entries.
 - **Legacy files**: Existing entries that used the old naming style do not need to be renamed only for convention.
 - **Heading format (entries)**: `# YYYY-MM-DD — <Category>: <Short Title>` (h1 in standalone entry files listed in `## Entries`).
 - **Categories**: `Feature`, `Fix`, `Refactor`, `Design`, `Milestone`, `Discussion` (pick the most fitting one).
@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-03 | Design     | [Devlog Recording Guide Allows Root-Level Independent Entries](devlog/M6/2026-05-03-M6-devlog-rule-allow-root-level-entries.md)                                                               |
 | 2026-05-03 | Fix        | [README Ambience Payload Number (~14 MB → ~15 MB)](devlog/M6/2026-05-03-M6-root-doc-factual-fixes.md)                                                                                         |
 | 2026-05-03 | Feature    | [Mobile Info Panel Rework — Content Reflow, State Colors, Toggle-Driven Transitions](devlog/2026-05-03-mobile-panel-rework.md)                                                                |
 | 2026-05-01 | Fix        | [Doc Audit & Resync (README, ARCHITECTURE, DEPLOYMENT)](devlog/M6/2026-05-01-M6-doc-audit-resync.md)                                                                                          |

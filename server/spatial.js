@@ -557,7 +557,6 @@ function validateBounds(bounds) {
 
 module.exports = {
     init,
-    queryGridsInBounds,
     calculateViewportStats,
     validateBounds,
     getGridData,

@@ -3,31 +3,9 @@
 
 const {
     getLcFractionsFromDistribution,
-    computeProximityFromGridCount,
     computeProximityFromZoom,
     computeDeltaMetrics,
 } = require('../audio-metrics');
-
-describe('computeProximityFromGridCount', () => {
-    test('gridCount=0 is forced to 0', () => {
-        expect(computeProximityFromGridCount(0, 50, 800)).toBe(0);
-    });
-
-    test('count <= lower maps to 1', () => {
-        expect(computeProximityFromGridCount(50, 50, 800)).toBe(1);
-        expect(computeProximityFromGridCount(10, 50, 800)).toBe(1);
-    });
-
-    test('count >= upper maps to 0', () => {
-        expect(computeProximityFromGridCount(800, 50, 800)).toBe(0);
-        expect(computeProximityFromGridCount(1600, 50, 800)).toBe(0);
-    });
-
-    test('linear interpolation between thresholds', () => {
-        // Midpoint between 50 and 800 is 425 => proximity 0.5
-        expect(computeProximityFromGridCount(425, 50, 800)).toBeCloseTo(0.5, 6);
-    });
-});
 
 describe('computeProximityFromZoom', () => {
     test('zoom >= high maps to 1', () => {

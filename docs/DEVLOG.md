@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-03 | Fix        | [README Ambience Payload Number (~14 MB → ~15 MB)](devlog/M6/2026-05-03-M6-root-doc-factual-fixes.md)                                                                                         |
 | 2026-05-03 | Feature    | [Mobile Info Panel Rework — Content Reflow, State Colors, Toggle-Driven Transitions](devlog/2026-05-03-mobile-panel-rework.md)                                                                |
 | 2026-05-01 | Fix        | [Doc Audit & Resync (README, ARCHITECTURE, DEPLOYMENT)](devlog/M6/2026-05-01-M6-doc-audit-resync.md)                                                                                          |
 | 2026-05-01 | Fix        | [Retroactive Summary Corrections (M1, M2, M3, M6)](devlog/M6/2026-05-01-M6-retroactive-summary-corrections.md)                                                                                |

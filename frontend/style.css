@@ -193,6 +193,13 @@ body {
     color: var(--color-text-tier1);
     font-family: var(--font-sans);
     z-index: 50;
+}
+
+/* Transitions are gated behind `.animating` so they fire only on explicit
+   user toggles (added by main.js's togglePanel), never on viewport resize.
+   This avoids interpolating between the desktop and mobile hidden states
+   when the window crosses the 600 px breakpoint. */
+#info-panel.animating {
     transition:
         opacity 0.25s ease,
         transform 0.25s ease;
@@ -230,8 +237,10 @@ body {
     margin-bottom: 2px;
 }
 
-/* Data vintage: sits directly under the subtitle as title-block metadata. */
-#info-panel > .vintage {
+/* Data vintage: sits directly under the subtitle as title-block metadata.
+   Selector dropped its direct-child combinator after `.vintage` was wrapped
+   in `.brand-block` for the mobile reflow — desktop layout is unchanged. */
+#info-panel .vintage {
     font-size: var(--fs-meta);
     color: var(--color-text-tier3);
     margin-bottom: 14px;
@@ -260,6 +269,17 @@ body {
 .audio-status {
     font-size: var(--fs-label);
     color: var(--color-text-tier2);
+}
+
+/* State-encoded colors apply to both desktop and mobile so the
+   `Playing` / failure indication is consistent across breakpoints.
+   The `loading` pill background is mobile-only (layout-specific) and
+   stays inside the mobile media query. */
+.audio-status[data-state='playing'] {
+    color: var(--color-accent);
+}
+.audio-status[data-state='error'] {
+    color: var(--color-danger);
 }
 
 /* ============ Volume Control ============ */
@@ -671,10 +691,15 @@ body {
     #info-panel {
         top: auto;
         /* Floating card -- gaps on all four sides + safe-area awareness.
-           The sheet sits ~12 px above the home-indicator gesture zone
-           (or above the actual safe-area inset on notched devices,
-           whichever is larger), with 12 px breathing room left/right. */
-        bottom: max(12px, env(safe-area-inset-bottom));
+           The sheet sits above the home-indicator gesture zone (or above
+           the actual safe-area inset on notched devices) AND above the
+           Mapbox bottom-left logo (29 px tall, mandatory under TOS) so
+           the attribution stays visible below the sheet rather than
+           getting covered. 41 px = 29 px logo + 12 px breathing room.
+           The same offset drives the .hidden translateY below so the
+           sheet fully clears the viewport when dismissed. */
+        --sheet-bottom-offset: max(41px, calc(env(safe-area-inset-bottom) + 29px));
+        bottom: var(--sheet-bottom-offset);
         left: 12px;
         right: 12px;
         width: auto;
@@ -684,48 +709,242 @@ body {
         border-radius: 18px; /* all four corners rounded — true card */
         overflow-y: auto;
         transform: translateY(0);
+        touch-action: pan-y; /* let inner scroll work; drag handle owns its own touch-action */
+
+        /* Flex column lets `order` reflow direct children (handle → brand →
+           audio → stats → distribution → footer) without touching DOM order,
+           so screen-reader linearization stays aligned with desktop. */
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    /* Mobile-tuned transition curve — only applied during user toggles,
+       never on viewport resize (see #info-panel.animating in desktop block). */
+    #info-panel.animating {
         transition:
             transform 0.28s cubic-bezier(0.32, 0.72, 0, 1),
             opacity 0.18s ease;
-        touch-action: pan-y; /* let inner scroll work; drag handle owns its own touch-action */
     }
 
     #info-panel.hidden {
         opacity: 1; /* override the desktop-hidden's opacity:0 fade */
-        /* Slide fully past the bottom edge -- 100% covers the panel
-           height; the +24px overshoot covers the safe-area gap so no
-           rounded corner peeks back in on iOS. */
-        transform: translateY(calc(100% + 24px));
+        /* Slide fully past the bottom edge — 100% covers the panel height,
+           `--sheet-bottom-offset` covers the gap below the panel (safe-area
+           + Mapbox logo), and the extra 12 px overshoots the viewport edge
+           so the rounded top corner doesn't peek back in on iOS. */
+        transform: translateY(calc(100% + var(--sheet-bottom-offset) + 12px));
         pointer-events: none;
     }
 
-    /* Drag-handle visible only on mobile; sits above .brand-mark */
     .sheet-handle {
         display: block;
         margin: 0 -18px 8px;
         padding: 12px 0; /* enlarged tap + drag target */
         touch-action: none; /* drag JS captures pointer; native scroll mustn't fight */
+        order: 1;
     }
 
-    /* Hide debug-stats + subtitle + audio section on mobile.
-       The audio section's controls (Audio Off label + Vol slider) are
-       redundant with the always-visible top-right floating play/stop
-       button, and Vol on mobile is rarely worth the space. */
-    #info-panel .stats-section,
-    #info-panel .subtitle,
-    #info-panel .audio-section {
+    .brand-block {
+        order: 2;
+    }
+    .audio-section {
+        order: 3;
+    }
+    .stats-section {
+        order: 4;
+    }
+    .landcover-list {
+        order: 5;
+    }
+    .panel-footer {
+        order: 6;
+    }
+
+    /* Brand: 4 stacked elements collapsed to a single inline row.
+       Horizontal flow sidesteps the previous failure mode where tighter
+       vertical spacing put PLACEECHO right on top of Geo-Sonification
+       (visually cramped).
+       `#info-panel` prefix on the brand-mark/h2/vintage rules below is
+       load-bearing — without it the desktop `#info-panel .brand-mark`
+       (etc.) rules win on specificity. */
+    .brand-block {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0 8px;
+        font-size: 12px;
+        color: var(--color-text-tier3);
+    }
+    #info-panel .brand-block .brand-mark,
+    #info-panel .brand-block h2,
+    #info-panel .brand-block .vintage {
+        display: inline;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: inherit;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        color: inherit;
+    }
+    /* Brand-mark keeps the wider tracking from desktop (.brand-mark is the
+       small-caps "PLACEECHO" wordmark — 0.18em is part of its identity). */
+    #info-panel .brand-block .brand-mark {
+        letter-spacing: 0.18em;
+    }
+    #info-panel .brand-block .brand-mark::after,
+    #info-panel .brand-block h2::after {
+        content: '·';
+        margin-left: 8px;
+        color: var(--color-divider);
+    }
+    #info-panel .brand-block .subtitle {
         display: none;
     }
 
-    /* Branding spacing inherits desktop values (.brand-mark 6 px,
-       h2 4 px, .vintage 14 px + border) — overriding them tighter on
-       mobile made PLACEECHO sit right on top of Geo-Sonification,
-       which the user flagged as visually cramped relative to the
-       desktop layout. */
+    /* Audio: status pill + slider on one row.
+       Status text is kept (the floating ▶/■ button only encodes
+       play/paused; Loading and Audio off matter when the user wonders
+       why they can't hear anything).
+       `touch-action: manipulation` on the slider is defensive: the
+       parent's `touch-action: pan-y` above would otherwise eat
+       horizontal drags on the thumb. */
+    .audio-section {
+        display: flex;
+        align-items: baseline; /* baseline aligns "Audio off" (11.5px) with "Vol" (10.4px) — center-aligning would let the differing font heights drift apart */
+        gap: 10px;
+    }
+    .audio-section .audio-status-row {
+        flex: 0 0 auto;
+    }
+    /* Audio status: plain text by default; pill background only during the
+       `Loading…` / `Loading (N/M)` phase where it visually marks "wait".
+       Color also encodes state — accent when playing, danger when init
+       failed. JS sets `data-state` in renderLoadingUI / toggle handler. */
+    .audio-section .audio-status {
+        font-size: var(--fs-label);
+    }
+    .audio-section .audio-status[data-state='loading'] {
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--color-border-soft);
+    }
+    /* `playing` / `error` colors live at global scope (above the media
+       query) so desktop and mobile share the same state encoding. */
+    .audio-section .volume-control {
+        flex: 1;
+    }
+    .audio-section .volume-slider {
+        touch-action: manipulation;
+    }
+    /* Kill the desktop `.audio-section { padding-bottom: 14px }` divider —
+       on mobile the panel's flex `gap` already provides separation. */
+    .audio-section {
+        padding-bottom: 0;
+    }
 
-    /* Let landcover list take whatever it needs (sheet itself scrolls) */
+    /* Stats: 5 stacked rows → flex-wrapped inline-flex pairs.
+       Avoid `display: contents` on .stat-row — historically removed
+       elements from the a11y tree on Safari/Chrome; inline-flex
+       sidesteps the question entirely. HTML labels (incl. trailing
+       `:`) are kept verbatim so desktop is unaffected.
+       Mode + Land Type values are self-identifying ("Aggregated",
+       "Tree/Forest"); hide their labels to pack stats onto one line.
+       Desktop divider rules (padding/margin/border-bottom) reset here. */
+    .stats-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        padding-bottom: 0;
+        margin-bottom: 0;
+        border-bottom: 0;
+    }
+    .stats-section .stat-row {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+    .stats-section .stat-row:has(#audio-mode) .stat-label,
+    .stats-section .stat-row:has(#land-type) .stat-label {
+        display: none;
+    }
+    /* When `.stale` is on, the stale-indicator `::after` (style.css:419)
+       becomes a flex item under our flex stats-section. Force it to a full
+       row so `text-align: center` inside re-centers correctly; on desktop
+       (block layout) this rule is out of scope and the original behavior
+       is preserved. */
+    #info-panel.stale .stats-section::after {
+        flex-basis: 100%;
+    }
+    .stats-section .stat-label {
+        color: var(--color-text-tier3);
+        font-size: var(--fs-meta);
+        letter-spacing: 0.04em;
+    }
+    .stats-section .stat-value {
+        font-family: var(--font-mono);
+        font-size: var(--fs-label);
+    }
+
+    /* Distribution: tighter rows + drop desktop divider.
+       Swatch shrinks 10→8 px and grid column 12→10 px to claw back width
+       for the percentage. line-height 1.2 trims ~6 px per row. */
     .landcover-list {
         max-height: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+    .landcover-list .landcover-item {
+        grid-template-columns: 10px 1fr auto;
+        column-gap: 6px;
+        padding-top: 1px;
+        padding-bottom: 1px;
+        line-height: 1.2;
+    }
+    .landcover-list .landcover-item::after {
+        height: 1px;
+        left: 16px; /* swatch (10) + gap (6) */
+        max-width: calc(100% - 16px);
+    }
+    .landcover-list .landcover-swatch {
+        width: 8px;
+        height: 8px;
+    }
+
+    /* Footer: block layout so dot + attribution flow inline on one line
+       and copyright drops to a second short line. Beats flex-wrap which
+       was putting the dot alone on its own row. */
+    .panel-footer {
+        display: block;
+        font-size: var(--fs-meta);
+        color: var(--color-text-tier3);
+    }
+    .panel-footer .connection-status {
+        display: inline-flex;
+        margin-top: 0;
+        margin-right: 6px;
+    }
+    .panel-footer #ws-text {
+        display: none;
+    }
+    .panel-footer .data-attribution {
+        display: inline;
+        margin-top: 0;
+        font-size: inherit;
+        padding: 0;
+        line-height: 1.4;
+    }
+    .panel-footer .license-tag {
+        display: none;
+    }
+    .panel-footer #copyright-footer {
+        display: block;
+        margin: 2px 0 0;
+        padding: 0;
+        border: 0;
+        font-size: inherit;
     }
 
     /* While the user is actively dragging the sheet, suppress the

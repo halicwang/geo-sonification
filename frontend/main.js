@@ -128,7 +128,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // state on first load is collapsed so the user gets a full-globe view
     // before opting in to the stats. The hamburger ≡ at top-right and the
     // in-sheet drag handle both call the same toggle.
+    // Transitions are gated by `.animating` so they only fire on explicit
+    // user toggles — not on viewport resize. Otherwise dragging the window
+    // across the 600 px breakpoint would interpolate between the desktop
+    // hidden state (opacity 0 + translateX 20px) and the mobile hidden
+    // state (opacity 1 + translateY 100% + 24px), producing a visible
+    // panel-slides-away flicker.
+    let panelAnimatingTimer;
     function togglePanel() {
+        state.els.infoPanel.classList.add('animating');
+        clearTimeout(panelAnimatingTimer);
+        panelAnimatingTimer = setTimeout(() => {
+            state.els.infoPanel.classList.remove('animating');
+        }, 400);
+
         const hidden = state.els.infoPanel.classList.toggle('hidden');
         state.els.panelToggle.classList.toggle('open', !hidden);
         state.els.panelToggle.setAttribute('aria-expanded', String(!hidden));
@@ -175,6 +188,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.runtime.audioEnabled = true;
             setAudioToggleState(true);
             state.els.audioStatus.textContent = 'Loading\u2026';
+            state.els.audioStatus.dataset.state = 'loading';
             audioAllFailedToastShown = false;
 
             engine.setOnLoadingUpdate(renderLoadingUI);
@@ -199,6 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.runtime.audioEnabled = false;
             setAudioToggleState(false);
             state.els.audioStatus.textContent = 'Audio off';
+            state.els.audioStatus.dataset.state = 'off';
             await engine.stop();
             announcer.setEnabled(false);
             announcer.reset();
@@ -244,6 +259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (allFailed) {
             state.els.audioStatus.textContent =
                 'Audio init failed \u2014 check frontend/audio/ambience/';
+            state.els.audioStatus.dataset.state = 'error';
             if (!audioAllFailedToastShown) {
                 showToast(
                     'All ambience samples failed to load. Verify frontend/audio/ambience/.',
@@ -254,9 +270,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (readyCount + errorCount === states.length) {
             state.els.audioStatus.textContent =
                 errorCount > 0 ? 'Playing (' + errorCount + ' failed)' : 'Playing';
+            state.els.audioStatus.dataset.state = 'playing';
         } else if (states.some((s) => s.status === 'loading')) {
             state.els.audioStatus.textContent =
                 'Loading (' + readyCount + '/' + states.length + ')';
+            state.els.audioStatus.dataset.state = 'loading';
         }
     }
 });

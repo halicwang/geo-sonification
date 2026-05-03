@@ -272,8 +272,10 @@ export function initMap() {
         maxZoom: 12,
     });
 
-    state.runtime.map.addControl(new mapboxgl.NavigationControl(), 'top-left');
-    state.runtime.map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
+    // NavigationControl (zoom +/- + compass reset) and ScaleControl (km
+    // ruler) intentionally omitted — the floating play / hamburger top-right
+    // and pinch-zoom + scroll-wheel + double-tap cover all needed map
+    // interactions, and removing the controls keeps the canvas chrome-free.
 
     // Using 'style.load' rather than 'load' — keeps the setup path
     // generic in case the inline style is ever swapped for a remote one.

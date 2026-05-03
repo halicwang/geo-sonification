@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-03 | Design     | [Track CLAUDE.md and AGENTS.md as Project-Level Agent Guidance](devlog/M6/2026-05-03-M6-track-claude-and-agents-md.md)                                                                        |
 | 2026-05-03 | Design     | [Devlog Recording Guide Allows Root-Level Independent Entries](devlog/M6/2026-05-03-M6-devlog-rule-allow-root-level-entries.md)                                                               |
 | 2026-05-03 | Fix        | [README Ambience Payload Number (~14 MB → ~15 MB)](devlog/M6/2026-05-03-M6-root-doc-factual-fixes.md)                                                                                         |
 | 2026-05-03 | Feature    | [Mobile Info Panel Rework — Content Reflow, State Colors, Toggle-Driven Transitions](devlog/2026-05-03-mobile-panel-rework.md)                                                                |

@@ -15,6 +15,7 @@ import {
     ASSET_BASE,
     VIEWPORT_DEBOUNCE,
     getClientId,
+    applyServerConfig,
     GRID_FEATURE_STATE_SOURCE,
     GRID_FEATURE_STATE_SOURCE_LAYER,
 } from './config.js';
@@ -220,20 +221,7 @@ export async function refreshServerConfig() {
     try {
         const response = await fetch(`${state.config.apiBase}/api/config`);
         if (!response.ok) return;
-        const config = await response.json();
-
-        if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
-            state.config.gridSize = config.gridSize;
-        }
-        if (config.landcoverMeta) {
-            state.config.landcoverMeta = config.landcoverMeta;
-        }
-        if (Number.isFinite(config.proximityZoomLow)) {
-            state.config.proximityZoomLow = config.proximityZoomLow;
-        }
-        if (Number.isFinite(config.proximityZoomHigh)) {
-            state.config.proximityZoomHigh = config.proximityZoomHigh;
-        }
+        applyServerConfig(await response.json());
         engine.setProximityThresholds(
             state.config.proximityZoomLow,
             state.config.proximityZoomHigh

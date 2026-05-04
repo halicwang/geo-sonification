@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-03 | Refactor   | [Frontend Server-Config Validation Dedup](devlog/M6/2026-05-03-M6-frontend-occam-server-config-validation.md)                                                                                 |
 | 2026-05-03 | Fix        | [Process-Level Rejection and Exception Handlers](devlog/M6/2026-05-03-M6-process-error-handlers.md)                                                                                           |
 | 2026-05-03 | Refactor   | [Frontend DOM Write-on-Change Guards Across Hot Paths](devlog/M6/2026-05-03-M6-frontend-write-on-change-guards.md)                                                                            |
 | 2026-05-03 | Refactor   | [Server Occam Sweep — Drop Dead Grid-Count Proximity, Simplify Defensive Guards](devlog/M6/2026-05-03-M6-server-occam-sweep.md)                                                               |

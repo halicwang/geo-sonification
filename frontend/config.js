@@ -310,6 +310,27 @@ export function buildWsUrl() {
 
 // ============ Server Config ============
 
+/**
+ * Merge a `/api/config` response into `state.config`, applying
+ * `Number.isFinite` guards on every numeric field. Shared by the boot-time
+ * `loadServerConfig()` here and the post-reconnect `refreshServerConfig()`
+ * in `frontend/map.js` so the two paths cannot drift.
+ */
+export function applyServerConfig(parsed) {
+    if (Number.isFinite(parsed.gridSize) && parsed.gridSize > 0) {
+        state.config.gridSize = parsed.gridSize;
+    }
+    if (parsed.landcoverMeta) {
+        state.config.landcoverMeta = parsed.landcoverMeta;
+    }
+    if (Number.isFinite(parsed.proximityZoomLow)) {
+        state.config.proximityZoomLow = parsed.proximityZoomLow;
+    }
+    if (Number.isFinite(parsed.proximityZoomHigh)) {
+        state.config.proximityZoomHigh = parsed.proximityZoomHigh;
+    }
+}
+
 /** Fetch grid size and landcover metadata from the server. */
 export async function loadServerConfig() {
     try {
@@ -318,19 +339,7 @@ export async function loadServerConfig() {
             console.warn(`Server config endpoint returned ${response.status}, using fallback`);
             return;
         }
-        const config = await response.json();
-        if (Number.isFinite(config.gridSize) && config.gridSize > 0) {
-            state.config.gridSize = config.gridSize;
-        }
-        if (config.landcoverMeta) {
-            state.config.landcoverMeta = config.landcoverMeta;
-        }
-        if (Number.isFinite(config.proximityZoomLow)) {
-            state.config.proximityZoomLow = config.proximityZoomLow;
-        }
-        if (Number.isFinite(config.proximityZoomHigh)) {
-            state.config.proximityZoomHigh = config.proximityZoomHigh;
-        }
+        applyServerConfig(await response.json());
     } catch (err) {
         console.warn('Failed to load server config, using defaults:', err);
     }

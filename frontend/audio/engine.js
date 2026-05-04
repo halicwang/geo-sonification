@@ -181,7 +181,7 @@ const bufferCache = createBufferCache({
     assetBase: ASSET_BASE,
     priorityFirst: [0, 6],
     prioritySecond: [1, 2, 3, 4, 5],
-    onAllLoaded: () => scheduler && scheduler.startAllSources(),
+    onAllLoaded: () => scheduler.startAllSources(),
 });
 
 // ════════════════════════════════════════════════════════════════════

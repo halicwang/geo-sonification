@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-03 | Refactor   | [Drop Dead `scheduler &&` Guard in onAllLoaded](devlog/M6/2026-05-03-M6-frontend-engine-onallloaded-dead-guard.md)                                                                            |
 | 2026-05-03 | Refactor   | [Split city-announcer into spatial + cache + orchestrator](devlog/M6/2026-05-03-M6-frontend-city-announcer-split.md)                                                                          |
 | 2026-05-03 | Refactor   | [Extract voice-scheduler from audio/engine.js](devlog/M6/2026-05-03-M6-frontend-engine-voice-scheduler-split.md)                                                                              |
 | 2026-05-03 | Refactor   | [Inject UI Callbacks into map.js](devlog/M6/2026-05-03-M6-frontend-map-ui-callback-injection.md)                                                                                              |

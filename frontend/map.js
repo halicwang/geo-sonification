@@ -319,8 +319,8 @@ export function initMap(callbacks) {
             ],
         },
         projection: 'globe',
-        center: [-55, -10], // Amazon region
-        zoom: 4,
+        center: [19.5, 21.75], // midpoint of Libya-Chad border
+        zoom: 2.5,
         minZoom: 2.5,
         maxZoom: 12,
     });

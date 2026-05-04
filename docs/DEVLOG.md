@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-04 | Refactor   | [Retarget Initial Map View to Libya-Chad Border](devlog/M6/2026-05-04-M6-frontend-map-initial-view.md)                                                                                        |
 | 2026-05-04 | Refactor   | [Raise Map `minZoom` 2 → 2.5](devlog/M6/2026-05-04-M6-frontend-map-minzoom-2-5.md)                                                                                                            |
 | 2026-05-04 | Fix        | [Tighten Limb-Vignette Mask](devlog/M6/2026-05-04-M6-frontend-limb-vignette-tighten-outer-fade.md)                                                                                            |
 | 2026-05-04 | Feature    | [Light / Dark / Auto Theme Switching](devlog/M6/2026-05-04-M6-frontend-light-dark-auto-theme.md)                                                                                              |

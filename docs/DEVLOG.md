@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-03 | Refactor   | [Inject UI Callbacks into map.js](devlog/M6/2026-05-03-M6-frontend-map-ui-callback-injection.md)                                                                                              |
 | 2026-05-03 | Refactor   | [Frontend Server-Config Validation Dedup](devlog/M6/2026-05-03-M6-frontend-occam-server-config-validation.md)                                                                                 |
 | 2026-05-03 | Refactor   | [Server Occam Sweep — Drop Redundant Body Guard, Narrow load-env Exports, Inline Weight-Mode Set](devlog/M6/2026-05-03-M6-occam-export-and-guard-cleanup.md)                                  |
 | 2026-05-03 | Fix        | [Process-Level Rejection and Exception Handlers](devlog/M6/2026-05-03-M6-process-error-handlers.md)                                                                                           |

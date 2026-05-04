@@ -19,10 +19,27 @@ import {
     GRID_FEATURE_STATE_SOURCE,
     GRID_FEATURE_STATE_SOURCE_LAYER,
 } from './config.js';
-import { updateUI, showToast } from './ui.js';
 import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
 import { initHoverGlow } from './hover-glow.js';
+
+/**
+ * UI-side callbacks supplied by `main.js` so this module never reaches
+ * directly into `ui.js`. Set in `initMap`; both fields are required.
+ *
+ * @typedef {Object} MapCallbacks
+ * @property {(stats: Object) => void} onStats - Receives every stats
+ *   payload from `/api/viewport` (HTTP fallback) so main.js can fan it out
+ *   to `updateUI` and the audio engine. The WebSocket path bypasses map.js
+ *   entirely and goes through `connectWebSocket`'s own `onStats` callback,
+ *   so reusing the same handler in both paths keeps fan-out consistent.
+ * @property {(message: string, durationMs?: number) => void} onToast -
+ *   Surfaces user-facing notifications (currently only the
+ *   PMTiles-load-failed warning).
+ */
+
+/** @type {MapCallbacks|null} */
+let mapCallbacks = null;
 
 // ============ Motion Tracking ============
 
@@ -200,11 +217,7 @@ async function sendViewportHTTP(bounds) {
             );
             return;
         }
-        const stats = await response.json();
-        updateUI(stats);
-        if (stats.audioParams) {
-            engine.update(stats.audioParams);
-        }
+        mapCallbacks.onStats(await response.json());
     } catch (err) {
         console.error('HTTP viewport update failed:', err);
     }
@@ -233,8 +246,13 @@ export async function refreshServerConfig() {
 
 // ============ Map Initialization ============
 
-/** Create the Mapbox GL map, add controls, grid overlay, and event listeners. */
-export function initMap() {
+/**
+ * Create the Mapbox GL map, add controls, grid overlay, and event listeners.
+ *
+ * @param {MapCallbacks} callbacks - UI fan-out callbacks; required.
+ */
+export function initMap(callbacks) {
+    mapCallbacks = callbacks;
     mapboxgl.accessToken = state.config.mapboxToken;
 
     // Inline minimal v8 style — single black background layer, no
@@ -306,7 +324,7 @@ export function initMap() {
                 'Grid layer failed to load (PMTiles missing?), continuing without overlay:',
                 err
             );
-            showToast(
+            mapCallbacks.onToast(
                 'Grid tiles failed to load \u2014 run npm run build:tiles to regenerate.',
                 8000
             );

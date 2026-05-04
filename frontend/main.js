@@ -89,7 +89,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // first refreshServerConfig() round-trip.
     engine.setProximityThresholds(state.config.proximityZoomLow, state.config.proximityZoomHigh);
 
-    initMap();
+    // Shared stats handler — fan-out to UI and audio engine. Used by both
+    // the WebSocket path (`connectWebSocket.onStats`) and the HTTP fallback
+    // path (`map.js sendViewportHTTP` via `initMap`'s onStats callback).
+    // Sharing one handler keeps the two transports byte-equivalent on the
+    // client side.
+    const handleStats = (data) => {
+        updateUI(data);
+        if (data.audioParams) {
+            engine.update(data.audioParams);
+        }
+    };
+
+    initMap({ onStats: handleStats, onToast: showToast });
 
     // City name announcement — dwell trigger on settle, flyby trigger on drag
     function getAnnouncerArgs() {
@@ -113,12 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateConnectionStatus(true);
             triggerInitialViewportPush(state.runtime.map, onViewportChange);
         },
-        onStats: (data) => {
-            updateUI(data);
-            if (data.audioParams) {
-                engine.update(data.audioParams);
-            }
-        },
+        onStats: handleStats,
         onError: (msg) => showToast(`Error: ${msg}`, 5000),
         onDisconnect: () => updateConnectionStatus(false),
     });

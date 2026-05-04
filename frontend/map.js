@@ -18,10 +18,13 @@ import {
     applyServerConfig,
     GRID_FEATURE_STATE_SOURCE,
     GRID_FEATURE_STATE_SOURCE_LAYER,
+    getResolvedTheme,
+    subscribeTheme,
 } from './config.js';
 import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
 import { initHoverGlow } from './hover-glow.js';
+import { LimbVignetteLayer } from './limb-vignette-layer.js';
 
 /**
  * UI-side callbacks supplied by `main.js` so this module never reaches
@@ -60,8 +63,46 @@ let lastZoomText = '';
 /** Layer id for the per-grid dot overlay. */
 const GRID_DOT_LAYER = 'grid-dots';
 
-/** Fixed neutral grey for the dot overlay (landcover is surfaced in popups, not colors). */
-const DOT_COLOR = '#606060';
+/**
+ * Mapbox layer paint per resolved theme. The light value is used for the
+ * inline minimal-style background-color so cold loads under a light OS
+ * theme don't flash black before the canvas renders. circle-stroke-color
+ * flips polarity so the per-dot edge stays visible against either
+ * background. The dot fill is also theme-tuned: `#606060` reads as a
+ * solid mid-grey on black, but on the light `#f7f7f8` canvas it skews
+ * toward black; `#a5a5a5` reads as a softer neutral grey there without
+ * over-emphasizing the dot grid against the white panel chrome.
+ *
+ * Mapbox style specs cannot read CSS custom properties, so the values
+ * are duplicated here; they're kept in sync with style.css `:root`
+ * tokens by manual review.
+ */
+const MAP_THEME = {
+    dark: {
+        background: '#000',
+        dot: '#606060',
+        circleStroke: 'rgba(255, 255, 255, 0.18)',
+    },
+    light: {
+        background: '#f7f7f8',
+        dot: '#a5a5a5',
+        circleStroke: 'rgba(0, 0, 0, 0.18)',
+    },
+};
+
+/**
+ * Parse `#rrggbb` (with or without the leading `#`) or the 4-char
+ * shorthand `#rgb` into a 0..1-normalized [r, g, b] tuple. Used to feed
+ * `MAP_THEME[*].background` into the limb-vignette shader's `uBgColor`
+ * uniform — keeps `MAP_THEME` as the single source of truth instead of
+ * duplicating the same hex into a parallel rgb dict.
+ */
+function hexToRgb01(hex) {
+    let s = hex.startsWith('#') ? hex.slice(1) : hex;
+    if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    const n = parseInt(s, 16);
+    return [((n >> 16) & 0xff) / 255, ((n >> 8) & 0xff) / 255, (n & 0xff) / 255];
+}
 
 /**
  * Per-zoom stroke width for the dot layer. Pulled out as a module-level
@@ -113,15 +154,15 @@ async function addGridLayer() {
         source: GRID_FEATURE_STATE_SOURCE,
         'source-layer': GRID_FEATURE_STATE_SOURCE_LAYER,
         paint: {
-            // Fixed grey baseline. The cursor halo is painted as an
-            // additive white overlay by the hover-glow custom WebGL
+            // Theme-tuned grey baseline. The cursor halo is painted as
+            // an additive white overlay by the hover-glow custom WebGL
             // layer (frontend/hover-glow-layer.js) above this layer
             // — circle-color no longer reads feature-state, and
             // hover-glow.js no longer writes setFeatureState.
-            'circle-color': DOT_COLOR,
+            'circle-color': MAP_THEME[getResolvedTheme()].dot,
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
             'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
-            'circle-stroke-color': 'rgba(255, 255, 255, 0.18)',
+            'circle-stroke-color': MAP_THEME[getResolvedTheme()].circleStroke,
             'circle-stroke-width': STROKE_WIDTH_BY_ZOOM,
             'circle-stroke-opacity': 0.8,
             'circle-blur': 0,
@@ -255,14 +296,15 @@ export function initMap(callbacks) {
     mapCallbacks = callbacks;
     mapboxgl.accessToken = state.config.mapboxToken;
 
-    // Inline minimal v8 style — single black background layer, no
+    // Inline minimal v8 style — single background layer, no
     // sources/sprite/glyphs. Used to be 'mapbox://styles/mapbox/dark-v10'
     // immediately stripped to black by an applyMinimalBasemap pass on
     // style.load, but the dark-v10 fetch left a visible navy-blue
     // (#08111f) flash on cold loads while the style.json + sprite were
-    // in flight. Inlining removes the CDN round-trip and renders a
-    // black canvas from the very first frame; the dot overlay layer is
-    // added in our own style.load handler below.
+    // in flight. Inlining removes the CDN round-trip and renders the
+    // canvas in the resolved theme color from the very first frame;
+    // the dot overlay layer is added in our own style.load handler below.
+    const initialBackground = MAP_THEME[getResolvedTheme()].background;
     state.runtime.map = new mapboxgl.Map({
         container: 'map',
         style: {
@@ -272,7 +314,7 @@ export function initMap(callbacks) {
                 {
                     id: 'background',
                     type: 'background',
-                    paint: { 'background-color': '#000' },
+                    paint: { 'background-color': initialBackground },
                 },
             ],
         },
@@ -328,6 +370,49 @@ export function initMap(callbacks) {
                 'Grid tiles failed to load \u2014 run npm run build:tiles to regenerate.',
                 8000
             );
+        }
+
+        // Limb-vignette neutralizes the rim ring caused by spherical
+        // foreshortening of the viewport-aligned `grid-dots` circles.
+        // Painted above grid-dots, below hover-glow so the cursor halo
+        // still floats above the mask. No-op in mercator (z>=5).
+        const limbVignette = new LimbVignetteLayer();
+        limbVignette.setBgColor(hexToRgb01(MAP_THEME[getResolvedTheme()].background));
+        state.runtime.map.addLayer(limbVignette);
+        state.runtime.limbVignette = limbVignette;
+
+        // Repaint the basemap background, dot stroke, and limb-vignette mask
+        // whenever the user toggles theme or the OS prefers-color-scheme flips
+        // while in auto. Guarded against re-entry from a partial addGridLayer()
+        // failure: background always exists (inline style), but the dot layer
+        // and limb-vignette layer may not.
+        subscribeTheme((resolved) => {
+            const palette = MAP_THEME[resolved] || MAP_THEME.dark;
+            const map = state.runtime.map;
+            if (!map) return;
+            if (map.getLayer('background')) {
+                map.setPaintProperty('background', 'background-color', palette.background);
+            }
+            if (map.getLayer(GRID_DOT_LAYER)) {
+                map.setPaintProperty(GRID_DOT_LAYER, 'circle-color', palette.dot);
+                map.setPaintProperty(GRID_DOT_LAYER, 'circle-stroke-color', palette.circleStroke);
+            }
+            if (state.runtime.limbVignette) {
+                state.runtime.limbVignette.setBgColor(hexToRgb01(palette.background));
+            }
+        });
+
+        // Debug surface for live calibration of the mask band. Patch via
+        // `window.__lv.tune({ band: [a, b] })` from DevTools \u2014 the
+        // change takes effect on the very next render. Mirrors the pattern
+        // used by `window.__hg` in hover-glow.js. The earlier screen-space
+        // implementation also accepted `radiusStops`; the ray-sphere fix
+        // dropped that knob since the silhouette test is geometrically exact.
+        if (typeof window !== 'undefined') {
+            window.__lv = {
+                layer: limbVignette,
+                tune: (patch) => limbVignette.setTunables(patch),
+            };
         }
 
         // Hover glow loads its own sidecar. Failure is non-fatal \u2014 the

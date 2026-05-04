@@ -9,7 +9,9 @@
  * handled by a single program (mapbox-gl v3.11 dispatches the
  * globe-mode args via positional params 4-5 of render()). Fragment
  * shader paints the glow (cursorFactor × min(1, borderFactor +
- * cursorFloor)) as an additive white disc.
+ * cursorFloor)) as a `uHaloColor`-tinted disc — white in dark theme
+ * (high contrast against the black canvas) and black in light theme
+ * (high contrast against the near-white canvas).
  *
  * The shader source lives here, separate from the JS GL plumbing in
  * hover-glow-layer.js, so prettier doesn't have to chew on multi-line
@@ -73,7 +75,7 @@ void main() {
 `;
 
 /**
- * Fragment shader: paints an additive white halo at every cell whose
+ * Fragment shader: paints a halo at every cell whose
  * (cursorFactor × min(1, borderFactor + cursorFloor)) glow exceeds
  * uEps, with a soft round disc shape via gl_PointCoord.
  *
@@ -83,10 +85,12 @@ void main() {
  *   - borderFactor:   piecewise Hermite over MAX_FALLOFF_STOPS stops.
  *   - glow:           cf × min(1, bf + cursorFloor).
  *
- * Output uses premultiplied alpha (vec4(a, a, a, a)) so Mapbox's
+ * Output uses premultiplied alpha (vec4(uHaloColor * a, a)) so Mapbox's
  * default custom-layer blendFunc (ONE, ONE_MINUS_SRC_ALPHA) lays the
- * additive white over whatever the grid-dots circle layer painted
- * underneath.
+ * tinted halo over whatever the grid-dots circle layer painted
+ * underneath. uHaloColor = (1, 1, 1) reproduces the original white-on-dark
+ * additive look; (0, 0, 0) inverts it to a darkening halo for the light
+ * theme. JS pushes the value via `gl.uniform3fv` per-frame.
  */
 export const FRAGMENT_SHADER_SRC = `#version 300 es
 precision highp float;
@@ -99,6 +103,7 @@ uniform float uR;
 uniform float uCursorFloor;
 uniform float uEps;
 uniform vec2 uFalloff[4];
+uniform vec3 uHaloColor;
 
 out vec4 fragColor;
 
@@ -148,7 +153,7 @@ void main() {
     float discMask = smoothstep(1.0, 0.6, rad);
     float a = g * discMask;
 
-    fragColor = vec4(a, a, a, a);
+    fragColor = vec4(uHaloColor * a, a);
 }
 `;
 

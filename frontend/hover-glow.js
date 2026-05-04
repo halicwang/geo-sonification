@@ -33,8 +33,22 @@ import {
     HOVER_GLOW_EPS,
     HOVER_GLOW_CURSOR_FLOOR,
     HOVER_GLOW_HALO_SCALE_BY_ZOOM,
+    getResolvedTheme,
+    subscribeTheme,
 } from './config.js';
 import { HoverGlowLayer } from './hover-glow-layer.js';
+
+/**
+ * Halo tint per resolved theme. White over the dark canvas brightens
+ * dots toward pure white (high contrast); black over the near-white
+ * canvas darkens them toward pure black (also high contrast). The
+ * blendFunc (ONE, ONE_MINUS_SRC_ALPHA) handles both directions
+ * symmetrically because the shader emits premultiplied src.
+ */
+const HALO_COLOR_BY_THEME = {
+    dark: [1, 1, 1],
+    light: [0, 0, 0],
+};
 
 // ============ Sidecar format constants ============
 //
@@ -148,6 +162,15 @@ export async function initHoverGlow(map) {
         dotRadiusStops: GRID_DOT_RADIUS_BY_ZOOM,
     });
     map.addLayer(glowLayer);
+
+    // Initial tint matches the resolved theme; subscribeTheme repaints the
+    // halo whenever the user toggles or the OS prefers-color-scheme flips
+    // while in auto. Without this, the halo stays white in light mode and
+    // is invisible against the near-white canvas.
+    glowLayer.setHaloColor(HALO_COLOR_BY_THEME[getResolvedTheme()] || HALO_COLOR_BY_THEME.dark);
+    subscribeTheme((resolved) => {
+        glowLayer.setHaloColor(HALO_COLOR_BY_THEME[resolved] || HALO_COLOR_BY_THEME.dark);
+    });
 
     const canvas = map.getCanvas();
     canvas.addEventListener('mousemove', (e) => {

@@ -169,6 +169,12 @@ export class HoverGlowLayer {
         this._cursorLng = 999;
         this._cursorLat = 999;
 
+        // Halo tint (RGB, 0..1). Defaults to white so dark-theme behavior
+        // matches the original look exactly. hover-glow.js calls
+        // `setHaloColor` with the resolved theme; light theme passes black
+        // so the halo darkens the near-white canvas instead of brightening it.
+        this._haloColor = new Float32Array([1, 1, 1]);
+
         this._gl = null;
         this._map = null;
         this._program = null;
@@ -208,6 +214,7 @@ export class HoverGlowLayer {
             uCursorFloor: gl.getUniformLocation(this._program, 'uCursorFloor'),
             uEps: gl.getUniformLocation(this._program, 'uEps'),
             uFalloff: gl.getUniformLocation(this._program, 'uFalloff'),
+            uHaloColor: gl.getUniformLocation(this._program, 'uHaloColor'),
         };
 
         const vertexData = buildVertexBuffer(this._gridIndex);
@@ -273,6 +280,7 @@ export class HoverGlowLayer {
         gl.uniform1f(u.uCursorFloor, this._tunables.cursorFloor);
         gl.uniform1f(u.uEps, this._tunables.eps);
         gl.uniform2fv(u.uFalloff, packBorderFalloff(this._tunables.borderFalloff));
+        gl.uniform3fv(u.uHaloColor, this._haloColor);
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -283,6 +291,22 @@ export class HoverGlowLayer {
     setCursorLngLat(lng, lat) {
         this._cursorLng = lng;
         this._cursorLat = lat;
+        if (this._map) this._map.triggerRepaint();
+    }
+
+    /**
+     * Set the halo tint (RGB, 0..1). Mutates `_haloColor` in place so the
+     * Float32Array passed to `gl.uniform3fv` keeps the same identity
+     * across frames. Triggers a repaint when the map is attached so the
+     * change shows up without waiting for a mousemove.
+     *
+     * @param {[number, number, number] | Float32Array} rgb
+     */
+    setHaloColor(rgb) {
+        if (!rgb || rgb.length < 3) return;
+        this._haloColor[0] = rgb[0];
+        this._haloColor[1] = rgb[1];
+        this._haloColor[2] = rgb[2];
         if (this._map) this._map.triggerRepaint();
     }
 

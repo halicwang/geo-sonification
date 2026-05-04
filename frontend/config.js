@@ -57,7 +57,7 @@ export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
  * @typedef {Object} StateRuntime
  * Live instances and transient per-session values. Ownership of writes:
  * `clientId` ← config.js, `ws` / `wsReconnectDelay` ← websocket.js,
- * `map` / `debounceTimer` / `lastViewportSend` ← map.js,
+ * `map` / `debounceTimer` / `lastViewportSend` / `limbVignette` ← map.js,
  * `audioEnabled` ← main.js.
  * @property {WebSocket|null} ws - Active WebSocket; null between connections.
  * @property {import('mapbox-gl').Map|null} map - Mapbox GL instance once
@@ -72,6 +72,9 @@ export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
  *   doubles per failed retry, resets on a successful open.
  * @property {boolean} audioEnabled - Toggled by the user via the start
  *   button; gates `engine.start()` / `engine.stop()`.
+ * @property {import('./limb-vignette-layer.js').LimbVignetteLayer} [limbVignette] -
+ *   Globe-rim mask layer instance; set by map.js after `addGridLayer()`
+ *   so subscribeTheme() can repaint the mask color on theme flips.
  */
 
 /**
@@ -398,4 +401,139 @@ export function getLoudnessNormEnabled() {
     } catch {
         return true;
     }
+}
+
+// ============ Theme (Light / Dark / Auto) ============
+//
+// User-facing preference for the visual theme. Three modes:
+//   'auto'  — follow the OS preference via prefers-color-scheme.
+//   'light' — explicit light theme regardless of OS.
+//   'dark'  — explicit dark theme regardless of OS.
+// Default is 'auto'. The resolved theme ('light' | 'dark') is written to
+// `document.documentElement.dataset.theme` so the [data-theme="light"]
+// CSS rules in style.css swap the color tokens. The raw mode is mirrored
+// to `dataset.themeMode` so the toggle button can render the correct icon
+// without re-reading localStorage.
+//
+// To prevent FOUC on cold load, an inline script in index.html duplicates
+// this resolution before the first paint. main.js calls applyTheme() once
+// after DOMContentLoaded as a safety net and re-applies after every user
+// click on the toggle.
+
+const THEME_STORAGE_KEY = 'GEO_SONIFICATION_THEME';
+const THEME_MODES = new Set(['auto', 'light', 'dark']);
+const themeSubscribers = new Set();
+let themeMql = null;
+let lastResolvedTheme = null;
+
+function getThemeMql() {
+    if (themeMql) return themeMql;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+        return null;
+    }
+    themeMql = window.matchMedia('(prefers-color-scheme: light)');
+    // Single module-scope listener: re-resolves on system preference change
+    // and notifies subscribers, but only when the user's mode is 'auto'.
+    // Manual mode flips already drive applyTheme() directly.
+    const onSystemChange = () => {
+        if (getThemeMode() !== 'auto') return;
+        applyTheme();
+    };
+    if (typeof themeMql.addEventListener === 'function') {
+        themeMql.addEventListener('change', onSystemChange);
+    } else if (typeof themeMql.addListener === 'function') {
+        // Safari < 14 fallback.
+        themeMql.addListener(onSystemChange);
+    }
+    return themeMql;
+}
+
+/**
+ * Read the user's theme preference. Returns 'auto' | 'light' | 'dark'.
+ * Defaults to 'auto' when storage is unreadable or holds an unknown value.
+ */
+export function getThemeMode() {
+    try {
+        const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+        return THEME_MODES.has(stored) ? stored : 'auto';
+    } catch {
+        return 'auto';
+    }
+}
+
+/** Persist the user's theme mode. Silently no-ops on unknown modes or unavailable storage. */
+export function setThemeMode(mode) {
+    if (!THEME_MODES.has(mode)) return;
+    try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch {
+        // localStorage unavailable (e.g. private mode, quota): nothing to
+        // persist. getThemeMode() will keep returning the previous value
+        // (or 'auto' default), and main.js's click handler reads the mode
+        // back from storage so the toggle reflects the actually-stored
+        // state instead of the optimistic intended-but-unwritten value.
+    }
+}
+
+/** Resolve the user's mode against the OS preference. Returns 'light' | 'dark'. */
+export function getResolvedTheme() {
+    const mode = getThemeMode();
+    if (mode === 'light' || mode === 'dark') return mode;
+    const mql = getThemeMql();
+    return mql && mql.matches ? 'light' : 'dark';
+}
+
+/**
+ * Apply the resolved theme to <html>:
+ *   - dataset.theme     = 'light' | 'dark'   (drives the CSS variable swap)
+ *   - dataset.themeMode = 'auto'  | 'light' | 'dark' (drives the toggle icon)
+ *
+ * When the resolved value changes, briefly sets a `data-theme-switching`
+ * attribute across one paint frame so transitions on body/buttons/panels
+ * do not animate every color when the user flips the mode. Subscribers
+ * are notified after the dataset is written.
+ */
+export function applyTheme() {
+    if (typeof document === 'undefined' || !document.documentElement) return;
+    const root = document.documentElement;
+    const mode = getThemeMode();
+    const resolved = getResolvedTheme();
+    const changed = resolved !== lastResolvedTheme;
+    lastResolvedTheme = resolved;
+    root.dataset.theme = resolved;
+    root.dataset.themeMode = mode;
+    if (changed) {
+        root.setAttribute('data-theme-switching', '');
+        // Two rAFs: the first lets the browser commit the new dataset under
+        // the suppression class; the second removes it so subsequent UI
+        // animations (audio button active flash, panel slide) behave normally.
+        const raf =
+            typeof requestAnimationFrame === 'function'
+                ? requestAnimationFrame
+                : (cb) => setTimeout(cb, 0);
+        raf(() => raf(() => root.removeAttribute('data-theme-switching')));
+        themeSubscribers.forEach((cb) => {
+            try {
+                cb(resolved, mode);
+            } catch (err) {
+                console.error('theme subscriber threw:', err);
+            }
+        });
+    }
+}
+
+/**
+ * Subscribe to resolved-theme changes. The callback is invoked with
+ * (resolved, mode) whenever applyTheme() detects a transition, including
+ * the very first apply and OS prefers-color-scheme flips while in 'auto'.
+ * Returns an unsubscribe function.
+ */
+export function subscribeTheme(cb) {
+    if (typeof cb !== 'function') return () => {};
+    themeSubscribers.add(cb);
+    // Side effect: ensure the matchMedia listener is wired so auto-mode
+    // users get system-flip notifications even before applyTheme() is
+    // first called by main.js.
+    getThemeMql();
+    return () => themeSubscribers.delete(cb);
 }

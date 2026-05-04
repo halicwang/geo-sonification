@@ -20,7 +20,15 @@
  * @module frontend/main
  */
 
-import { state, getMapboxToken, loadServerConfig, getClientId } from './config.js';
+import {
+    state,
+    getMapboxToken,
+    loadServerConfig,
+    getClientId,
+    getThemeMode,
+    setThemeMode,
+    applyTheme,
+} from './config.js';
 import { showToast, updateUI, updateConnectionStatus } from './ui.js';
 import { initMap, onViewportChange, refreshServerConfig } from './map.js';
 import { connectWebSocket } from './websocket.js';
@@ -64,6 +72,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loopProgressHandle: document.getElementById('loop-progress-handle'),
         infoPanel: document.getElementById('info-panel'),
         panelToggle: document.getElementById('panel-toggle'),
+        themeToggle: document.getElementById('theme-toggle'),
+        themeIcon: document.getElementById('theme-icon'),
     };
 
     getClientId();
@@ -171,6 +181,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.els.infoPanel.classList.add('hidden');
         state.els.panelToggle.classList.remove('open');
         state.els.panelToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    // ── Theme toggle button ──
+    // Cycles auto → light → dark → auto. The inline script in index.html
+    // already set `data-theme` and `data-theme-mode` on <html> before first
+    // paint; applyTheme() is called once here as a safety net so the
+    // module-scope cache (lastResolvedTheme) stays consistent with the dataset.
+    const THEME_NEXT = { auto: 'light', light: 'dark', dark: 'auto' };
+    const THEME_ICON = { auto: '◐', light: '☀', dark: '☾' };
+    const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+
+    function refreshThemeButton(mode) {
+        if (!state.els.themeToggle) return;
+        state.els.themeIcon.textContent = THEME_ICON[mode];
+        const next = THEME_LABEL[THEME_NEXT[mode]];
+        state.els.themeToggle.title = `Theme: ${THEME_LABEL[mode]}`;
+        state.els.themeToggle.setAttribute(
+            'aria-label',
+            `Theme: ${THEME_LABEL[mode]} (click for ${next})`
+        );
+    }
+
+    applyTheme();
+    refreshThemeButton(getThemeMode());
+
+    if (state.els.themeToggle) {
+        state.els.themeToggle.addEventListener('click', () => {
+            setThemeMode(THEME_NEXT[getThemeMode()]);
+            applyTheme();
+            // Read mode back from storage rather than trusting the optimistic
+            // `nextMode` — if setThemeMode silently failed (private mode,
+            // quota), the page still shows the old theme; the button must
+            // reflect that, not the intended-but-unwritten value.
+            refreshThemeButton(getThemeMode());
+        });
     }
 
     // ── Audio toggle button ──

@@ -217,4 +217,28 @@ describe('HoverGlowLayer', () => {
         expect(() => layer.setTunables({})).not.toThrow();
         expect(tunables.cursorFloor).toBe(0.25);
     });
+
+    it('halo color defaults to white so dark theme behaves as before', () => {
+        const layer = makeLayer();
+        expect(Array.from(layer._haloColor)).toEqual([1, 1, 1]);
+    });
+
+    it('setHaloColor mutates the existing Float32Array and triggers a repaint', () => {
+        const layer = makeLayer();
+        const triggerRepaint = vi.fn();
+        layer._map = { triggerRepaint };
+        const before = layer._haloColor;
+        layer.setHaloColor([0, 0, 0]);
+        expect(layer._haloColor).toBe(before); // identity preserved for uniform3fv
+        expect(Array.from(layer._haloColor)).toEqual([0, 0, 0]);
+        expect(triggerRepaint).toHaveBeenCalledOnce();
+    });
+
+    it('setHaloColor ignores nullish or short inputs', () => {
+        const layer = makeLayer();
+        layer._map = { triggerRepaint: vi.fn() };
+        layer.setHaloColor(null);
+        layer.setHaloColor([0.5]);
+        expect(Array.from(layer._haloColor)).toEqual([1, 1, 1]);
+    });
 });

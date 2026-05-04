@@ -2,12 +2,20 @@
  * Geo-Sonification UI
  *
  * Layout: full-screen Mapbox map + floating info panel (top-right).
- * Color scheme: pure black background — matches the inline minimal
- * basemap style configured in map.js (single black background layer,
- * no source/sprite/glyphs fetches).
+ * Color scheme: dual-theme via CSS custom properties — dark is the
+ * default, light is opt-in via `:root[data-theme="light"]`. The Mapbox
+ * background layer in map.js is repainted in lockstep so the canvas
+ * matches the panel chrome. See frontend/config.js applyTheme().
  */
 
-/* ============ Theme Variables ============ */
+/* ============ Theme Variables ============
+ *
+ * Color tokens default to the dark theme. The `:root[data-theme="light"]`
+ * block below overrides them when frontend/config.js applyTheme() resolves
+ * the user's mode (or the OS prefers-color-scheme in 'auto') to 'light'.
+ * Typography and type-scale tokens are theme-independent and live only in
+ * the base :root block.
+ */
 :root {
     --color-bg: #000000;
     --color-bg-panel: rgba(0, 0, 0, 0.55);
@@ -20,7 +28,7 @@
     --color-accent-rgb: 92 255 200;
     --color-accent-info: #4fc3f7;
     --color-danger: #ff6b6b;
-    --color-border: rgba(255, 255, 255, 0.1);
+    --color-border: rgba(255, 255, 255, 0.12);
 
     /* Typography stacks */
     --font-sans:
@@ -37,12 +45,60 @@
     --color-divider: rgba(255, 255, 255, 0.08);
     --color-border-soft: rgba(255, 255, 255, 0.06);
 
+    /* Theme-relative overlay tints. `strong` drives the mobile sheet handle
+       grip; `weak` drives the volume slider track and other low-contrast
+       neutral overlays. Hardcoded `rgba(255,255,255,...)` previously made
+       these invisible against a light background, so they swap with theme. */
+    --color-overlay-strong: rgba(255, 255, 255, 0.32);
+    --color-overlay-weak: rgba(255, 255, 255, 0.1);
+
     /* Type scale */
     --fs-title: 1.05rem;
     --fs-subtitle: 0.72rem;
     --fs-meta: 0.65rem;
     --fs-label: 0.72rem;
     --fs-value: 0.78rem;
+}
+
+/* Light theme overrides. The dark-theme accent teal (#5cffc8) — used by
+   the "Playing" state and focus rings — is replaced by a darker
+   AA-contrast teal so text and borders read on the white panel. The
+   WebGL hover halo flips separately (white over dark, black over light;
+   see hover-glow.js HALO_COLOR_BY_THEME). */
+:root[data-theme='light'] {
+    --color-bg: #f7f7f8;
+    --color-bg-panel: rgba(255, 255, 255, 0.72);
+    --color-bg-70: rgba(255, 255, 255, 0.85);
+    --color-text: #1a1a1c;
+    --color-text-bright: #000000;
+    --color-text-muted: #3a3a3a;
+    --color-text-dim: #5a5a5a;
+    --color-accent: #14a37a;
+    --color-accent-rgb: 20 163 122;
+    --color-accent-info: #0277bd;
+    --color-danger: #d32f2f;
+    --color-border: rgba(0, 0, 0, 0.12);
+
+    --color-text-tier1: rgba(0, 0, 0, 0.88);
+    --color-text-tier2: rgba(0, 0, 0, 0.6);
+    --color-text-tier3: rgba(0, 0, 0, 0.38);
+
+    --color-panel-bg-v2: rgba(248, 248, 250, 0.85);
+    --color-divider: rgba(0, 0, 0, 0.08);
+    --color-border-soft: rgba(0, 0, 0, 0.06);
+
+    --color-overlay-strong: rgba(0, 0, 0, 0.32);
+    --color-overlay-weak: rgba(0, 0, 0, 0.12);
+}
+
+/* Suppress every transition for one paint cycle when applyTheme() flips
+   the theme. Without this, every panel/button color animates concurrently
+   on toggle, which reads as a slow tinted flash. The attribute is removed
+   on the next double-rAF in config.js applyTheme(). */
+[data-theme-switching] *,
+[data-theme-switching] *::before,
+[data-theme-switching] *::after {
+    transition: none !important;
 }
 
 /* ============ Reset & Base ============ */
@@ -170,7 +226,7 @@ body {
     display: block;
     width: 36px;
     height: 5px;
-    background: rgba(255, 255, 255, 0.32);
+    background: var(--color-overlay-strong);
     border-radius: 2.5px;
     margin: 0 auto;
 }
@@ -335,8 +391,8 @@ body {
         to right,
         var(--color-accent) 0,
         var(--color-accent) var(--fill-pct, 100%),
-        rgba(255, 255, 255, 0.1) var(--fill-pct, 100%),
-        rgba(255, 255, 255, 0.1) 100%
+        var(--color-overlay-weak) var(--fill-pct, 100%),
+        var(--color-overlay-weak) 100%
     );
 }
 
@@ -368,7 +424,7 @@ body {
 .volume-slider::-moz-range-track {
     height: 2px;
     border-radius: 1px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-weak);
     border: none;
 }
 
@@ -549,7 +605,7 @@ body {
     opacity: 1;
 }
 
-/* ============ Mapbox Overrides (match dark theme) ============ */
+/* ============ Mapbox Overrides (theme-aware via CSS variables) ============ */
 .mapboxgl-ctrl-attrib {
     background: var(--color-bg-70) !important;
     color: var(--color-text-dim) !important;
@@ -603,7 +659,7 @@ body {
     height: 10px;
     border-radius: 2px;
     display: inline-block;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--color-border);
 }
 
 .landcover-name {

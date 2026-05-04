@@ -321,7 +321,7 @@ export function initMap(callbacks) {
         projection: 'globe',
         center: [-55, -10], // Amazon region
         zoom: 4,
-        minZoom: 2,
+        minZoom: 2.5,
         maxZoom: 12,
     });
 

@@ -102,11 +102,11 @@ const LAND_FRACTION_WEIGHT_EXP = parseNonNegativeFloat('LAND_FRACTION_WEIGHT_EXP
 // Skip cells with less land than this threshold (km2) during aggregation only.
 const MIN_LAND_AREA_KM2 = parseNonNegativeFloat('MIN_LAND_AREA_KM2', 0);
 
-const LAND_FRACTION_WEIGHT_MODES = new Set(['identity', 'linear', 'sqrt', 'pow']);
-if (!LAND_FRACTION_WEIGHT_MODES.has(LAND_FRACTION_WEIGHT_MODE)) {
+const ALLOWED_LAND_FRACTION_WEIGHT_MODES = ['identity', 'linear', 'sqrt', 'pow'];
+if (!ALLOWED_LAND_FRACTION_WEIGHT_MODES.includes(LAND_FRACTION_WEIGHT_MODE)) {
     console.error(
         `ERROR: Invalid LAND_FRACTION_WEIGHT_MODE "${LAND_FRACTION_WEIGHT_MODE}". ` +
-            `Must be one of: ${Array.from(LAND_FRACTION_WEIGHT_MODES).join(', ')}`
+            `Must be one of: ${ALLOWED_LAND_FRACTION_WEIGHT_MODES.join(', ')}`
     );
     process.exit(1);
 }

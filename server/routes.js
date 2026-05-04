@@ -70,7 +70,7 @@ function attachRoutes(app, deps) {
         }
         const clientKey = getHttpClientKey(req);
         const { state, previousMode } = getHttpClientState(clientKey);
-        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const body = req.body;
         if (!Array.isArray(body.bounds) || body.bounds.length !== 4) {
             return res.status(400).json({
                 error: 'HTTP bounds must be an array: [west, south, east, north]',

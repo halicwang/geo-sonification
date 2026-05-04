@@ -124,8 +124,6 @@ function loadEnvFile(filePath = DEFAULT_ENV_PATH, targetEnv = process.env) {
 }
 
 module.exports = {
-    DEFAULT_ENV_PATH,
-    stripInlineComment,
     parseEnvContent,
     loadEnvFile,
 };

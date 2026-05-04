@@ -32,6 +32,11 @@ let prevCenterLat = 0;
 let prevCenterLon = 0;
 let prevMoveTime = 0;
 
+// ============ DOM Memo ============
+
+/** Last value written to #zoom-level so successive `move` events skip no-op DOM writes. */
+let lastZoomText = '';
+
 // ============ Grid Overlay ============
 
 /** Layer id for the per-grid dot overlay. */
@@ -328,7 +333,11 @@ export function initMap() {
         state.runtime.map.on('move', () => {
             const zoom = state.runtime.map.getZoom();
             if (state.els.zoomLevel) {
-                state.els.zoomLevel.textContent = zoom.toFixed(2);
+                const zoomText = zoom.toFixed(2);
+                if (zoomText !== lastZoomText) {
+                    lastZoomText = zoomText;
+                    state.els.zoomLevel.textContent = zoomText;
+                }
             }
             // Drive the low-pass filter cutoff locally from the live
             // zoom — bypasses WS round-trip and viewport debounce so
@@ -361,7 +370,9 @@ export function initMap() {
         });
 
         if (state.els.zoomLevel) {
-            state.els.zoomLevel.textContent = state.runtime.map.getZoom().toFixed(2);
+            const zoomText = state.runtime.map.getZoom().toFixed(2);
+            lastZoomText = zoomText;
+            state.els.zoomLevel.textContent = zoomText;
         }
         onViewportChange();
 

@@ -16,6 +16,14 @@ import { escapeHtml, getLandcoverName, getLandcoverColor } from './landcover.js'
 let _toastTimerId = null;
 let _staleTimerId = null;
 
+// Last-written values for stat-field DOM writes — `updateUI` runs per WS stats
+// message and many fields stay constant across panning at the same zoom; the
+// guards skip identical writes to avoid redundant text-node reflow.
+let _lastGridCount = '';
+let _lastAudioMode = '';
+let _lastProximity = '';
+let _lastLandType = '';
+
 /**
  * Render viewport stats into the info panel.
  * Called on every WebSocket stats message or HTTP fallback response.
@@ -26,34 +34,47 @@ export function updateUI(stats) {
     // Grid count display (with thousands separators for readability)
     const gc = stats.gridCount || 0;
     const tgc = stats.theoreticalGridCount;
+    let gcText;
     if (tgc != null && tgc > 0) {
         const pct = ((stats.landCoverageRatio || 0) * 100).toFixed(0);
-        els.gridCount.textContent = `${gc.toLocaleString('en-US')} / ${tgc.toLocaleString('en-US')} (${pct}%)`;
+        gcText = `${gc.toLocaleString('en-US')} / ${tgc.toLocaleString('en-US')} (${pct}%)`;
     } else {
-        els.gridCount.textContent = gc.toLocaleString('en-US');
+        gcText = gc.toLocaleString('en-US');
+    }
+    if (gcText !== _lastGridCount) {
+        _lastGridCount = gcText;
+        els.gridCount.textContent = gcText;
     }
 
     // Mode indicator (aggregated vs per-grid)
     if (els.audioMode) {
-        if (stats.mode === 'per-grid') {
-            els.audioMode.textContent = `Per-Grid (${stats.gridCount || 0} cells)`;
-            els.audioMode.style.color = 'var(--color-accent-info)';
-        } else {
-            els.audioMode.textContent = 'Aggregated';
-            els.audioMode.style.color = '';
+        const isPerGrid = stats.mode === 'per-grid';
+        const modeText = isPerGrid ? `Per-Grid (${stats.gridCount || 0} cells)` : 'Aggregated';
+        if (modeText !== _lastAudioMode) {
+            _lastAudioMode = modeText;
+            els.audioMode.textContent = modeText;
+            els.audioMode.style.color = isPerGrid ? 'var(--color-accent-info)' : '';
         }
     }
 
     // Proximity (from audioParams)
     if (els.proximity && stats.audioParams) {
         const p = stats.audioParams.proximity;
-        els.proximity.textContent = p != null ? p.toFixed(2) : '—';
+        const proximityText = p != null ? p.toFixed(2) : '—';
+        if (proximityText !== _lastProximity) {
+            _lastProximity = proximityText;
+            els.proximity.textContent = proximityText;
+        }
     }
 
     // Dominant landcover
     if (els.landType) {
         const name = getLandcoverName(stats.dominantLandcover);
-        els.landType.textContent = name ? `${name} (${stats.dominantLandcover})` : '—';
+        const landTypeText = name ? `${name} (${stats.dominantLandcover})` : '—';
+        if (landTypeText !== _lastLandType) {
+            _lastLandType = landTypeText;
+            els.landType.textContent = landTypeText;
+        }
     }
 
     // Dynamic landcover breakdown list — single innerHTML write

@@ -43,9 +43,12 @@
 export function attachProgressBar({ progressEl, fillEl, handleEl, engine }) {
     let progressRafId = null;
     let isDragging = false;
+    let lastPct = '';
 
     function setVisualProgress(progress) {
         const pct = (progress * 100).toFixed(2) + '%';
+        if (pct === lastPct) return;
+        lastPct = pct;
         fillEl.style.width = pct;
         handleEl.style.left = pct;
     }

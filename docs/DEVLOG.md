@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-03 | Refactor   | [Frontend DOM Write-on-Change Guards Across Hot Paths](devlog/M6/2026-05-03-M6-frontend-write-on-change-guards.md)                                                                            |
 | 2026-05-03 | Refactor   | [Server Occam Sweep — Drop Dead Grid-Count Proximity, Simplify Defensive Guards](devlog/M6/2026-05-03-M6-server-occam-sweep.md)                                                               |
 | 2026-05-03 | Design     | [Track CLAUDE.md and AGENTS.md as Project-Level Agent Guidance](devlog/M6/2026-05-03-M6-track-claude-and-agents-md.md)                                                                        |
 | 2026-05-03 | Design     | [Devlog Recording Guide Allows Root-Level Independent Entries](devlog/M6/2026-05-03-M6-devlog-rule-allow-root-level-entries.md)                                                               |

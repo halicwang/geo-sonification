@@ -8,39 +8,30 @@
  * Receives server-computed bus targets via engine.update(audioParams).
  * Applies EMA smoothing and writes to GainNodes via requestAnimationFrame.
  *
- * Loop playback model:
- *   - Each bus uses double-buffered voices (A/B) instead of loop=true
- *   - At cycle boundary (buffer duration - overlap), next voice starts at 0s
- *   - Outgoing voice fades out while incoming fades in over overlap window
+ * Voice scheduling (per-bus double-buffered playback, global swap clock,
+ * loop progress / seek) lives in `audio/voice-scheduler.js` and is bound
+ * to this engine's AudioContext + bus gains inside `ensureCtx()`.
  *
  * AudioContext lifecycle:
  *   - start() creates context + starts loop graph (if buffers ready)
  *   - stop() suspends context and clears loop graph
  *   - visibilitychange: suspend on hidden, resume+snap on visible
  *
- * No icon triggers — sample folders are empty (YAGNI).
- *
  * @module frontend/audio/engine
  */
 
 import { ASSET_BASE, getLoudnessNormEnabled } from '../config.js';
-import { clamp01, equalPowerCurves } from './utils.js';
+import { clamp01 } from './utils.js';
 import { createMasterChain } from './context.js';
 import { createBufferCache } from './buffer-cache.js';
 import { createEmaState, tickEma, snapEmaToTargets, resetEma, isEmaIdle } from './raf-loop.js';
+import { createVoiceScheduler } from './voice-scheduler.js';
 import {
     SMOOTHING_TIME_MS,
     PROXIMITY_SMOOTHING_MS,
     SNAP_THRESHOLD_MS,
     VELOCITY_ATTACK_MS,
     VELOCITY_DECAY_MS,
-    LOOP_OVERLAP_SECONDS,
-    LOOP_START_LOOKAHEAD_SECONDS,
-    LOOP_TIMER_LOOKAHEAD_SECONDS,
-    VOICE_STOP_GRACE_SECONDS,
-    LATE_SWAP_LOOKAHEAD_SECONDS,
-    RECOVERY_FADE_SECONDS,
-    SWAP_LATE_WARN_SECONDS,
     BUS_PREAMP_GAIN,
     LIMITER_THRESHOLD_DB,
     LIMITER_RATIO,
@@ -50,7 +41,7 @@ import {
 } from './constants.js';
 
 // ════════════════════════════════════════════════════════════════════
-//  Constants (remaining; the rest moved to ./audio/constants.js)
+//  Constants
 // ════════════════════════════════════════════════════════════════════
 
 const NUM_BUSES = 7;
@@ -76,9 +67,6 @@ const LAND_FULL_COVERAGE_THRESHOLD = 0.4;
  */
 const BASE_Q1 = 0.5176;
 const MAX_Q1 = 4.0;
-
-/** Resolution of equal-power fade curves. */
-const XF_CURVE_POINTS = 128;
 
 /** Exponent for gain power-curve shaping. Values < 1.0 stretch mid-high range differences. */
 const GAIN_CURVE_EXPONENT = 0.6;
@@ -138,42 +126,12 @@ let lpFilter3 = null;
 let duckGain = null;
 
 /**
- * @typedef {Object} LoopSlot
- * @property {AudioBufferSourceNode|null} source
- * @property {GainNode|null} gain
+ * Voice scheduler bound to this engine's audioCtx + bus gains. Built
+ * once inside ensureCtx() and never replaced; null only between module
+ * load and the first start() / ensureCtx() call.
+ * @type {import('./voice-scheduler.js').VoiceScheduler|null}
  */
-
-/**
- * @typedef {Object} BusLoopState
- * @property {LoopSlot[]} slots
- * @property {0|1} activeSlot
- */
-
-/** @returns {LoopSlot} */
-function createEmptyLoopSlot() {
-    return { source: null, gain: null };
-}
-
-/** @type {BusLoopState[]} */
-const busLoops = Array.from({ length: NUM_BUSES }, () => ({
-    slots: [createEmptyLoopSlot(), createEmptyLoopSlot()],
-    activeSlot: 0,
-}));
-
-/** Global loop cycle = min(buffer duration) - overlap. */
-let loopCycleSeconds = 0;
-
-/** Absolute AudioContext time for next global swap event. */
-let nextGlobalSwapTime = 0;
-
-/** AudioContext time anchor for the first voice start (used for drift-free scheduling). */
-let loopClockOrigin = 0;
-
-/** Number of completed swap cycles since loopClockOrigin. */
-let loopCycleCount = 0;
-
-/** @type {number|null} */
-let globalSwapTimerId = null;
+let scheduler = null;
 
 // ── EMA state ──
 // Targets / smoothed values for buses, coverage, proximity, velocity.
@@ -223,300 +181,8 @@ const bufferCache = createBufferCache({
     assetBase: ASSET_BASE,
     priorityFirst: [0, 6],
     prioritySecond: [1, 2, 3, 4, 5],
-    onAllLoaded: () => startAllSources(),
+    onAllLoaded: () => scheduler && scheduler.startAllSources(),
 });
-
-// Equal-power crossfade curves reduce perceived loudness dip at midpoint.
-const { fadeIn: FADE_IN_CURVE, fadeOut: FADE_OUT_CURVE } = equalPowerCurves(XF_CURVE_POINTS);
-
-// ════════════════════════════════════════════════════════════════════
-//  Helpers
-// ════════════════════════════════════════════════════════════════════
-
-/** @param {AudioBufferSourceNode|null} source @param {GainNode|null} gain */
-function disconnectVoice(source, gain) {
-    if (source) {
-        try {
-            source.disconnect();
-        } catch {
-            // noop
-        }
-    }
-    if (gain) {
-        try {
-            gain.disconnect();
-        } catch {
-            // noop
-        }
-    }
-}
-
-/** @param {LoopSlot} slot */
-function stopSlotImmediately(slot) {
-    const source = slot.source;
-    const gain = slot.gain;
-
-    slot.source = null;
-    slot.gain = null;
-
-    if (source) {
-        source.onended = null;
-        try {
-            source.stop();
-        } catch {
-            // noop
-        }
-    }
-
-    disconnectVoice(source, gain);
-}
-
-function clearGlobalSwapTimer() {
-    if (globalSwapTimerId !== null) {
-        clearTimeout(globalSwapTimerId);
-        globalSwapTimerId = null;
-    }
-}
-
-function clearLoopClockState() {
-    loopCycleSeconds = 0;
-    nextGlobalSwapTime = 0;
-    loopClockOrigin = 0;
-    loopCycleCount = 0;
-    clearGlobalSwapTimer();
-}
-
-/** @param {number} busIndex */
-function resetBusLoop(busIndex) {
-    const state = busLoops[busIndex];
-    stopSlotImmediately(state.slots[0]);
-    stopSlotImmediately(state.slots[1]);
-    state.slots[0] = createEmptyLoopSlot();
-    state.slots[1] = createEmptyLoopSlot();
-    state.activeSlot = 0;
-}
-
-function resetAllBusLoops() {
-    for (let i = 0; i < NUM_BUSES; i++) {
-        resetBusLoop(i);
-    }
-}
-
-/**
- * Create one one-shot voice for the given bus at an absolute start time.
- * @param {number} busIndex
- * @param {number} startTime
- * @param {number} [offsetSeconds=0]
- * @returns {LoopSlot|null}
- */
-function createVoice(busIndex, startTime, offsetSeconds = 0) {
-    const buffer = bufferCache.get(busIndex);
-    if (!audioCtx || !buffer || !gains[busIndex]) return null;
-
-    const source = audioCtx.createBufferSource();
-    const gain = audioCtx.createGain();
-
-    source.buffer = buffer;
-    source.connect(gain);
-    gain.connect(gains[busIndex]);
-
-    const maxOffset = Math.max(0, source.buffer.duration - 1e-3);
-    const safeOffset = Number.isFinite(offsetSeconds)
-        ? Math.max(0, Math.min(offsetSeconds, maxOffset))
-        : 0;
-    source.start(startTime, safeOffset);
-
-    return { source, gain };
-}
-
-/**
- * Compute global cycle length from decoded buffers.
- * Uses min(duration) for safety if files differ by a few samples.
- * @returns {number}
- */
-function computeLoopCycleSeconds() {
-    const durations = [];
-    for (let i = 0; i < NUM_BUSES; i++) {
-        const buffer = bufferCache.get(i);
-        if (buffer) durations.push(buffer.duration);
-    }
-    if (durations.length === 0) return 0;
-
-    const minDuration = Math.min(...durations);
-    const cycle = minDuration - LOOP_OVERLAP_SECONDS;
-    if (!(cycle > 0)) {
-        console.error('[audio/engine] Invalid loop cycle:', {
-            minDuration,
-            overlap: LOOP_OVERLAP_SECONDS,
-        });
-        return 0;
-    }
-    return cycle;
-}
-
-/**
- * Schedule cleanup of a voice after its fade-out window.
- * @param {AudioBufferSourceNode} source
- * @param {GainNode} gain
- * @param {number} stopTime
- */
-function scheduleVoiceStop(source, gain, stopTime) {
-    source.onended = () => {
-        disconnectVoice(source, gain);
-    };
-
-    try {
-        source.stop(stopTime);
-    } catch {
-        disconnectVoice(source, gain);
-    }
-}
-
-/**
- * Perform one bus-local crossfade at a shared global swap time.
- * @param {number} busIndex
- * @param {number} swapTime
- * @param {number} phaseDelaySeconds
- * @param {number} incomingOffsetSeconds
- */
-function swapBusVoice(busIndex, swapTime, phaseDelaySeconds, incomingOffsetSeconds) {
-    const state = busLoops[busIndex];
-    const outgoingIndex = state.activeSlot;
-    const incomingIndex = outgoingIndex === 0 ? 1 : 0;
-    const outgoing = state.slots[outgoingIndex];
-
-    // Defensive cleanup in case an old incoming slot wasn't released yet.
-    stopSlotImmediately(state.slots[incomingIndex]);
-
-    const incoming = createVoice(busIndex, swapTime, incomingOffsetSeconds);
-    const overlapRemaining = LOOP_OVERLAP_SECONDS - Math.max(0, phaseDelaySeconds);
-
-    if (outgoing.source && outgoing.gain && overlapRemaining > 1e-3) {
-        incoming.gain.gain.cancelScheduledValues(swapTime);
-        incoming.gain.gain.setValueAtTime(0, swapTime);
-        incoming.gain.gain.setValueCurveAtTime(FADE_IN_CURVE, swapTime, overlapRemaining);
-
-        outgoing.gain.gain.cancelScheduledValues(swapTime);
-        outgoing.gain.gain.setValueAtTime(1, swapTime);
-        outgoing.gain.gain.setValueCurveAtTime(FADE_OUT_CURVE, swapTime, overlapRemaining);
-
-        scheduleVoiceStop(
-            outgoing.source,
-            outgoing.gain,
-            swapTime + overlapRemaining + VOICE_STOP_GRACE_SECONDS
-        );
-    } else {
-        // Recovery path: overlap window missed (or outgoing unavailable).
-        incoming.gain.gain.cancelScheduledValues(swapTime);
-        incoming.gain.gain.setValueAtTime(1, swapTime);
-        if (outgoing.source && outgoing.gain) {
-            outgoing.gain.gain.cancelScheduledValues(swapTime);
-            outgoing.gain.gain.setValueAtTime(1, swapTime);
-            outgoing.gain.gain.linearRampToValueAtTime(0, swapTime + RECOVERY_FADE_SECONDS);
-            scheduleVoiceStop(
-                outgoing.source,
-                outgoing.gain,
-                swapTime + RECOVERY_FADE_SECONDS + VOICE_STOP_GRACE_SECONDS
-            );
-        }
-    }
-
-    state.slots[incomingIndex] = incoming;
-    state.slots[outgoingIndex] = createEmptyLoopSlot();
-    state.activeSlot = incomingIndex;
-}
-
-function scheduleGlobalSwap() {
-    clearGlobalSwapTimer();
-
-    if (!audioCtx || suspended) return;
-    if (!(loopCycleSeconds > 0) || !(nextGlobalSwapTime > 0)) return;
-
-    const delaySec = nextGlobalSwapTime - audioCtx.currentTime - LOOP_TIMER_LOOKAHEAD_SECONDS;
-    const delayMs = Math.max(0, delaySec * 1000);
-
-    globalSwapTimerId = setTimeout(() => {
-        globalSwapTimerId = null;
-        performGlobalSwap();
-    }, delayMs);
-}
-
-function performGlobalSwap() {
-    if (!audioCtx || suspended) return;
-    if (!(loopCycleSeconds > 0) || !(nextGlobalSwapTime > 0)) return;
-
-    const plannedSwapTime = nextGlobalSwapTime;
-    const now = audioCtx.currentTime;
-    const swapTime = plannedSwapTime >= now ? plannedSwapTime : now + LATE_SWAP_LOOKAHEAD_SECONDS;
-    const phaseDelaySeconds = Math.max(0, swapTime - plannedSwapTime);
-    const incomingOffsetSeconds = phaseDelaySeconds % loopCycleSeconds;
-
-    if (phaseDelaySeconds > SWAP_LATE_WARN_SECONDS) {
-        console.warn(
-            `[audio/engine] Late loop swap: ${(phaseDelaySeconds * 1000).toFixed(1)}ms behind`
-        );
-    }
-
-    for (let i = 0; i < NUM_BUSES; i++) {
-        if (bufferCache.has(i)) {
-            swapBusVoice(i, swapTime, phaseDelaySeconds, incomingOffsetSeconds);
-        }
-    }
-
-    // Use multiplication from a fixed origin instead of repeated addition
-    // to prevent floating-point drift over long sessions.
-    loopCycleCount++;
-    let nextPlannedSwapTime = loopClockOrigin + loopCycleCount * loopCycleSeconds;
-    const minFutureTime = audioCtx.currentTime + LOOP_TIMER_LOOKAHEAD_SECONDS;
-    while (nextPlannedSwapTime <= minFutureTime) {
-        loopCycleCount++;
-        nextPlannedSwapTime = loopClockOrigin + loopCycleCount * loopCycleSeconds;
-    }
-    nextGlobalSwapTime = nextPlannedSwapTime;
-    scheduleGlobalSwap();
-}
-
-function stopAllSources() {
-    clearLoopClockState();
-    resetAllBusLoops();
-}
-
-/**
- * Start one voice per decoded bus in lockstep, then run a global swap clock
- * that performs 1.875s overlap crossfades at each cycle boundary.
- */
-function startAllSources() {
-    if (!audioCtx) return;
-
-    stopAllSources();
-
-    const cycleSeconds = computeLoopCycleSeconds();
-    if (!(cycleSeconds > 0)) return;
-
-    const when = audioCtx.currentTime + LOOP_START_LOOKAHEAD_SECONDS;
-    let startedCount = 0;
-
-    for (let i = 0; i < NUM_BUSES; i++) {
-        if (!bufferCache.has(i)) continue;
-
-        const first = createVoice(i, when);
-        first.gain.gain.setValueAtTime(1, when);
-
-        const state = busLoops[i];
-        state.slots[0] = first;
-        state.slots[1] = createEmptyLoopSlot();
-        state.activeSlot = 0;
-        startedCount++;
-    }
-
-    if (startedCount === 0) return;
-
-    loopCycleSeconds = cycleSeconds;
-    loopClockOrigin = when;
-    loopCycleCount = 1;
-    nextGlobalSwapTime = when + cycleSeconds;
-    scheduleGlobalSwap();
-}
 
 // ════════════════════════════════════════════════════════════════════
 //  EMA Update (called from WS message handler)
@@ -546,7 +212,7 @@ function update(audioParams) {
     // Resume if the context is suspended while audio remains enabled.
     if (audioCtx.state === 'suspended' && !document.hidden) {
         audioCtx.resume();
-        scheduleGlobalSwap();
+        scheduler.scheduleGlobalSwap();
         startRaf();
     }
 
@@ -689,7 +355,7 @@ function rafLoop() {
     // Idle suspend: every EMA has converged within IDLE_THRESHOLD of its
     // target, so a continued rAF tick would re-write identical AudioParam
     // values — pure waste. Suspend `requestAnimationFrame` until update()
-    // / updateMotion() / handleVisibilityChange() / startAllSources()
+    // / updateMotion() / handleVisibilityChange() / scheduler.startAllSources()
     // wakes us. The startAllSources wake (re-armed via start()'s
     // post-loadAll startRaf) is essential: without it, a fresh-load
     // convergence-before-buffers race leaves the gain.value writes
@@ -734,7 +400,7 @@ function handleVisibilityChange() {
     if (!audioCtx) return;
 
     if (document.hidden) {
-        clearGlobalSwapTimer();
+        scheduler.clearGlobalSwapTimer();
         if (audioCtx.state === 'running') {
             audioCtx.suspend();
         }
@@ -746,7 +412,7 @@ function handleVisibilityChange() {
             snapEmaToTargets(ema);
             lastEmaTime = performance.now();
             startRaf();
-            scheduleGlobalSwap();
+            scheduler.scheduleGlobalSwap();
         }
     }
 }
@@ -756,21 +422,22 @@ function handleVisibilityChange() {
 // ════════════════════════════════════════════════════════════════════
 
 /**
- * Idempotently create the AudioContext + master chain. Safe to call
- * multiple times — second and later calls return the existing context
- * without rebuilding the graph. Must be invoked from a user gesture
- * on first call (browser autoplay policy).
+ * Idempotently create the AudioContext + master chain + voice scheduler.
+ * Safe to call multiple times — second and later calls return the
+ * existing context without rebuilding the graph. Must be invoked from a
+ * user gesture on first call (browser autoplay policy).
  *
  * Sibling modules under `frontend/audio/` call this helper to obtain
  * the singleton AudioContext, which is what makes the graph-build a
  * single point of truth across the package.
  *
  * Lifetime invariant: once this function returns, `audioCtx`,
- * `masterGain`, `duckGain`, `lpFilter1/2/3`, and every `gains[i]` are
- * non-null for the rest of the page lifetime. `stop()` only suspends
- * the context; node references are never reset to null. Hot-path
- * functions rely on this — once their `if (!audioCtx) return;` entry
- * guard clears, downstream chain nodes need no further null checks.
+ * `masterGain`, `duckGain`, `lpFilter1/2/3`, every `gains[i]`, and
+ * `scheduler` are non-null for the rest of the page lifetime. `stop()`
+ * only suspends the context; node references are never reset to null.
+ * Hot-path functions rely on this — once their `if (!audioCtx) return;`
+ * entry guard clears, downstream chain nodes need no further null
+ * checks.
  *
  * @returns {AudioContext}
  */
@@ -800,6 +467,13 @@ function ensureCtx() {
     for (let i = 0; i < NUM_BUSES; i++) {
         gains[i] = chain.busGains[i];
     }
+
+    scheduler = createVoiceScheduler({
+        audioCtx,
+        busGains: gains,
+        bufferCache,
+        isSuspended: () => suspended,
+    });
 
     return audioCtx;
 }
@@ -835,8 +509,9 @@ async function start() {
     // Replay the last audioParams that arrived before AudioContext existed.
     // This sets busTargets to the correct values for the current viewport so
     // the EMA smoothing can advance the gains while samples are still loading.
-    // By the time startAllSources() fires, gains will already be at (or near)
-    // the target levels — audio is audible immediately, no silent gap.
+    // By the time scheduler.startAllSources() fires, gains will already be
+    // at (or near) the target levels — audio is audible immediately, no
+    // silent gap.
     if (pendingParams) {
         update(pendingParams);
         pendingParams = null;
@@ -851,11 +526,11 @@ async function start() {
     // EMAs may have converged within IDLE_THRESHOLD and the rAF callback
     // suspended itself — but bufferCache.has(i) was still false, so the
     // per-bus gain.value writes never happened. By the time we reach this
-    // line, onAllLoaded → startAllSources() has already connected sources
-    // to busGains, so a single wake tick will write the converged
-    // gain.value through and audio becomes audible. Without this line,
-    // gain.value stays at the initial 0 forever and the seven ambience
-    // buses are silent until the user moves the map.
+    // line, onAllLoaded → scheduler.startAllSources() has already
+    // connected sources to busGains, so a single wake tick will write the
+    // converged gain.value through and audio becomes audible. Without
+    // this line, gain.value stays at the initial 0 forever and the seven
+    // ambience buses are silent until the user moves the map.
     startRaf();
 }
 
@@ -865,7 +540,7 @@ async function start() {
 async function stop() {
     suspended = true;
     cancelRaf();
-    stopAllSources();
+    if (scheduler) scheduler.stopAllSources();
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     bufferCache.cancelAndReset();
 
@@ -876,7 +551,7 @@ async function stop() {
 
 /**
  * Get current loading state for all buses.
- * @returns {import('./audio/buffer-cache.js').BusLoadingState[]}
+ * @returns {import('./buffer-cache.js').BusLoadingState[]}
  */
 function getLoadingStates() {
     return bufferCache.getStates();
@@ -884,7 +559,7 @@ function getLoadingStates() {
 
 /**
  * Register a callback for loading progress updates.
- * @param {((states: import('./audio/buffer-cache.js').BusLoadingState[]) => void) | null} callback
+ * @param {((states: import('./buffer-cache.js').BusLoadingState[]) => void) | null} callback
  */
 function setOnLoadingUpdate(callback) {
     bufferCache.setOnUpdate(callback);
@@ -900,50 +575,15 @@ function isRunning() {
  * @returns {{ progress: number, cycleSeconds: number } | null}
  */
 function getLoopProgress() {
-    if (!audioCtx || suspended || !(loopCycleSeconds > 0) || !(nextGlobalSwapTime > 0)) {
-        return null;
-    }
-    const elapsed = loopCycleSeconds - (nextGlobalSwapTime - audioCtx.currentTime);
-    const progress = clamp01(elapsed / loopCycleSeconds);
-    return { progress, cycleSeconds: loopCycleSeconds };
+    return scheduler ? scheduler.getLoopProgress() : null;
 }
 
 /**
  * Seek all buses to a position within the current loop cycle.
- * Stops all current voices and restarts them at the target buffer offset.
  * @param {number} progress - 0.0 to 1.0 position within the cycle
  */
 function seekLoop(progress) {
-    if (!audioCtx || suspended || !(loopCycleSeconds > 0)) return;
-
-    const normalizedProgress = clamp01(progress);
-    const targetOffset = normalizedProgress === 1 ? 0 : normalizedProgress * loopCycleSeconds;
-    const now = audioCtx.currentTime;
-    const startTime = now + LATE_SWAP_LOOKAHEAD_SECONDS;
-
-    clearGlobalSwapTimer();
-    resetAllBusLoops();
-
-    let startedCount = 0;
-    for (let i = 0; i < NUM_BUSES; i++) {
-        if (!bufferCache.has(i)) continue;
-
-        const voice = createVoice(i, startTime, targetOffset);
-        voice.gain.gain.setValueAtTime(1, startTime);
-
-        const state = busLoops[i];
-        state.slots[0] = voice;
-        state.slots[1] = createEmptyLoopSlot();
-        state.activeSlot = 0;
-        startedCount++;
-    }
-
-    if (startedCount === 0) return;
-
-    loopClockOrigin = startTime - targetOffset;
-    loopCycleCount = 1;
-    nextGlobalSwapTime = loopClockOrigin + loopCycleSeconds;
-    scheduleGlobalSwap();
+    if (scheduler) scheduler.seekLoop(progress);
 }
 
 /**

@@ -38,27 +38,33 @@ import { VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC } from './limb-vignette-shaders.
 import { mat4Multiply, mat4Invert } from './mat4.js';
 
 /**
- * Mask band in normalized globe-radius units. `[0.94, 1.0]` puts the
+ * Mask band in normalized globe-radius units. `[0.96, 1.0]` puts the
  * mask peak (alpha=1) exactly on the silhouette, where viewport-aligned
  * `grid-dots` circles compress hardest under spherical foreshortening.
- * Inner 0→1 ramp spans 0.94→1.0; outer 1→0 falloff spans 1.0→1.08
- * (width fixed at 0.08 in the fragment shader, sized to absorb the
- * dot-sprite radius that overshoots the silhouette in screen space).
+ * Inner 0→1 ramp spans 0.96→1.0; outer 1→0 falloff spans
+ * 1.0→1.0+`DEFAULT_OUTER_FADE` (default 0.02 — ~3–6× margin over the
+ * actual dot-sprite overshoot at globe-mode zoom levels; wider pads
+ * just blurred the silhouette boundary into the canvas background).
+ * Both inner band and outer fade are live-tunable via
+ * `__lv.tune({ band, outerFade })`.
  *
- * Why a 0.06-wide inner ramp (and not wider): the inner ramp also
- * thins out the dots inside the globe. Earlier `[0.85, 1.0]` fully
- * removed the rim ring but washed too far inward — the spherical
- * curvature of the globe became invisible against the light-theme
- * background. `[0.94, 1.0]` is the smallest inner span that still
- * peaks at α=1 on the silhouette while leaving a visible dot ring
- * just inside it that reads as the globe's outline.
+ * Why a 0.04-wide inner ramp (and not wider): the inner ramp also
+ * thins out the dots inside the globe. Earlier `[0.85, 1.0]` (tested
+ * first) fully removed the rim ring but washed too far inward — the
+ * spherical curvature became invisible against the light-theme
+ * background. `[0.94, 1.0]` was the first viable narrower default;
+ * `[0.96, 1.0]` shaves another 2% off the inner ramp, leaving more
+ * dots intact just inside the silhouette so the sphere outline reads
+ * even more clearly while peak alpha at `dNorm=1.0` still wipes out
+ * the dot pile-up.
  *
  * The original default `[0.92, 1.04]` placed the peak at `dNorm=1.04`
  * (outside the silhouette), leaving alpha ≈ 0.74 at `dNorm=1.0` — not
  * enough to fully erase the rim ring, visible as a darker arc on the
  * light theme at 1080p+.
  */
-const DEFAULT_BAND = [0.94, 1.0];
+const DEFAULT_BAND = [0.96, 1.0];
+const DEFAULT_OUTER_FADE = 0.02;
 
 /**
  * Mapbox's ECEF coordinate space is scaled to GLOBE_RADIUS (not a
@@ -101,6 +107,7 @@ export class LimbVignetteLayer {
 
         this._bgColor = new Float32Array([0, 0, 0]);
         this._band = DEFAULT_BAND.slice();
+        this._outerFade = DEFAULT_OUTER_FADE;
 
         this._gl = null;
         this._map = null;
@@ -129,6 +136,7 @@ export class LimbVignetteLayer {
             uGlobeRadiusEcef: gl.getUniformLocation(this._program, 'uGlobeRadiusEcef'),
             uTransition: gl.getUniformLocation(this._program, 'uTransition'),
             uBand: gl.getUniformLocation(this._program, 'uBand'),
+            uOuterFade: gl.getUniformLocation(this._program, 'uOuterFade'),
             uBgColor: gl.getUniformLocation(this._program, 'uBgColor'),
         };
 
@@ -169,6 +177,7 @@ export class LimbVignetteLayer {
         gl.uniform1f(u.uGlobeRadiusEcef, MAPBOX_GLOBE_RADIUS);
         gl.uniform1f(u.uTransition, transition || 0);
         gl.uniform2f(u.uBand, this._band[0], this._band[1]);
+        gl.uniform1f(u.uOuterFade, this._outerFade);
         gl.uniform3fv(u.uBgColor, this._bgColor);
 
         gl.enable(gl.BLEND);
@@ -194,16 +203,20 @@ export class LimbVignetteLayer {
     }
 
     /**
-     * Live-tune the mask band. Used by the DevTools `window.__lv.tune(...)`
-     * surface for fine-tuning the inner/outer edges. Unrecognized fields
-     * and malformed bands are silently ignored.
+     * Live-tune the mask. Used by the DevTools `window.__lv.tune(...)`
+     * surface for fine-tuning the inner band edges and the silhouette-
+     * outside fade width. Unrecognized fields and malformed values are
+     * silently ignored.
      *
-     * @param {{ band?: [number, number] }} patch
+     * @param {{ band?: [number, number], outerFade?: number }} patch
      */
     setTunables(patch) {
         if (!patch) return;
         if (Array.isArray(patch.band) && patch.band.length === 2) {
             this._band = patch.band.slice();
+        }
+        if (Number.isFinite(patch.outerFade) && patch.outerFade >= 0) {
+            this._outerFade = patch.outerFade;
         }
         if (this._map) this._map.triggerRepaint();
     }

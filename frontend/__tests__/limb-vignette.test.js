@@ -57,12 +57,23 @@ describe('LimbVignetteLayer', () => {
         expect(triggerRepaint).toHaveBeenCalledOnce();
     });
 
+    it('setTunables({ outerFade }) overrides the fade width and triggers a repaint', () => {
+        const layer = new LimbVignetteLayer();
+        const triggerRepaint = vi.fn();
+        layer._map = { triggerRepaint };
+        layer.setTunables({ outerFade: 0.05 });
+        expect(layer._outerFade).toBe(0.05);
+        expect(triggerRepaint).toHaveBeenCalledOnce();
+    });
+
     it('setTunables({}) is a safe no-op, leaves defaults intact', () => {
         const layer = new LimbVignetteLayer();
         layer._map = { triggerRepaint: vi.fn() };
         const bandBefore = layer._band.slice();
+        const outerBefore = layer._outerFade;
         expect(() => layer.setTunables({})).not.toThrow();
         expect(layer._band).toEqual(bandBefore);
+        expect(layer._outerFade).toBe(outerBefore);
     });
 
     it('setTunables ignores band patches that are not length-2 arrays', () => {
@@ -72,6 +83,16 @@ describe('LimbVignetteLayer', () => {
         layer.setTunables({ band: [0.9] });
         layer.setTunables({ band: 'nope' });
         expect(layer._band).toEqual(before);
+    });
+
+    it('setTunables ignores non-finite or negative outerFade patches', () => {
+        const layer = new LimbVignetteLayer();
+        layer._map = { triggerRepaint: vi.fn() };
+        const before = layer._outerFade;
+        layer.setTunables({ outerFade: 'wide' });
+        layer.setTunables({ outerFade: NaN });
+        layer.setTunables({ outerFade: -0.1 });
+        expect(layer._outerFade).toBe(before);
     });
 
     it('render() short-circuits in mercator mode (no globeToMercator arg)', () => {

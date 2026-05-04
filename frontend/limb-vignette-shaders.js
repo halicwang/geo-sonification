@@ -68,14 +68,19 @@ void main() {
  *
  * Mask band shape:
  *   inner edge (uBand.x → uBand.y): smoothstep 0 → 1.
- *   outer edge (uBand.y → uBand.y + 0.08): smoothstep 1 → 0.
+ *   outer edge (uBand.y → uBand.y + uOuterFade): smoothstep 1 → 0.
  *
  * `uBand.y` should be `1.0` so peak alpha lands on the silhouette,
- * where grid-dot density compresses hardest. The outer 0.08 pad
- * absorbs the dot-sprite radius that overshoots `dNorm > 1` (each
- * viewport-aligned circle extends ~`circle-radius` px past the
- * silhouette in screen space, falling into a normalized band whose
- * width grows with zoom-out).
+ * where grid-dot density compresses hardest. `uOuterFade` is the
+ * width of the silhouette-outside falloff. The default (~0.02) gives
+ * ~3–6× margin over the dot-sprite overshoot at globe-mode zoom levels
+ * (each viewport-aligned circle extends ~`circle-radius` px past the
+ * silhouette in screen space; at z<5 with the on-screen globe radius
+ * in the hundreds-to-thousands of px, the overshoot in normalized
+ * globe-radius units stays well under 0.005). Wider pads blur the
+ * silhouette boundary into the canvas background without absorbing
+ * any additional sprite area; live-tunable via
+ * `__lv.tune({ outerFade: x })`.
  *
  * `(1.0 − uTransition)` fades the mask out over the globe→mercator
  * transition (z ∈ [5, 6]) where the geometry stops being a sphere.
@@ -92,6 +97,7 @@ uniform vec2 uViewportPx;
 uniform float uGlobeRadiusEcef;
 uniform float uTransition;
 uniform vec2 uBand;
+uniform float uOuterFade;
 uniform vec3 uBgColor;
 
 out vec4 fragColor;
@@ -107,7 +113,7 @@ void main() {
     float dNorm = length(perp) / uGlobeRadiusEcef;
 
     float aIn = smoothstep(uBand.x, uBand.y, dNorm);
-    float aOut = 1.0 - smoothstep(uBand.y, uBand.y + 0.08, dNorm);
+    float aOut = 1.0 - smoothstep(uBand.y, uBand.y + uOuterFade, dNorm);
     float a = aIn * aOut * (1.0 - uTransition);
     if (a < 0.001) discard;
     fragColor = vec4(uBgColor * a, a);

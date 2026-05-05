@@ -73,7 +73,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         infoPanel: document.getElementById('info-panel'),
         panelToggle: document.getElementById('panel-toggle'),
         themeToggle: document.getElementById('theme-toggle'),
-        themeIcon: document.getElementById('theme-icon'),
     };
 
     getClientId();
@@ -189,12 +188,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // paint; applyTheme() is called once here as a safety net so the
     // module-scope cache (lastResolvedTheme) stays consistent with the dataset.
     const THEME_NEXT = { auto: 'light', light: 'dark', dark: 'auto' };
-    const THEME_ICON = { auto: '◐', light: '☀', dark: '☾' };
     const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
 
+    // Icon visuals are driven entirely by CSS selectors on
+    // <html data-theme-mode>, which applyTheme() keeps in sync. Here we only
+    // refresh the textual affordances (tooltip + aria-label) for a11y.
     function refreshThemeButton(mode) {
         if (!state.els.themeToggle) return;
-        state.els.themeIcon.textContent = THEME_ICON[mode];
         const next = THEME_LABEL[THEME_NEXT[mode]];
         state.els.themeToggle.title = `Theme: ${THEME_LABEL[mode]}`;
         state.els.themeToggle.setAttribute(

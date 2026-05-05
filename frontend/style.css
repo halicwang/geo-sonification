@@ -94,8 +94,14 @@
 /* Suppress every transition for one paint cycle when applyTheme() flips
    the theme. Without this, every panel/button color animates concurrently
    on toggle, which reads as a slow tinted flash. The attribute is removed
-   on the next double-rAF in config.js applyTheme(). */
-[data-theme-switching] *,
+   on the next double-rAF in config.js applyTheme().
+
+   `.theme-icon` is exempt: its rotate-and-fade is the user's confirmation
+   that the click registered, and it animates transform + opacity (not
+   color), so it is not part of the "tinted flash" the suppression
+   targets. Without the exemption, any cycle that also flips the resolved
+   theme would freeze the icon swap. */
+[data-theme-switching] *:not(.theme-icon),
 [data-theme-switching] *::before,
 [data-theme-switching] *::after {
     transition: none !important;
@@ -167,6 +173,41 @@ body {
 .floating-btn:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
+}
+
+/* Theme toggle: three SVGs are stacked at the button's center; the active
+   one (selected by data-theme-mode on <html>) fades and rotates in while
+   the others rotate-and-scale out. transform + opacity are
+   compositor-only, so this stays cheap regardless of how often the user
+   cycles. */
+.theme-toggle-btn {
+    position: relative;
+}
+
+.theme-icon {
+    position: absolute;
+    top: 10px; /* (40 - 20) / 2 — keeps SVG centered without relying on transform */
+    left: 10px;
+    opacity: 0;
+    transform: rotate(90deg) scale(0);
+    transform-origin: center;
+    transition:
+        transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.2s ease-out;
+    pointer-events: none; /* hidden icons must not steal the click */
+}
+
+:root[data-theme-mode='auto'] .theme-icon-auto,
+:root[data-theme-mode='light'] .theme-icon-light,
+:root[data-theme-mode='dark'] .theme-icon-dark {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .theme-icon {
+        transition: none;
+    }
 }
 
 .audio-btn-floating {

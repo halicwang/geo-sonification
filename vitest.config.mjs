@@ -25,6 +25,12 @@ export default defineConfig({
                 'frontend/map.js',
                 'frontend/popup.js',
                 'frontend/websocket.js',
+                // WebGL-bound modules — happy-dom has no real GL context,
+                // so coverage on these is meaningless. Plumbing is unit
+                // tested via mocked gl in hover-glow.test.js; visual
+                // correctness is integration tested in the dev preview.
+                'frontend/hover-glow-layer.js',
+                'frontend/hover-glow-shaders.js',
             ],
         },
     },

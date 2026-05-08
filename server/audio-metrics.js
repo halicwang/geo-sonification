@@ -43,33 +43,6 @@ function getLcFractionsFromDistribution(distribution) {
 }
 
 /**
- * Proximity mapping from visible grid count.
- * - gridCount===0 => 0 (forced distant mode for no-data/ocean-only views)
- * - gridCount<=lower => 1
- * - gridCount>=upper => 0
- * - linear interpolation between
- *
- * @param {number} gridCount
- * @param {number} lower - Threshold for fully proximate
- * @param {number} upper - Threshold for fully distant
- * @returns {number} 0-1
- */
-function computeProximityFromGridCount(gridCount, lower, upper) {
-    const count = Number.isFinite(gridCount) ? Math.max(0, gridCount) : 0;
-    if (count === 0) return 0;
-
-    const low = Number.isFinite(lower) ? lower : 50;
-    const high = Number.isFinite(upper) ? upper : 800;
-
-    if (low >= high) {
-        return count <= low ? 1 : 0;
-    }
-    if (count <= low) return 1;
-    if (count >= high) return 0;
-    return clamp01((high - count) / (high - low));
-}
-
-/**
  * Proximity mapping from zoom level.
  * - zoom >= zoomHigh => 1 (fully zoomed in — land detail mode)
  * - zoom <= zoomLow  => 0 (fully zoomed out — ocean/distant mode)
@@ -111,17 +84,8 @@ function normalizeLcArray(values) {
  * @returns {import('./types').Snapshot|null}
  */
 function normalizeSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== 'object') return null;
-    if (!Array.isArray(snapshot.lcFractions)) return null;
+    if (!snapshot || !Array.isArray(snapshot.lcFractions)) return null;
     return { lcFractions: normalizeLcArray(snapshot.lcFractions) };
-}
-
-/**
- * Create a zero-delta result (no change).
- * @returns {{ deltaLc: number[] }}
- */
-function createZeroDelta() {
-    return { deltaLc: LC_CLASS_ORDER.map(() => 0) };
 }
 
 /**
@@ -137,7 +101,7 @@ function computeDeltaMetrics(currentLcFractions, previousSnapshot) {
     const prev = normalizeSnapshot(previousSnapshot);
     if (!prev) {
         return {
-            ...createZeroDelta(),
+            deltaLc: LC_CLASS_ORDER.map(() => 0),
             snapshot: { lcFractions: current },
         };
     }
@@ -215,9 +179,7 @@ module.exports = {
     LC_CLASS_ORDER,
     clamp01,
     getLcFractionsFromDistribution,
-    computeProximityFromGridCount,
     computeProximityFromZoom,
-    createZeroDelta,
     computeDeltaMetrics,
     BUS_NAMES,
     BUS_LC_INDICES,

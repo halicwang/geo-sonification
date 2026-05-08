@@ -10,10 +10,39 @@
  * @module frontend/map
  */
 
-import { state, ASSET_BASE, VIEWPORT_DEBOUNCE, getClientId } from './config.js';
-import { updateUI, showToast } from './ui.js';
+import {
+    state,
+    ASSET_BASE,
+    VIEWPORT_DEBOUNCE,
+    getClientId,
+    applyServerConfig,
+    GRID_FEATURE_STATE_SOURCE,
+    GRID_FEATURE_STATE_SOURCE_LAYER,
+    getResolvedTheme,
+    subscribeTheme,
+} from './config.js';
 import { engine } from './audio/engine.js';
 import { attachPopup } from './popup.js';
+import { initHoverGlow } from './hover-glow.js';
+import { LimbVignetteLayer } from './limb-vignette-layer.js';
+
+/**
+ * UI-side callbacks supplied by `main.js` so this module never reaches
+ * directly into `ui.js`. Set in `initMap`; both fields are required.
+ *
+ * @typedef {Object} MapCallbacks
+ * @property {(stats: Object) => void} onStats - Receives every stats
+ *   payload from `/api/viewport` (HTTP fallback) so main.js can fan it out
+ *   to `updateUI` and the audio engine. The WebSocket path bypasses map.js
+ *   entirely and goes through `connectWebSocket`'s own `onStats` callback,
+ *   so reusing the same handler in both paths keeps fan-out consistent.
+ * @property {(message: string, durationMs?: number) => void} onToast -
+ *   Surfaces user-facing notifications (currently only the
+ *   PMTiles-load-failed warning).
+ */
+
+/** @type {MapCallbacks|null} */
+let mapCallbacks = null;
 
 // ============ Motion Tracking ============
 
@@ -24,13 +53,56 @@ let prevCenterLat = 0;
 let prevCenterLon = 0;
 let prevMoveTime = 0;
 
+// ============ DOM Memo ============
+
+/** Last value written to #zoom-level so successive `move` events skip no-op DOM writes. */
+let lastZoomText = '';
+
 // ============ Grid Overlay ============
 
 /** Layer id for the per-grid dot overlay. */
 const GRID_DOT_LAYER = 'grid-dots';
 
-/** Fixed neutral grey for the dot overlay (landcover is surfaced in popups, not colors). */
-const DOT_COLOR = '#606060';
+/**
+ * Mapbox layer paint per resolved theme. The light value is used for the
+ * inline minimal-style background-color so cold loads under a light OS
+ * theme don't flash black before the canvas renders. circle-stroke-color
+ * flips polarity so the per-dot edge stays visible against either
+ * background. The dot fill is also theme-tuned: `#606060` reads as a
+ * solid mid-grey on black, but on the light `#f7f7f8` canvas it skews
+ * toward black; `#a5a5a5` reads as a softer neutral grey there without
+ * over-emphasizing the dot grid against the white panel chrome.
+ *
+ * Mapbox style specs cannot read CSS custom properties, so the values
+ * are duplicated here; they're kept in sync with style.css `:root`
+ * tokens by manual review.
+ */
+const MAP_THEME = {
+    dark: {
+        background: '#000',
+        dot: '#606060',
+        circleStroke: 'rgba(255, 255, 255, 0.18)',
+    },
+    light: {
+        background: '#f7f7f8',
+        dot: '#a5a5a5',
+        circleStroke: 'rgba(0, 0, 0, 0.18)',
+    },
+};
+
+/**
+ * Parse `#rrggbb` (with or without the leading `#`) or the 4-char
+ * shorthand `#rgb` into a 0..1-normalized [r, g, b] tuple. Used to feed
+ * `MAP_THEME[*].background` into the limb-vignette shader's `uBgColor`
+ * uniform — keeps `MAP_THEME` as the single source of truth instead of
+ * duplicating the same hex into a parallel rgb dict.
+ */
+function hexToRgb01(hex) {
+    let s = hex.startsWith('#') ? hex.slice(1) : hex;
+    if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    const n = parseInt(s, 16);
+    return [((n >> 16) & 0xff) / 255, ((n >> 8) & 0xff) / 255, (n & 0xff) / 255];
+}
 
 /**
  * Per-zoom stroke width for the dot layer. Pulled out as a module-level
@@ -65,7 +137,7 @@ async function addGridLayer() {
 
     const header = await mapboxPmTiles.PmTilesSource.getHeader(PMTILES_URL);
 
-    state.runtime.map.addSource('grid-source', {
+    state.runtime.map.addSource(GRID_FEATURE_STATE_SOURCE, {
         type: mapboxPmTiles.PmTilesSource.SOURCE_TYPE,
         url: PMTILES_URL,
         minzoom: header.minZoom,
@@ -79,13 +151,18 @@ async function addGridLayer() {
     state.runtime.map.addLayer({
         id: GRID_DOT_LAYER,
         type: 'circle',
-        source: 'grid-source',
-        'source-layer': 'grids',
+        source: GRID_FEATURE_STATE_SOURCE,
+        'source-layer': GRID_FEATURE_STATE_SOURCE_LAYER,
         paint: {
-            'circle-color': DOT_COLOR,
+            // Theme-tuned grey baseline. The cursor halo is painted as
+            // an additive white overlay by the hover-glow custom WebGL
+            // layer (frontend/hover-glow-layer.js) above this layer
+            // — circle-color no longer reads feature-state, and
+            // hover-glow.js no longer writes setFeatureState.
+            'circle-color': MAP_THEME[getResolvedTheme()].dot,
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
-            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
-            'circle-stroke-color': 'rgba(255, 255, 255, 0.18)',
+            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.6, 5, 0.68, 8, 0.75],
+            'circle-stroke-color': MAP_THEME[getResolvedTheme()].circleStroke,
             'circle-stroke-width': STROKE_WIDTH_BY_ZOOM,
             'circle-stroke-opacity': 0.8,
             'circle-blur': 0,
@@ -181,11 +258,7 @@ async function sendViewportHTTP(bounds) {
             );
             return;
         }
-        const stats = await response.json();
-        updateUI(stats);
-        if (stats.audioParams) {
-            engine.update(stats.audioParams);
-        }
+        mapCallbacks.onStats(await response.json());
     } catch (err) {
         console.error('HTTP viewport update failed:', err);
     }
@@ -202,20 +275,7 @@ export async function refreshServerConfig() {
     try {
         const response = await fetch(`${state.config.apiBase}/api/config`);
         if (!response.ok) return;
-        const config = await response.json();
-
-        if (config.gridSize && Number.isFinite(config.gridSize) && config.gridSize > 0) {
-            state.config.gridSize = config.gridSize;
-        }
-        if (config.landcoverMeta) {
-            state.config.landcoverMeta = config.landcoverMeta;
-        }
-        if (Number.isFinite(config.proximityZoomLow)) {
-            state.config.proximityZoomLow = config.proximityZoomLow;
-        }
-        if (Number.isFinite(config.proximityZoomHigh)) {
-            state.config.proximityZoomHigh = config.proximityZoomHigh;
-        }
+        applyServerConfig(await response.json());
         engine.setProximityThresholds(
             state.config.proximityZoomLow,
             state.config.proximityZoomHigh
@@ -227,18 +287,24 @@ export async function refreshServerConfig() {
 
 // ============ Map Initialization ============
 
-/** Create the Mapbox GL map, add controls, grid overlay, and event listeners. */
-export function initMap() {
+/**
+ * Create the Mapbox GL map, add controls, grid overlay, and event listeners.
+ *
+ * @param {MapCallbacks} callbacks - UI fan-out callbacks; required.
+ */
+export function initMap(callbacks) {
+    mapCallbacks = callbacks;
     mapboxgl.accessToken = state.config.mapboxToken;
 
-    // Inline minimal v8 style — single black background layer, no
+    // Inline minimal v8 style — single background layer, no
     // sources/sprite/glyphs. Used to be 'mapbox://styles/mapbox/dark-v10'
     // immediately stripped to black by an applyMinimalBasemap pass on
     // style.load, but the dark-v10 fetch left a visible navy-blue
     // (#08111f) flash on cold loads while the style.json + sprite were
-    // in flight. Inlining removes the CDN round-trip and renders a
-    // black canvas from the very first frame; the dot overlay layer is
-    // added in our own style.load handler below.
+    // in flight. Inlining removes the CDN round-trip and renders the
+    // canvas in the resolved theme color from the very first frame;
+    // the dot overlay layer is added in our own style.load handler below.
+    const initialBackground = MAP_THEME[getResolvedTheme()].background;
     state.runtime.map = new mapboxgl.Map({
         container: 'map',
         style: {
@@ -248,19 +314,21 @@ export function initMap() {
                 {
                     id: 'background',
                     type: 'background',
-                    paint: { 'background-color': '#000' },
+                    paint: { 'background-color': initialBackground },
                 },
             ],
         },
         projection: 'globe',
-        center: [-55, -10], // Amazon region
-        zoom: 4,
-        minZoom: 2,
+        center: [19.5, 21.75], // midpoint of Libya-Chad border
+        zoom: 2.5,
+        minZoom: 2.5,
         maxZoom: 12,
     });
 
-    state.runtime.map.addControl(new mapboxgl.NavigationControl(), 'top-left');
-    state.runtime.map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
+    // NavigationControl (zoom +/- + compass reset) and ScaleControl (km
+    // ruler) intentionally omitted — the floating play / hamburger top-right
+    // and pinch-zoom + scroll-wheel + double-tap cover all needed map
+    // interactions, and removing the controls keeps the canvas chrome-free.
 
     // Using 'style.load' rather than 'load' — keeps the setup path
     // generic in case the inline style is ever swapped for a remote one.
@@ -298,16 +366,69 @@ export function initMap() {
                 'Grid layer failed to load (PMTiles missing?), continuing without overlay:',
                 err
             );
-            showToast(
+            mapCallbacks.onToast(
                 'Grid tiles failed to load \u2014 run npm run build:tiles to regenerate.',
                 8000
             );
         }
 
+        // Limb-vignette neutralizes the rim ring caused by spherical
+        // foreshortening of the viewport-aligned `grid-dots` circles.
+        // Painted above grid-dots, below hover-glow so the cursor halo
+        // still floats above the mask. No-op in mercator (z>=5).
+        const limbVignette = new LimbVignetteLayer();
+        limbVignette.setBgColor(hexToRgb01(MAP_THEME[getResolvedTheme()].background));
+        state.runtime.map.addLayer(limbVignette);
+        state.runtime.limbVignette = limbVignette;
+
+        // Repaint the basemap background, dot stroke, and limb-vignette mask
+        // whenever the user toggles theme or the OS prefers-color-scheme flips
+        // while in auto. Guarded against re-entry from a partial addGridLayer()
+        // failure: background always exists (inline style), but the dot layer
+        // and limb-vignette layer may not.
+        subscribeTheme((resolved) => {
+            const palette = MAP_THEME[resolved] || MAP_THEME.dark;
+            const map = state.runtime.map;
+            if (!map) return;
+            if (map.getLayer('background')) {
+                map.setPaintProperty('background', 'background-color', palette.background);
+            }
+            if (map.getLayer(GRID_DOT_LAYER)) {
+                map.setPaintProperty(GRID_DOT_LAYER, 'circle-color', palette.dot);
+                map.setPaintProperty(GRID_DOT_LAYER, 'circle-stroke-color', palette.circleStroke);
+            }
+            if (state.runtime.limbVignette) {
+                state.runtime.limbVignette.setBgColor(hexToRgb01(palette.background));
+            }
+        });
+
+        // Debug surface for live calibration of the mask band. Patch via
+        // `window.__lv.tune({ band: [a, b] })` from DevTools \u2014 the
+        // change takes effect on the very next render. Mirrors the pattern
+        // used by `window.__hg` in hover-glow.js. The earlier screen-space
+        // implementation also accepted `radiusStops`; the ray-sphere fix
+        // dropped that knob since the silhouette test is geometrically exact.
+        if (typeof window !== 'undefined') {
+            window.__lv = {
+                layer: limbVignette,
+                tune: (patch) => limbVignette.setTunables(patch),
+            };
+        }
+
+        // Hover glow loads its own sidecar. Failure is non-fatal \u2014 the
+        // module logs a warning and the dot layer keeps rendering at
+        // its rest grey. Wired here (after addGridLayer) so the source
+        // and layer exist by the time the GPU custom layer registers.
+        initHoverGlow(state.runtime.map);
+
         state.runtime.map.on('move', () => {
             const zoom = state.runtime.map.getZoom();
             if (state.els.zoomLevel) {
-                state.els.zoomLevel.textContent = zoom.toFixed(2);
+                const zoomText = zoom.toFixed(2);
+                if (zoomText !== lastZoomText) {
+                    lastZoomText = zoomText;
+                    state.els.zoomLevel.textContent = zoomText;
+                }
             }
             // Drive the low-pass filter cutoff locally from the live
             // zoom — bypasses WS round-trip and viewport debounce so
@@ -340,7 +461,9 @@ export function initMap() {
         });
 
         if (state.els.zoomLevel) {
-            state.els.zoomLevel.textContent = state.runtime.map.getZoom().toFixed(2);
+            const zoomText = state.runtime.map.getZoom().toFixed(2);
+            lastZoomText = zoomText;
+            state.els.zoomLevel.textContent = zoomText;
         }
         onViewportChange();
 

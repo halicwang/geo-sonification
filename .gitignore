@@ -27,10 +27,11 @@ sonification/
 frontend/audio/ambience/*.wav
 frontend/audio/ambience/*.opus
 
-# AI agent config (local-only)
+# AI agent session/cache data (local-only)
 .claude/
-AGENTS.md
-CLAUDE.md
+
+# CLAUDE.md and AGENTS.md are tracked as project-level agent guidance —
+# personal preferences belong in the global ~/.claude/CLAUDE.md instead.
 
 # Deploy-time secrets + build output
 .env.deploy

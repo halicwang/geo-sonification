@@ -57,7 +57,7 @@ export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
  * @typedef {Object} StateRuntime
  * Live instances and transient per-session values. Ownership of writes:
  * `clientId` ← config.js, `ws` / `wsReconnectDelay` ← websocket.js,
- * `map` / `debounceTimer` / `lastViewportSend` ← map.js,
+ * `map` / `debounceTimer` / `lastViewportSend` / `limbVignette` ← map.js,
  * `audioEnabled` ← main.js.
  * @property {WebSocket|null} ws - Active WebSocket; null between connections.
  * @property {import('mapbox-gl').Map|null} map - Mapbox GL instance once
@@ -72,6 +72,9 @@ export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
  *   doubles per failed retry, resets on a successful open.
  * @property {boolean} audioEnabled - Toggled by the user via the start
  *   button; gates `engine.start()` / `engine.stop()`.
+ * @property {import('./limb-vignette-layer.js').LimbVignetteLayer} [limbVignette] -
+ *   Globe-rim mask layer instance; set by map.js after `addGridLayer()`
+ *   so subscribeTheme() can repaint the mask color on theme flips.
  */
 
 /**
@@ -135,6 +138,133 @@ export const WS_RECONNECT_MAX = 30000;
  */
 export const STALE_GRACE_MS = 5000;
 
+// ============ Grid layer identifiers ============
+//
+// Source id and source-layer name for the PMTiles grid dot layer.
+// frontend/map.js declares the source/layer with these names, and
+// frontend/hover-glow.js writes feature-state against the same pair.
+// Keeping them in one place avoids the silent-failure mode where the
+// pair drifts between the two files and setFeatureState targets a
+// non-existent layer.
+
+/** Mapbox source id for the PMTiles grid dot layer. */
+export const GRID_FEATURE_STATE_SOURCE = 'grid-source';
+
+/** Vector tile layer name inside the PMTiles archive. */
+export const GRID_FEATURE_STATE_SOURCE_LAYER = 'grids';
+
+/**
+ * Per-zoom dot radius in CSS pixels for the grey grid-dots circle layer
+ * and the hover-glow GPU overlay. The custom WebGL layer multiplies
+ * this by `2 × HOVER_GLOW_HALO_SCALE × devicePixelRatio` to derive
+ * `gl_PointSize` for the additive halo. Kept in lockstep with the
+ * `circle-radius` paint stops in `frontend/map.js`.
+ */
+export const GRID_DOT_RADIUS_BY_ZOOM = [
+    [2, 1.1],
+    [5, 2.8],
+    [8, 4.9],
+    [12, 8.2],
+];
+
+// ============ Hover-glow tunables ============
+//
+// Consumed by frontend/hover-glow.js. Live-overridable in DevTools via
+// `window.__hg.tune({ rByZoom: [...], borderFalloff: [...], ... })`.
+
+/**
+ * Cursor falloff radius in km, by zoom level. Linear-interpolated
+ * between breakpoints. Visual size on screen stays roughly constant
+ * across zooms — at zoom 2 we paint ~1000 km (small on screen), at
+ * zoom 10 we paint ~320 km (large on screen).
+ *
+ * The curve was widened from `[600, 350, 250, 180]` after
+ * `HOVER_GLOW_BORDER_FALLOFF` tightened from 250 km to 40 km — with
+ * the narrower border band, the visible "presence" of the lit tube
+ * along a coast/border was much shorter than before, so the cursor
+ * radius needed to grow roughly to compensate.
+ */
+export const HOVER_GLOW_R_KM_BY_ZOOM = [
+    [2, 1000],
+    [5, 600],
+    [7, 450],
+    [10, 320],
+];
+
+/**
+ * Border-distance penalty curve: cells far from any border cap glow
+ * to zero, regardless of how close the cursor is. Hermite-blended
+ * between breakpoints (C¹-continuous, no sharp transitions).
+ *
+ * GRID_SIZE = 0.5° ≈ 55 km cell spacing at the equator. Cells whose
+ * centroid is within ~28 km of a border are the ones the border line
+ * actually passes through; cells in the next ring out are 28-83 km
+ * away. To paint the border as a *single row of dots* (not a 3-row
+ * swath), the curve drops to ~0 by ~35 km — only the
+ * border-passing-through row qualifies.
+ *
+ *   1.0 @ 0 km, 0.7 @ 15 km, 0.1 @ 30 km, 0 @ 40 km+
+ */
+export const HOVER_GLOW_BORDER_FALLOFF = [
+    [0, 1.0],
+    [15, 0.7],
+    [30, 0.1],
+    [40, 0.0],
+];
+
+/**
+ * Minimum glow value to bother painting. Below this the pixel
+ * difference is invisible; the GPU fragment shader `discard`s.
+ */
+export const HOVER_GLOW_EPS = 0.005;
+
+/**
+ * Cursor-only floor on the border-distance penalty. Cells inside the
+ * cursor radius but far from any border still receive `cursorFactor *
+ * cursorFloor` instead of zero, so the cursor leaves a soft white trail
+ * even over the open ocean or a deep continental interior. Border-near
+ * cells continue to ride `borderFactor` up to its cap; the per-cell
+ * formula is `cursorFactor × min(1, borderFactor + cursorFloor)`.
+ *
+ * Additive (not max) blending keeps the Hermite border curve
+ * C¹-continuous — `max(bf, floor)` would introduce a visible kink at
+ * the crossover point (~30 km from a border), which the M6 P1 design
+ * explicitly avoids.
+ *
+ * The dot color paint expression in `frontend/map.js` interpolates
+ * `#606060 → #FFFFFF` via `cubic-bezier(0.4, 0, 0.2, 1)`. The bezier
+ * starts shallow, so linear changes in `cursorFloor` produce non-linear
+ * visual changes — `0.25` lifts brightness ≈13%, `0.40` ≈25%.
+ *
+ * Recommended live-tune range `[0, 0.5]`. Set to `0` to disable the
+ * cursor halo and recover legacy "border-only" behavior.
+ */
+export const HOVER_GLOW_CURSOR_FLOOR = 0.25;
+
+/**
+ * Per-zoom multiplier on the dot radius to derive the glow halo
+ * footprint (`gl_PointSize` in CSS pixels, before DPR scaling).
+ * Linear-interpolated between breakpoints by the GPU layer.
+ *
+ * A constant multiplier across zooms looks "thick" at low zoom: the
+ * halo grows linearly with the dot, but the dot **spacing** in
+ * screen pixels collapses much faster than the dot grows, so each
+ * cell's halo overlaps several neighbours and the cursor area
+ * becomes a uniform fog. Conversely at high zoom the dots are far
+ * apart and a wide halo per dot reads as a soft, well-defined
+ * glow. A small zoom curve keeps the halo dot-hugging when zoomed
+ * out and lets it bloom when zoomed in.
+ *
+ * Live-tunable in DevTools via `__hg.tune({ haloScale: [...] })`,
+ * either as a number (legacy single multiplier) or a stops table.
+ */
+export const HOVER_GLOW_HALO_SCALE_BY_ZOOM = [
+    [2, 1.5],
+    [5, 1.8],
+    [8, 2.2],
+    [12, 2.8],
+];
+
 const CLIENT_ID_STORAGE_KEY = 'GEO_SONIFICATION_CLIENT_ID';
 
 // ============ Mapbox Token ============
@@ -183,6 +313,27 @@ export function buildWsUrl() {
 
 // ============ Server Config ============
 
+/**
+ * Merge a `/api/config` response into `state.config`, applying
+ * `Number.isFinite` guards on every numeric field. Shared by the boot-time
+ * `loadServerConfig()` here and the post-reconnect `refreshServerConfig()`
+ * in `frontend/map.js` so the two paths cannot drift.
+ */
+export function applyServerConfig(parsed) {
+    if (Number.isFinite(parsed.gridSize) && parsed.gridSize > 0) {
+        state.config.gridSize = parsed.gridSize;
+    }
+    if (parsed.landcoverMeta) {
+        state.config.landcoverMeta = parsed.landcoverMeta;
+    }
+    if (Number.isFinite(parsed.proximityZoomLow)) {
+        state.config.proximityZoomLow = parsed.proximityZoomLow;
+    }
+    if (Number.isFinite(parsed.proximityZoomHigh)) {
+        state.config.proximityZoomHigh = parsed.proximityZoomHigh;
+    }
+}
+
 /** Fetch grid size and landcover metadata from the server. */
 export async function loadServerConfig() {
     try {
@@ -191,19 +342,7 @@ export async function loadServerConfig() {
             console.warn(`Server config endpoint returned ${response.status}, using fallback`);
             return;
         }
-        const config = await response.json();
-        if (Number.isFinite(config.gridSize) && config.gridSize > 0) {
-            state.config.gridSize = config.gridSize;
-        }
-        if (config.landcoverMeta) {
-            state.config.landcoverMeta = config.landcoverMeta;
-        }
-        if (Number.isFinite(config.proximityZoomLow)) {
-            state.config.proximityZoomLow = config.proximityZoomLow;
-        }
-        if (Number.isFinite(config.proximityZoomHigh)) {
-            state.config.proximityZoomHigh = config.proximityZoomHigh;
-        }
+        applyServerConfig(await response.json());
     } catch (err) {
         console.warn('Failed to load server config, using defaults:', err);
     }
@@ -262,4 +401,139 @@ export function getLoudnessNormEnabled() {
     } catch {
         return true;
     }
+}
+
+// ============ Theme (Light / Dark / Auto) ============
+//
+// User-facing preference for the visual theme. Three modes:
+//   'auto'  — follow the OS preference via prefers-color-scheme.
+//   'light' — explicit light theme regardless of OS.
+//   'dark'  — explicit dark theme regardless of OS.
+// Default is 'auto'. The resolved theme ('light' | 'dark') is written to
+// `document.documentElement.dataset.theme` so the [data-theme="light"]
+// CSS rules in style.css swap the color tokens. The raw mode is mirrored
+// to `dataset.themeMode` so the toggle button can render the correct icon
+// without re-reading localStorage.
+//
+// To prevent FOUC on cold load, an inline script in index.html duplicates
+// this resolution before the first paint. main.js calls applyTheme() once
+// after DOMContentLoaded as a safety net and re-applies after every user
+// click on the toggle.
+
+const THEME_STORAGE_KEY = 'GEO_SONIFICATION_THEME';
+const THEME_MODES = new Set(['auto', 'light', 'dark']);
+const themeSubscribers = new Set();
+let themeMql = null;
+let lastResolvedTheme = null;
+
+function getThemeMql() {
+    if (themeMql) return themeMql;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+        return null;
+    }
+    themeMql = window.matchMedia('(prefers-color-scheme: light)');
+    // Single module-scope listener: re-resolves on system preference change
+    // and notifies subscribers, but only when the user's mode is 'auto'.
+    // Manual mode flips already drive applyTheme() directly.
+    const onSystemChange = () => {
+        if (getThemeMode() !== 'auto') return;
+        applyTheme();
+    };
+    if (typeof themeMql.addEventListener === 'function') {
+        themeMql.addEventListener('change', onSystemChange);
+    } else if (typeof themeMql.addListener === 'function') {
+        // Safari < 14 fallback.
+        themeMql.addListener(onSystemChange);
+    }
+    return themeMql;
+}
+
+/**
+ * Read the user's theme preference. Returns 'auto' | 'light' | 'dark'.
+ * Defaults to 'auto' when storage is unreadable or holds an unknown value.
+ */
+export function getThemeMode() {
+    try {
+        const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+        return THEME_MODES.has(stored) ? stored : 'auto';
+    } catch {
+        return 'auto';
+    }
+}
+
+/** Persist the user's theme mode. Silently no-ops on unknown modes or unavailable storage. */
+export function setThemeMode(mode) {
+    if (!THEME_MODES.has(mode)) return;
+    try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch {
+        // localStorage unavailable (e.g. private mode, quota): nothing to
+        // persist. getThemeMode() will keep returning the previous value
+        // (or 'auto' default), and main.js's click handler reads the mode
+        // back from storage so the toggle reflects the actually-stored
+        // state instead of the optimistic intended-but-unwritten value.
+    }
+}
+
+/** Resolve the user's mode against the OS preference. Returns 'light' | 'dark'. */
+export function getResolvedTheme() {
+    const mode = getThemeMode();
+    if (mode === 'light' || mode === 'dark') return mode;
+    const mql = getThemeMql();
+    return mql && mql.matches ? 'light' : 'dark';
+}
+
+/**
+ * Apply the resolved theme to <html>:
+ *   - dataset.theme     = 'light' | 'dark'   (drives the CSS variable swap)
+ *   - dataset.themeMode = 'auto'  | 'light' | 'dark' (drives the toggle icon)
+ *
+ * When the resolved value changes, briefly sets a `data-theme-switching`
+ * attribute across one paint frame so transitions on body/buttons/panels
+ * do not animate every color when the user flips the mode. Subscribers
+ * are notified after the dataset is written.
+ */
+export function applyTheme() {
+    if (typeof document === 'undefined' || !document.documentElement) return;
+    const root = document.documentElement;
+    const mode = getThemeMode();
+    const resolved = getResolvedTheme();
+    const changed = resolved !== lastResolvedTheme;
+    lastResolvedTheme = resolved;
+    root.dataset.theme = resolved;
+    root.dataset.themeMode = mode;
+    if (changed) {
+        root.setAttribute('data-theme-switching', '');
+        // Two rAFs: the first lets the browser commit the new dataset under
+        // the suppression class; the second removes it so subsequent UI
+        // animations (audio button active flash, panel slide) behave normally.
+        const raf =
+            typeof requestAnimationFrame === 'function'
+                ? requestAnimationFrame
+                : (cb) => setTimeout(cb, 0);
+        raf(() => raf(() => root.removeAttribute('data-theme-switching')));
+        themeSubscribers.forEach((cb) => {
+            try {
+                cb(resolved, mode);
+            } catch (err) {
+                console.error('theme subscriber threw:', err);
+            }
+        });
+    }
+}
+
+/**
+ * Subscribe to resolved-theme changes. The callback is invoked with
+ * (resolved, mode) whenever applyTheme() detects a transition, including
+ * the very first apply and OS prefers-color-scheme flips while in 'auto'.
+ * Returns an unsubscribe function.
+ */
+export function subscribeTheme(cb) {
+    if (typeof cb !== 'function') return () => {};
+    themeSubscribers.add(cb);
+    // Side effect: ensure the matchMedia listener is wired so auto-mode
+    // users get system-flip notifications even before applyTheme() is
+    // first called by main.js.
+    getThemeMql();
+    return () => themeSubscribers.delete(cb);
 }

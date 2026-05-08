@@ -29,7 +29,6 @@ const {
     PROXIMITY_ZOOM_HIGH,
     PER_GRID_THRESHOLD_ENTER,
     PER_GRID_THRESHOLD_EXIT,
-    USE_LEGACY_AGGREGATION,
     BROADCAST_STATS,
 } = require('../config');
 const { BUS_NAMES } = require('../audio-metrics');
@@ -70,10 +69,6 @@ describe('P0-A Environment Pinning Guard', () => {
 
     test('PER_GRID_THRESHOLD_EXIT = 50', () => {
         expect(PER_GRID_THRESHOLD_EXIT).toBe(50);
-    });
-
-    test('USE_LEGACY_AGGREGATION = false', () => {
-        expect(USE_LEGACY_AGGREGATION).toBe(false);
     });
 
     test('BROADCAST_STATS = false', () => {

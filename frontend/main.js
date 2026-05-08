@@ -20,7 +20,15 @@
  * @module frontend/main
  */
 
-import { state, getMapboxToken, loadServerConfig, getClientId } from './config.js';
+import {
+    state,
+    getMapboxToken,
+    loadServerConfig,
+    getClientId,
+    getThemeMode,
+    setThemeMode,
+    applyTheme,
+} from './config.js';
 import { showToast, updateUI, updateConnectionStatus } from './ui.js';
 import { initMap, onViewportChange, refreshServerConfig } from './map.js';
 import { connectWebSocket } from './websocket.js';
@@ -64,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         loopProgressHandle: document.getElementById('loop-progress-handle'),
         infoPanel: document.getElementById('info-panel'),
         panelToggle: document.getElementById('panel-toggle'),
+        themeToggle: document.getElementById('theme-toggle'),
     };
 
     getClientId();
@@ -89,7 +98,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // first refreshServerConfig() round-trip.
     engine.setProximityThresholds(state.config.proximityZoomLow, state.config.proximityZoomHigh);
 
-    initMap();
+    // Shared stats handler — fan-out to UI and audio engine. Used by both
+    // the WebSocket path (`connectWebSocket.onStats`) and the HTTP fallback
+    // path (`map.js sendViewportHTTP` via `initMap`'s onStats callback).
+    // Sharing one handler keeps the two transports byte-equivalent on the
+    // client side.
+    const handleStats = (data) => {
+        updateUI(data);
+        if (data.audioParams) {
+            engine.update(data.audioParams);
+        }
+    };
+
+    initMap({ onStats: handleStats, onToast: showToast });
 
     // City name announcement — dwell trigger on settle, flyby trigger on drag
     function getAnnouncerArgs() {
@@ -113,12 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateConnectionStatus(true);
             triggerInitialViewportPush(state.runtime.map, onViewportChange);
         },
-        onStats: (data) => {
-            updateUI(data);
-            if (data.audioParams) {
-                engine.update(data.audioParams);
-            }
-        },
+        onStats: handleStats,
         onError: (msg) => showToast(`Error: ${msg}`, 5000),
         onDisconnect: () => updateConnectionStatus(false),
     });
@@ -128,7 +144,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // state on first load is collapsed so the user gets a full-globe view
     // before opting in to the stats. The hamburger ≡ at top-right and the
     // in-sheet drag handle both call the same toggle.
+    // Transitions are gated by `.animating` so they only fire on explicit
+    // user toggles — not on viewport resize. Otherwise dragging the window
+    // across the 600 px breakpoint would interpolate between the desktop
+    // hidden state (opacity 0 + translateX 20px) and the mobile hidden
+    // state (opacity 1 + translateY 100% + 24px), producing a visible
+    // panel-slides-away flicker.
+    let panelAnimatingTimer;
     function togglePanel() {
+        state.els.infoPanel.classList.add('animating');
+        clearTimeout(panelAnimatingTimer);
+        panelAnimatingTimer = setTimeout(() => {
+            state.els.infoPanel.classList.remove('animating');
+        }, 400);
+
         const hidden = state.els.infoPanel.classList.toggle('hidden');
         state.els.panelToggle.classList.toggle('open', !hidden);
         state.els.panelToggle.setAttribute('aria-expanded', String(!hidden));
@@ -153,6 +182,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.els.panelToggle.setAttribute('aria-expanded', 'false');
     }
 
+    // ── Theme toggle button ──
+    // Cycles auto → light → dark → auto. The inline script in index.html
+    // already set `data-theme` and `data-theme-mode` on <html> before first
+    // paint; applyTheme() is called once here as a safety net so the
+    // module-scope cache (lastResolvedTheme) stays consistent with the dataset.
+    const THEME_NEXT = { auto: 'light', light: 'dark', dark: 'auto' };
+    const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+
+    // Icon visuals are driven entirely by CSS selectors on
+    // <html data-theme-mode>, which applyTheme() keeps in sync. Here we only
+    // refresh the textual affordances (tooltip + aria-label) for a11y.
+    function refreshThemeButton(mode) {
+        if (!state.els.themeToggle) return;
+        const next = THEME_LABEL[THEME_NEXT[mode]];
+        state.els.themeToggle.title = `Theme: ${THEME_LABEL[mode]}`;
+        state.els.themeToggle.setAttribute(
+            'aria-label',
+            `Theme: ${THEME_LABEL[mode]} (click for ${next})`
+        );
+    }
+
+    applyTheme();
+    refreshThemeButton(getThemeMode());
+
+    if (state.els.themeToggle) {
+        state.els.themeToggle.addEventListener('click', () => {
+            setThemeMode(THEME_NEXT[getThemeMode()]);
+            applyTheme();
+            // Read mode back from storage rather than trusting the optimistic
+            // `nextMode` — if setThemeMode silently failed (private mode,
+            // quota), the page still shows the old theme; the button must
+            // reflect that, not the intended-but-unwritten value.
+            refreshThemeButton(getThemeMode());
+        });
+    }
+
     // ── Audio toggle button ──
     let audioAllFailedToastShown = false;
 
@@ -175,6 +240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.runtime.audioEnabled = true;
             setAudioToggleState(true);
             state.els.audioStatus.textContent = 'Loading\u2026';
+            state.els.audioStatus.dataset.state = 'loading';
             audioAllFailedToastShown = false;
 
             engine.setOnLoadingUpdate(renderLoadingUI);
@@ -199,6 +265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.runtime.audioEnabled = false;
             setAudioToggleState(false);
             state.els.audioStatus.textContent = 'Audio off';
+            state.els.audioStatus.dataset.state = 'off';
             await engine.stop();
             announcer.setEnabled(false);
             announcer.reset();
@@ -210,6 +277,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --fill-pct drives the gradient fill on the Webkit track so the
     // active (left) portion tracks the thumb in real time. Firefox
     // uses ::-moz-range-progress natively and ignores this var.
+    let lastFillPct = '';
+    let lastVolumeText = '';
     function updateVolumeFillPct() {
         const el = state.els.volumeSlider;
         const raw = parseFloat(el.value) || 0;
@@ -217,14 +286,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const max = parseFloat(el.max) || 100;
         const span = max - min;
         const pct = span > 0 ? ((raw - min) / span) * 100 : 0;
-        el.style.setProperty('--fill-pct', pct + '%');
+        const pctStr = pct + '%';
+        if (pctStr === lastFillPct) return;
+        lastFillPct = pctStr;
+        el.style.setProperty('--fill-pct', pctStr);
     }
 
     state.els.volumeSlider.addEventListener('input', () => {
         const raw = parseInt(state.els.volumeSlider.value, 10);
         const volume = raw / 100;
         engine.setVolume(volume);
-        state.els.volumeValue.textContent = raw + '%';
+        const text = raw + '%';
+        if (text !== lastVolumeText) {
+            lastVolumeText = text;
+            state.els.volumeValue.textContent = text;
+        }
         updateVolumeFillPct();
     });
 
@@ -244,6 +320,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (allFailed) {
             state.els.audioStatus.textContent =
                 'Audio init failed \u2014 check frontend/audio/ambience/';
+            state.els.audioStatus.dataset.state = 'error';
             if (!audioAllFailedToastShown) {
                 showToast(
                     'All ambience samples failed to load. Verify frontend/audio/ambience/.',
@@ -254,9 +331,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (readyCount + errorCount === states.length) {
             state.els.audioStatus.textContent =
                 errorCount > 0 ? 'Playing (' + errorCount + ' failed)' : 'Playing';
+            state.els.audioStatus.dataset.state = 'playing';
         } else if (states.some((s) => s.status === 'loading')) {
             state.els.audioStatus.textContent =
                 'Loading (' + readyCount + '/' + states.length + ')';
+            state.els.audioStatus.dataset.state = 'loading';
         }
     }
 });

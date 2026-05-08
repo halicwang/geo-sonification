@@ -17,13 +17,7 @@ const path = require('path');
 const { parse: parseCSV } = require('csv-parse/sync');
 const { loadOrCalcNormalize, calcCsvFingerprint } = require('./normalize');
 const { normalizeLandcoverClass, LC_PCT_COLUMNS, hasContinuousLcData } = require('./landcover');
-const {
-    DISABLE_CACHE,
-    FORCE_REBUILD_CACHE,
-    AGGREGATION_VERSION,
-    AGGREGATION_CONFIG,
-    GRID_SIZE,
-} = require('./config');
+const { DISABLE_CACHE, FORCE_REBUILD_CACHE, AGGREGATION_CONFIG, GRID_SIZE } = require('./config');
 
 /**
  * Cache schema version. Mismatched on read → cache invalidated and
@@ -524,7 +518,6 @@ async function loadGridData() {
             assertGridResolution(gridData, 'data/cache/all_grids.json');
             console.log(`[Cache] Loaded ${gridData.length} grid cells from cache`);
             const normalizeParams = await loadOrCalcNormalize(gridData, requiredCsvPaths, {
-                aggregationVersion: AGGREGATION_VERSION,
                 aggregationConfig: AGGREGATION_CONFIG,
             });
             return { gridData, normalizeParams };
@@ -625,7 +618,6 @@ async function loadGridData() {
     }
 
     const normalizeParams = await loadOrCalcNormalize(gridData, loadedCsvPaths, {
-        aggregationVersion: AGGREGATION_VERSION,
         aggregationConfig: AGGREGATION_CONFIG,
     });
 

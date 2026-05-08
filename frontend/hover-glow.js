@@ -27,6 +27,7 @@
 
 import {
     ASSET_BASE,
+    ASSET_VERSION,
     GRID_DOT_RADIUS_BY_ZOOM,
     HOVER_GLOW_R_KM_BY_ZOOM,
     HOVER_GLOW_BORDER_FALLOFF,
@@ -113,9 +114,10 @@ export function parseGridIndex(buffer) {
 }
 
 async function fetchGridIndex() {
-    const url = ASSET_BASE
+    const base = ASSET_BASE
         ? `${ASSET_BASE}/tiles/grid_index.bin`
         : `${window.location.origin}/tiles/grid_index.bin`;
+    const url = ASSET_VERSION ? `${base}?v=${ASSET_VERSION}` : base;
     const res = await fetch(url);
     if (!res.ok) {
         throw new Error(`grid_index.bin fetch ${res.status}: ${url}`);

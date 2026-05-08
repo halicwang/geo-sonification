@@ -175,6 +175,13 @@ wrangler r2 object put placeecho-assets/tiles/grids.pmtiles \
   --cache-control="public, max-age=31536000, immutable" \
   --remote
 
+# Hover-glow grid index sidecar (emitted alongside PMTiles by build-tiles)
+wrangler r2 object put placeecho-assets/tiles/grid_index.bin \
+  --file=data/tiles/grid_index.bin \
+  --content-type="application/octet-stream" \
+  --cache-control="public, max-age=31536000, immutable" \
+  --remote
+
 # Ambience Opus files (7 files; encoded by scripts/encode-ambience-opus.sh)
 for clip in bare crop forest grass shrub urban water; do
   wrangler r2 object put placeecho-assets/audio/ambience/${clip}.opus \
@@ -184,6 +191,13 @@ for clip in bare crop forest grass shrub urban water; do
     --remote
 done
 ```
+
+If a freshly-uploaded asset previously 404'd at the edge (e.g. a new
+file added to R2 for the first time), Cloudflare will have negative-cached
+the 404 with a default 4 h TTL. Purge that single URL via Cloudflare
+dashboard → Caching → Configuration → Purge Custom URL. Wrangler's OAuth
+scope does not include `cache_purge`, so this step cannot be scripted
+without a dedicated API token.
 
 ### Worker (reverse proxy) — **manual**
 

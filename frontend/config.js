@@ -35,6 +35,13 @@ export const BASE_PATH = (runtime.basePath || '').replace(/\/$/, '');
 /** Absolute URL prefix for large static assets (PMTiles, ambience WAVs). */
 export const ASSET_BASE = (runtime.assetBase || BASE_PATH).replace(/\/$/, '');
 
+// Cache-busting version stamp appended as `?v=<buildHash>` to every
+// ASSET_BASE fetch URL. Each deploy mints a new buildHash, so any
+// stale entry (notably a prior 404 negatively cached by the browser
+// for hours after a sidecar's first-time miss) is bypassed. Same
+// build → same URL → CDN/disk cache still hit normally.
+export const ASSET_VERSION = runtime.buildHash || '';
+
 // ============ Shared State ============
 
 /**

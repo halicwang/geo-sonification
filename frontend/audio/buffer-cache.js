@@ -28,6 +28,7 @@
  * @typedef {Object} BufferCacheOptions
  * @property {string[]} busNames - per-index display name; length defines bus count
  * @property {string} assetBase - prefix for ambience asset URLs
+ * @property {string} [assetVersion] - cache-busting suffix appended as `?v=<value>`; empty/omitted disables it
  * @property {number[]} priorityFirst - bus indices loaded in the first parallel phase
  * @property {number[]} prioritySecond - bus indices loaded in the second parallel phase
  * @property {() => void} [onAllLoaded] - fired after both priority phases complete on a non-stale generation
@@ -48,7 +49,14 @@
  * @returns {BufferCache}
  */
 export function createBufferCache(opts) {
-    const { busNames, assetBase, priorityFirst, prioritySecond, onAllLoaded } = opts;
+    const {
+        busNames,
+        assetBase,
+        assetVersion = '',
+        priorityFirst,
+        prioritySecond,
+        onAllLoaded,
+    } = opts;
     const numBuses = busNames.length;
 
     /** @type {(AudioBuffer | null)[]} */
@@ -123,7 +131,9 @@ export function createBufferCache(opts) {
         notify();
 
         try {
-            const response = await fetch(`${assetBase}/audio/ambience/${name}.opus`);
+            const baseUrl = `${assetBase}/audio/ambience/${name}.opus`;
+            const fetchUrl = assetVersion ? `${baseUrl}?v=${assetVersion}` : baseUrl;
+            const response = await fetch(fetchUrl);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status} for ${name}.opus`);
             }

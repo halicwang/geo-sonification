@@ -20,7 +20,7 @@
  * @module frontend/audio/engine
  */
 
-import { ASSET_BASE, getLoudnessNormEnabled } from '../config.js';
+import { ASSET_BASE, ASSET_VERSION, getLoudnessNormEnabled } from '../config.js';
 import { clamp01 } from './utils.js';
 import { createMasterChain } from './context.js';
 import { createBufferCache } from './buffer-cache.js';
@@ -179,6 +179,7 @@ let pendingParams = null;
 const bufferCache = createBufferCache({
     busNames: ['forest', 'shrub', 'grass', 'crop', 'urban', 'bare', 'water'],
     assetBase: ASSET_BASE,
+    assetVersion: ASSET_VERSION,
     priorityFirst: [0, 6],
     prioritySecond: [1, 2, 3, 4, 5],
     onAllLoaded: () => scheduler.startAllSources(),

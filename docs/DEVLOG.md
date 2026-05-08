@@ -31,6 +31,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-08 | Fix        | [Version-stamp Asset URLs to Bypass Stale Browser Cache](devlog/M6/2026-05-08-M6-asset-version-cache-bust.md)                                                                                 |
 | 2026-05-08 | Design     | [Add Git Workflow Boundary Rule to CLAUDE.md and AGENTS.md](devlog/M6/2026-05-08-M6-git-workflow-boundary-rule.md)                                                                            |
 | 2026-05-04 | Feature    | [Light / Dark / Auto Theme Switching](devlog/M6/2026-05-04-M6-frontend-light-dark-auto-theme.md)                                                                                              |
 | 2026-05-03 | Refactor   | [Split city-announcer into spatial + cache + orchestrator](devlog/M6/2026-05-03-M6-frontend-city-announcer-split.md)                                                                          |

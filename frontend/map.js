@@ -13,6 +13,7 @@
 import {
     state,
     ASSET_BASE,
+    ASSET_VERSION,
     VIEWPORT_DEBOUNCE,
     getClientId,
     applyServerConfig,
@@ -125,9 +126,10 @@ const STROKE_WIDTH_BY_ZOOM = [
 
 /** Add PMTiles vector source + single circle layer for per-grid dots. */
 async function addGridLayer() {
-    const PMTILES_URL = ASSET_BASE
+    const pmTilesBase = ASSET_BASE
         ? `${ASSET_BASE}/tiles/grids.pmtiles`
         : `${window.location.origin}/tiles/grids.pmtiles`;
+    const PMTILES_URL = ASSET_VERSION ? `${pmTilesBase}?v=${ASSET_VERSION}` : pmTilesBase;
 
     // Register the custom PMTiles source type (idempotent)
     mapboxgl.Style.setSourceType(

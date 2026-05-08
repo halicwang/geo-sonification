@@ -23,6 +23,7 @@ Update logs, design decisions, and ideas for Geo-Sonification.
 
 | Date       | Category   | Title                                                                                                                                                                                         |
 | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-08 | Design     | [Add Git Workflow Boundary Rule to CLAUDE.md and AGENTS.md](devlog/M6/2026-05-08-M6-git-workflow-boundary-rule.md)                                                                            |
 | 2026-05-04 | Refactor   | [Theme Toggle Glyphs → SVG Icon Set with Rotate-Fade Animation](devlog/M6/2026-05-04-M6-frontend-theme-toggle-svg-icons.md)                                                                   |
 | 2026-05-04 | Refactor   | [Retarget Initial Map View to Libya-Chad Border](devlog/M6/2026-05-04-M6-frontend-map-initial-view.md)                                                                                        |
 | 2026-05-04 | Refactor   | [Raise Map `minZoom` 2 → 2.5](devlog/M6/2026-05-04-M6-frontend-map-minzoom-2-5.md)                                                                                                            |

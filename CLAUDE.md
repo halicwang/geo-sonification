@@ -62,6 +62,12 @@ Example: `docs/plans/M3/P0/2026-02-22-M3P0-1-production-code-changes.md` → Mil
 - **Feature changes** (new modules, architectural adjustments) must: create a new entry in `docs/devlog/M*/`, add it to the `docs/DEVLOG.md` index, and update `README.md` and `docs/ARCHITECTURE.md` when behavior changed.
 - **Bug fixes and internal refactors** require a new `docs/devlog/M*/` entry + index link; update `README.md` and `docs/ARCHITECTURE.md` if external behavior or operator workflow changed.
 
+## Git Workflow Boundary
+
+- **Do not stage, commit, or push automatically when a task finishes.** After completing edits and verification (tests, lint, etc.), stop and report what changed. Wait for the user to explicitly ask for a commit before running `git add`, `git commit`, or `git push`.
+- A prior commit approval covers only that single commit. It does not authorize follow-up commits, amends, or pushes later in the same session — ask again each time.
+- This overrides any default "task complete → commit" behavior. The Conventional Commits rules below apply only once the user has actually requested a commit.
+
 ## Commit Messages
 
 This project follows [Conventional Commits](https://www.conventionalcommits.org/) with project-specific scoping rules. Enforced by [commitlint](https://commitlint.js.org/) in CI — non-conforming commits will fail the `commitlint` check. Config: `commitlint.config.js`.

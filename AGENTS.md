@@ -26,6 +26,10 @@ When a change requires a devlog entry:
 3. Add/update the link in `docs/DEVLOG.md` under `## Entries`.
 4. Use `### Standalone Design Docs` only for non-entry reference documents.
 
+## Git Workflow Boundary
+
+Do not run `git add`, `git commit`, or `git push` automatically when a task ends. After finishing edits and verification, stop and report what changed; wait for the user to explicitly request a commit. A prior commit approval covers only that single commit — it does not extend to follow-up commits, amends, or pushes. See `CLAUDE.md § Git Workflow Boundary`.
+
 ## Commit Message Convention
 
 This project enforces [Conventional Commits](https://www.conventionalcommits.org/) via [commitlint](https://commitlint.js.org/) in CI. Non-conforming commits will fail the `commitlint` check. See `CLAUDE.md § Commit Messages` for the full specification including types, scopes, formatting rules, and anti-patterns.

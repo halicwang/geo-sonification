@@ -161,7 +161,7 @@ async function addGridLayer() {
             // hover-glow.js no longer writes setFeatureState.
             'circle-color': MAP_THEME[getResolvedTheme()].dot,
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 1.1, 5, 2.8, 8, 4.9, 12, 8.2],
-            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.92, 5, 0.96, 8, 1],
+            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.6, 5, 0.68, 8, 0.75],
             'circle-stroke-color': MAP_THEME[getResolvedTheme()].circleStroke,
             'circle-stroke-width': STROKE_WIDTH_BY_ZOOM,
             'circle-stroke-opacity': 0.8,

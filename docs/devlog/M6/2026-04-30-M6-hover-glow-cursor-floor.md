@@ -18,9 +18,8 @@ One-line per-cell formula change inside `tick()`, plus one new
 live-tunable constant. The paint expression in `frontend/map.js` is
 unchanged — it still interpolates `circle-color` from `#606060` →
 `#FFFFFF` over the existing `glow ∈ [0, 1]` feature-state, so the
-GPU-upload budget that the [drag-pause
-fix](2026-04-30-M6-hover-glow-pause-during-drag.md) is built around
-stays exactly the same. No second feature-state, no extra
+GPU-upload budget that the drag-pause fix was built around stays
+exactly the same. No second feature-state, no extra
 `setFeatureState` calls per frame.
 
 ```diff

@@ -4,8 +4,8 @@ User feedback after the same-day pause-during-drag ship:
 
 > 现在感觉整个前端的实现都有点卡卡的 这是为什么 有没有什么彻底换实现思路的方法但是是很流畅很流畅的那种呢？
 
-The previous `2026-04-30-M6-hover-glow-pause-during-drag.md` entry
-established that JS-side per-frame tick cost is sub-millisecond and
+The previous drag-pause fix established that JS-side per-frame tick
+cost is sub-millisecond and
 that the real bottleneck is the GPU vertex-buffer upload churn each
 `setFeatureState({glow})` call queues. The drag-pause workaround
 froze the glow geographically while the user dragged — eliminating
@@ -250,11 +250,11 @@ Known risks:
   blends. If shimmer appears at zoom 5, swap to `step(0.5, transition)`
   for a one-frame snap.
 
-## Obsoleted entries
+## What this rewrite obsoleted
 
-[`2026-04-30-M6-hover-glow-pause-during-drag.md`](2026-04-30-M6-hover-glow-pause-during-drag.md):
-the `dragging` flag, `movestart`/`moveend` handlers, and the GPU
-upload churn this fix worked around are all gone in this rewrite.
+The earlier drag-pause fix: the `dragging` flag,
+`movestart`/`moveend` handlers, and the GPU upload churn it worked
+around are all gone in this rewrite.
 
 ## Files changed
 

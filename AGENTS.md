@@ -19,12 +19,22 @@ Before making any code or documentation change, you must:
 
 ## Mandatory Devlog Rules
 
-When a change requires a devlog entry:
+A devlog entry is required only when the change matches one of three triggers:
+
+1. **New feature** — user-facing capability that didn't exist before.
+2. **Significant enhancement** — behavior, scope, performance, or interface contract change on an existing feature. Parameter tweaks and cosmetic polish do not qualify.
+3. **Large-scale refactor** — architectural pivot or cross-module restructure.
+
+**Mandatory pre-commit judgment**: Before every commit, self-evaluate the change against the three triggers above. The judgment is the mandatory step — the entry is conditional on it. When ambiguous, ask the user before committing. Skip the devlog for bug fixes, parameter tweaks, single-line config changes, icon swaps, dead-code removal, doc factual fixes, isolated perf gates, cosmetic UI polish, and single-module hygiene cleanup; the commit body covers them.
+
+When an entry is warranted, follow these format rules:
 
 1. Put the entry in the active milestone folder: `docs/devlog/M*/`. Independent post-milestone tasks (no milestone framing) may sit at the root of `docs/devlog/`; the pre-commit hook regex `^docs/devlog/` accepts both. Default to a milestone folder unless you have explicit reason otherwise.
 2. Use filename format: `YYYY-MM-DD-M*-kebab-case-title.md` for milestone entries; `YYYY-MM-DD-kebab-case-title.md` for root-level independent entries.
 3. Add/update the link in `docs/DEVLOG.md` under `## Entries`.
 4. Use `### Standalone Design Docs` only for non-entry reference documents.
+
+See `docs/DEVLOG.md § Recording Guide` for full entry format.
 
 ## Git Workflow Boundary
 

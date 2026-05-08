@@ -59,8 +59,17 @@ Example: `docs/plans/M3/P0/2026-02-22-M3P0-1-production-code-changes.md` → Mil
 
 ## Documentation Update Policy
 
-- **Feature changes** (new modules, architectural adjustments) must: create a new entry in `docs/devlog/M*/`, add it to the `docs/DEVLOG.md` index, and update `README.md` and `docs/ARCHITECTURE.md` when behavior changed.
-- **Bug fixes and internal refactors** require a new `docs/devlog/M*/` entry + index link; update `README.md` and `docs/ARCHITECTURE.md` if external behavior or operator workflow changed.
+A devlog entry under `docs/devlog/M*/` (plus a link in `docs/DEVLOG.md`) is required only when a commit matches one of three triggers:
+
+1. **New feature** — user-facing capability that didn't exist before.
+2. **Significant enhancement** — behavior, scope, performance, or interface contract change on an existing feature. Parameter tweaks and cosmetic polish do not qualify.
+3. **Large-scale refactor** — architectural pivot or cross-module restructure.
+
+For all other commits — bug fixes, parameter tweaks, config one-liners, icon swaps, dead-code removal, doc factual fixes, isolated perf gates, cosmetic UI polish, single-module cleanup — skip the devlog and put the rationale in the commit body.
+
+**Mandatory pre-commit judgment**: Before every commit you must evaluate the change against the three triggers above. The judgment itself is the mandatory step — the entry is conditional on the judgment. When ambiguous, ask the user before committing. Update `README.md` and `docs/ARCHITECTURE.md` when external behavior shifted, regardless of whether a devlog was warranted.
+
+See `docs/DEVLOG.md` § Recording Guide for entry format.
 
 ## Git Workflow Boundary
 

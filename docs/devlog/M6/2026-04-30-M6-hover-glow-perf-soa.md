@@ -88,8 +88,7 @@ removing one more per-frame alloc.
   `rByZoom`) is byte-identical. The 5-test `glowFor` suite added by
   the cursor-floor change still passes unchanged.
 - `setFeatureState` call shape (source / sourceLayer / id / glow) is
-  unchanged, so the GPU-upload cost the [drag-pause
-  devlog](2026-04-30-M6-hover-glow-pause-during-drag.md) is built
+  unchanged, so the GPU-upload cost the drag-pause work was built
   around stays exactly the same.
 
 ## Verification

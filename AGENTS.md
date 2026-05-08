@@ -4,7 +4,20 @@ Repository-level agent instructions for `geo-sonification`.
 
 ## Planning Hierarchy
 
-See `CLAUDE.md § Planning Hierarchy` for the full definition of **Milestone → Phase → Stage**.
+Development is organized in three levels:
+
+| Level         | ID pattern         | Scope                                                                              | Location                                       |
+| ------------- | ------------------ | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Milestone** | `M1`, `M2`, `M3` … | Major development cycle                                                            | `docs/plans/M<n>/`                             |
+| **Phase**     | `P0` – `P5`        | Delivery unit within a milestone; has its own requirements, DoD, and evidence gate | `docs/plans/M<n>/` (three lighthouse docs)     |
+| **Stage**     | `1`, `2`, `3` …    | Sequential execution step within a phase; one concrete task                        | `docs/plans/M<n>/P<n>/` (numbered stage files) |
+
+- **Milestone** sets the overall goal (e.g., M3 = Open Platform).
+- **Phase** groups related work packets with shared requirements and a phase-exit gate (e.g., P0 = Compatibility Guardrails).
+- **Stage** is a single ordered step inside a phase (e.g., P0-1 = production code changes, P0-2 = fixture infrastructure).
+
+Stage file naming: `YYYY-MM-DD-M<milestone>P<phase>-<stage>-<kebab-title>.md`
+Example: `docs/plans/M3/P0/2026-02-22-M3P0-1-production-code-changes.md` → Milestone 3, Phase 0, Stage 1.
 
 Key operational implication: stage plans in `docs/plans/M*/P*/` contain the granular execution steps for each phase. You **must** consult them before executing any phase work (see check #3 below).
 
@@ -38,25 +51,112 @@ See `docs/DEVLOG.md § Recording Guide` for full entry format.
 
 ## Git Workflow Boundary
 
-Do not run `git add`, `git commit`, or `git push` automatically when a task ends. After finishing edits and verification, stop and report what changed; wait for the user to explicitly request a commit. A prior commit approval covers only that single commit — it does not extend to follow-up commits, amends, or pushes. See `CLAUDE.md § Git Workflow Boundary`.
+- **Do not stage, commit, or push automatically when a task finishes.** After completing edits and verification (tests, lint, etc.), stop and report what changed. Wait for the user to explicitly ask for a commit before running `git add`, `git commit`, or `git push`.
+- A prior commit approval covers only that single commit. It does not authorize follow-up commits, amends, or pushes later in the same session — ask again each time.
+- This overrides any default "task complete → commit" behavior. The Conventional Commits rules below apply only once the user has actually requested a commit.
 
 ## Commit Message Convention
 
-This project enforces [Conventional Commits](https://www.conventionalcommits.org/) via [commitlint](https://commitlint.js.org/) in CI. Non-conforming commits will fail the `commitlint` check. See `CLAUDE.md § Commit Messages` for the full specification including types, scopes, formatting rules, and anti-patterns.
+This project follows [Conventional Commits](https://www.conventionalcommits.org/) with project-specific scoping rules. Enforced by [commitlint](https://commitlint.js.org/) in CI — non-conforming commits will fail the `commitlint` check. Config: `commitlint.config.js`.
 
-Key rules for agents:
-
-1. **Format**: `<type>(<scope>): <subject>` — max 100 chars (header). Body and footer also max 100 chars per line; see `commitlint.config.js`.
-2. **Types** (enforced): `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf`, `revert`.
-3. **Scope** (recommended, not enforced): module name (`server`, `frontend`, `audio`, `ws`, `data`) or phase tag (`M2`). Omitting scope is valid: `fix: handle missing data`.
-4. **Subject**: imperative mood, start lowercase, no period. Uppercase abbreviations (API, HTTP, DEM) are allowed.
-5. **Body** (for non-trivial changes): explain **why**, wrap at 100 chars per line.
-6. **Anti-patterns**: no vague messages (`Update files`, `Fix stuff`), no `WIP` on shared branches, no "explain" or "recent" as change verbs.
-
-### Devlog Trailer
-
-Recommended footer when devlog was reviewed before committing:
+### Format
 
 ```
-DEVLOG-REVIEWED: YYYY-MM-DD
+<type>(<scope>): <subject>
+
+[optional body]
+
+[optional footer(s)]
 ```
+
+### Type (required)
+
+| Type       | When to use                                              |
+| ---------- | -------------------------------------------------------- |
+| `feat`     | New user-facing functionality or behavior                |
+| `fix`      | Bug fix                                                  |
+| `refactor` | Code change that neither fixes a bug nor adds a feature  |
+| `docs`     | Documentation only — plans, devlog, README, ARCHITECTURE |
+| `test`     | Adding or updating tests                                 |
+| `chore`    | Build config, dependencies, tooling, repo housekeeping   |
+| `ci`       | CI/CD pipeline changes                                   |
+| `perf`     | Performance improvement with no functional change        |
+| `revert`   | Reverts a previous commit (reference SHA in body)        |
+
+### Scope (recommended)
+
+Use the module or area affected: `server`, `frontend`, `data`, `audio`, `ws`, `plans`, `devlog`.
+
+When the commit is scoped to a milestone phase, use the phase tag as scope:
+
+```
+docs(M3/P0): renumber plan files from letter to numeric suffixes
+```
+
+Multiple scopes are acceptable when tightly coupled: `fix(server,ws): ...`
+
+### Subject line rules
+
+- **Imperative mood, present tense** — "add", not "added" or "adds".
+- **Start lowercase** after the colon — `feat(server): add ...`, not `Add ...`.
+- **Uppercase abbreviations are OK** — `add API endpoint`, `handle HTTP 429`.
+- **No period** at the end.
+- **Max 100 characters** (type + scope + colon + space + subject).
+- Describe **what changed**, not what was wrong.
+
+### Body (optional, recommended for non-trivial changes)
+
+- Separated from subject by a blank line.
+- Explain **why** this change was made, not what (the diff shows what).
+- Wrap at 100 characters per line (matches `commitlint.config.js` `body-max-line-length`).
+
+### Authorship (mandatory)
+
+- **NEVER add `Co-Authored-By` trailers.** All commits must appear as sole authorship. This rule is absolute and has no exceptions.
+
+### Footer (optional)
+
+- Breaking changes: `BREAKING CHANGE: <description>`
+- Issue references: `Closes #42`, `Refs #17`
+- Devlog trailer: `DEVLOG-REVIEWED: YYYY-MM-DD`
+
+### Examples
+
+```
+feat(server): add elevation-aware fallback for missing DEM tiles
+
+The tile service previously returned 500 when DEM data was unavailable
+for high-latitude regions. Fall back to bilinear interpolation from
+neighboring tiles to maintain audio continuity.
+
+Closes #23
+DEVLOG-REVIEWED: 2026-02-22
+```
+
+```
+fix(frontend): prevent audio context suspension on tab switch
+```
+
+```
+docs(M3/P0): add stage plans for compatibility guardrails
+
+DEVLOG-REVIEWED: 2026-02-22
+```
+
+```
+refactor(audio): extract param-mapping logic into shared util
+
+No behavioral change. Reduces duplication between drone and percussive
+mode mappers.
+```
+
+### Anti-patterns (do not use)
+
+| Bad                                  | Why                                                    |
+| ------------------------------------ | ------------------------------------------------------ |
+| `Explain recent doc changes`         | "recent" is meaningless in history; "explain" ≠ change |
+| `Fix doc format naming`              | Which doc? What format? What naming?                   |
+| `Add missing spec rationale details` | "missing details" conveys zero information             |
+| `Update files`                       | Says nothing                                           |
+| `WIP`                                | Never commit WIP to shared branches                    |
+| `fix: Fix the bug`                   | Redundant; describe the actual bug                     |
